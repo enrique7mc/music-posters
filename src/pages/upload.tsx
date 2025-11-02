@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
@@ -22,6 +22,40 @@ const loadingMessages = [
   "✨ Adding some magic...",
   "🌟 Making it perfect...",
 ];
+
+// Helper function to get CSS classes for artist name based on weight
+const getArtistNameClasses = (weight?: number): string => {
+  if (!weight) return 'text-gray-800';
+  if (weight >= 8) return 'text-gray-800 font-bold text-lg';
+  if (weight >= 6) return 'text-gray-800 font-semibold';
+  return 'text-gray-800';
+};
+
+// Helper function to get tier badge configuration
+const getTierBadge = (tier?: string) => {
+  if (!tier) return null;
+
+  const tierConfig = {
+    headliner: {
+      bgColor: 'bg-yellow-200 text-yellow-800',
+      label: '🎸 Headliner',
+    },
+    'sub-headliner': {
+      bgColor: 'bg-blue-200 text-blue-800',
+      label: '⭐ Sub-headliner',
+    },
+    'mid-tier': {
+      bgColor: 'bg-green-200 text-green-800',
+      label: 'Mid-tier',
+    },
+    undercard: {
+      bgColor: 'bg-gray-200 text-gray-800',
+      label: 'Undercard',
+    },
+  };
+
+  return tierConfig[tier as keyof typeof tierConfig];
+};
 
 export default function Upload() {
   const router = useRouter();
@@ -61,8 +95,8 @@ export default function Upload() {
     }
   }, [creating]);
 
-  // Calculate tier counts for summary
-  const getTierCounts = () => {
+  // Calculate tier counts for summary (memoized to avoid recomputation)
+  const tierCounts = useMemo(() => {
     const counts = {
       headliner: 0,
       'sub-headliner': 0,
@@ -77,7 +111,7 @@ export default function Upload() {
     });
 
     return counts;
-  };
+  }, [artists]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -197,6 +231,15 @@ export default function Upload() {
           )}
 
           <div className="bg-white rounded-lg shadow-md p-8">
+            {/* Shared file input - used by all upload buttons */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
             {/* Empty state - show when no image selected */}
             {!selectedFile && !analyzing && artists.length === 0 && (
               <div className="text-center py-12">
@@ -208,13 +251,6 @@ export default function Upload() {
                   </p>
                 </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 inline-flex items-center gap-2"
@@ -234,13 +270,6 @@ export default function Upload() {
               <>
                 <h2 className="text-3xl font-semibold mb-6">Upload Festival Poster</h2>
                 <div className="mb-6">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 inline-flex items-center gap-2 mb-4"
@@ -304,7 +333,7 @@ export default function Upload() {
                   {/* Summary Cards */}
                   {analysisProvider === 'gemini' && artists.some(a => a.tier) ? (
                     (() => {
-                      const counts = getTierCounts();
+                      const counts = tierCounts;
                       return (
                         <div className="grid grid-cols-2 gap-3 mb-4">
                           {/* Total Artists */}
@@ -358,24 +387,19 @@ export default function Upload() {
                           <li key={index} className="flex items-center justify-between py-1">
                             <div className="flex items-center flex-1">
                               <span className="text-purple-600 font-semibold mr-3 min-w-[2rem] text-right">{index + 1}.</span>
-                              <span className={`text-gray-800 ${artist.weight && artist.weight >= 8 ? 'font-bold text-lg' : artist.weight && artist.weight >= 6 ? 'font-semibold' : ''}`}>
+                              <span className={getArtistNameClasses(artist.weight)}>
                                 {artist.name}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
-                              {artist.tier && (
-                                <span className={`text-xs px-2 py-1 rounded-full ${
-                                  artist.tier === 'headliner' ? 'bg-yellow-200 text-yellow-800' :
-                                  artist.tier === 'sub-headliner' ? 'bg-blue-200 text-blue-800' :
-                                  artist.tier === 'mid-tier' ? 'bg-green-200 text-green-800' :
-                                  'bg-gray-200 text-gray-800'
-                                }`}>
-                                  {artist.tier === 'headliner' ? '🎸 Headliner' :
-                                   artist.tier === 'sub-headliner' ? '⭐ Sub-headliner' :
-                                   artist.tier === 'mid-tier' ? 'Mid-tier' :
-                                   'Undercard'}
-                                </span>
-                              )}
+                              {(() => {
+                                const tierBadge = getTierBadge(artist.tier);
+                                return tierBadge && (
+                                  <span className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor}`}>
+                                    {tierBadge.label}
+                                  </span>
+                                );
+                              })()}
                               {artist.weight && (
                                 <span className="text-xs text-gray-500 font-mono">
                                   {artist.weight}/10
