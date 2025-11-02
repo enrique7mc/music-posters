@@ -269,7 +269,7 @@ export default function Upload() {
             {selectedFile && !analyzing && artists.length === 0 && (
               <>
                 <h2 className="text-3xl font-semibold mb-6">Upload Festival Poster</h2>
-                <div className="mb-6">
+                <div className="mb-6 flex justify-center">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 inline-flex items-center gap-2 mb-4"
