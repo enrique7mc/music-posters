@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (provider === 'gemini') {
       // Use Gemini 2.0 Flash with vision-first approach
       console.log('[Analyze API] Analyzing with Gemini...');
-      result = await analyzeImageWithGeminiRetry(imageBuffer);
+      result = await analyzeImageWithGeminiRetry(imageBuffer, imageFile.mimetype ?? 'image/jpeg');
     } else {
       // Use Google Cloud Vision (default)
       console.log('[Analyze API] Analyzing with Vision API...');

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import { Artist, AnalyzeResponse } from '@/types';
@@ -36,22 +36,7 @@ export default function Upload() {
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  // Rotate loading messages while creating playlist
-  useEffect(() => {
-    if (creating) {
-      const interval = setInterval(() => {
-        setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
-      }, 2000); // Change message every 2 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [creating]);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       const response = await axios.get('/api/auth/me');
       setUser(response.data);
@@ -59,7 +44,11 @@ export default function Upload() {
     } catch (err) {
       router.push('/');
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -196,6 +185,7 @@ export default function Upload() {
 
             {previewUrl && (
               <div className="mb-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewUrl}
                   alt="Preview"
@@ -241,7 +231,7 @@ export default function Upload() {
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto mb-6">
                   <ul className="space-y-2">
-                    {artists
+                    {[...artists]
                       .sort((a, b) => (b.weight || 0) - (a.weight || 0))
                       .map((artist, index) => (
                         <li key={index} className="flex items-center justify-between py-1">

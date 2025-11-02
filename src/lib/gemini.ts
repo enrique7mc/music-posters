@@ -85,9 +85,13 @@ Be precise with artist spellings. No additional text, only the JSON array.`;
 /**
  * Analyzes a festival poster image using Gemini 2.0 Flash
  * @param imageBuffer - Buffer containing the image data
+ * @param mimeType - MIME type of the image (e.g., 'image/jpeg', 'image/png', 'image/webp')
  * @returns Object with artists array and raw Gemini response
  */
-export async function analyzeImageWithGemini(imageBuffer: Buffer): Promise<{
+export async function analyzeImageWithGemini(
+  imageBuffer: Buffer,
+  mimeType: string = 'image/jpeg'
+): Promise<{
   artists: Artist[];
   rawText: string;
 }> {
@@ -111,7 +115,7 @@ export async function analyzeImageWithGemini(imageBuffer: Buffer): Promise<{
     const imagePart = {
       inlineData: {
         data: imageBase64,
-        mimeType: 'image/jpeg', // Assuming JPEG, adjust if needed
+        mimeType: mimeType,
       },
     };
 
@@ -231,6 +235,7 @@ function inferTierFromWeight(weight: number): 'headliner' | 'sub-headliner' | 'm
  */
 export async function analyzeImageWithGeminiRetry(
   imageBuffer: Buffer,
+  mimeType: string = 'image/jpeg',
   maxRetries: number = 3
 ): Promise<{ artists: Artist[]; rawText: string }> {
   let lastError: Error | null = null;
@@ -238,7 +243,7 @@ export async function analyzeImageWithGeminiRetry(
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[Gemini] Analysis attempt ${attempt}/${maxRetries}`);
-      const result = await analyzeImageWithGemini(imageBuffer);
+      const result = await analyzeImageWithGemini(imageBuffer, mimeType);
 
       // Validate result
       if (!result.artists || result.artists.length === 0) {
