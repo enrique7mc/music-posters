@@ -168,16 +168,21 @@ export default function Upload() {
       // Extract artist names from Artist objects
       const artistNames = artists.map(a => a.name);
 
-      const response = await axios.post('/api/create-playlist', {
+      // Search for tracks (this will take 20-70 seconds with rate limiting)
+      const response = await axios.post('/api/search-tracks', {
         artists: artistNames,
-        playlistName: `Festival Mix - ${new Date().toLocaleDateString()}`,
       });
 
-      // Redirect to success page with playlist URL
-      router.push(`/success?playlistUrl=${encodeURIComponent(response.data.playlistUrl)}`);
+      // Store tracks in sessionStorage for the review page
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('tracks', JSON.stringify(response.data.tracks));
+      }
+
+      // Navigate to review-tracks page
+      router.push('/review-tracks');
     } catch (err: any) {
-      console.error('Error creating playlist:', err);
-      setError(err.response?.data?.error || 'Failed to create playlist');
+      console.error('Error searching tracks:', err);
+      setError(err.response?.data?.error || 'Failed to search tracks');
       setCreating(false);
     }
   };
@@ -443,7 +448,7 @@ export default function Upload() {
                         onClick={handleCreatePlaylist}
                         className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
                       >
-                        Create Spotify Playlist
+                        Continue to Track Selection
                       </button>
                     )}
                   </div>
