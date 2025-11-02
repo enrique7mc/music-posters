@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
@@ -22,6 +22,40 @@ const loadingMessages = [
   "✨ Adding some magic...",
   "🌟 Making it perfect...",
 ];
+
+// Helper function to get CSS classes for artist name based on weight
+const getArtistNameClasses = (weight?: number): string => {
+  if (!weight) return 'text-gray-800';
+  if (weight >= 8) return 'text-gray-800 font-bold text-lg';
+  if (weight >= 6) return 'text-gray-800 font-semibold';
+  return 'text-gray-800';
+};
+
+// Helper function to get tier badge configuration
+const getTierBadge = (tier?: string) => {
+  if (!tier) return null;
+
+  const tierConfig = {
+    headliner: {
+      bgColor: 'bg-yellow-200 text-yellow-800',
+      label: '🎸 Headliner',
+    },
+    'sub-headliner': {
+      bgColor: 'bg-blue-200 text-blue-800',
+      label: '⭐ Sub-headliner',
+    },
+    'mid-tier': {
+      bgColor: 'bg-green-200 text-green-800',
+      label: 'Mid-tier',
+    },
+    undercard: {
+      bgColor: 'bg-gray-200 text-gray-800',
+      label: 'Undercard',
+    },
+  };
+
+  return tierConfig[tier as keyof typeof tierConfig];
+};
 
 export default function Upload() {
   const router = useRouter();
@@ -50,6 +84,34 @@ export default function Upload() {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Rotate loading messages while creating playlist
+  useEffect(() => {
+    if (creating) {
+      const interval = setInterval(() => {
+        setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [creating]);
+
+  // Calculate tier counts for summary (memoized to avoid recomputation)
+  const tierCounts = useMemo(() => {
+    const counts = {
+      headliner: 0,
+      'sub-headliner': 0,
+      'mid-tier': 0,
+      undercard: 0,
+    };
+
+    artists.forEach(artist => {
+      if (artist.tier && artist.tier in counts) {
+        counts[artist.tier as keyof typeof counts]++;
+      }
+    });
+
+    return counts;
+  }, [artists]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -161,7 +223,7 @@ export default function Upload() {
       </nav>
 
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {error && (
             <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
@@ -169,42 +231,59 @@ export default function Upload() {
           )}
 
           <div className="bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-3xl font-semibold mb-6">Upload Festival Poster</h2>
+            {/* Shared file input - used by all upload buttons */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
 
-            <div className="mb-6">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-              >
-                Choose Image
-              </button>
-            </div>
+            {/* Empty state - show when no image selected */}
+            {!selectedFile && !analyzing && artists.length === 0 && (
+              <div className="text-center py-12">
+                <div className="mb-6">
+                  <div className="text-8xl mb-4">🎸</div>
+                  <h2 className="text-3xl font-semibold mb-3">Upload Festival Poster</h2>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    Upload a photo of any festival lineup poster and we&apos;ll extract the artists to create a Spotify playlist
+                  </p>
+                </div>
 
-            {previewUrl && (
-              <div className="mb-6">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  className="max-w-full max-h-96 mx-auto rounded-lg shadow-md"
-                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 inline-flex items-center gap-2"
+                >
+                  <span>📁</span>
+                  Choose Image
+                </button>
+
+                <div className="mt-8 text-sm text-gray-500">
+                  <p>Supports JPG, PNG, and other image formats</p>
+                </div>
               </div>
             )}
 
+            {/* Show title and button when image is selected but not analyzed yet */}
             {selectedFile && !analyzing && artists.length === 0 && (
-              <button
-                onClick={handleAnalyze}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-              >
-                Analyze Poster
-              </button>
+              <>
+                <h2 className="text-3xl font-semibold mb-6">Upload Festival Poster</h2>
+                <div className="mb-6">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 inline-flex items-center gap-2 mb-4"
+                  >
+                    <span>📁</span>
+                    Choose Different Image
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Show title when analyzing or results are shown */}
+            {(analyzing || artists.length > 0) && (
+              <h2 className="text-3xl font-semibold mb-6">Upload Festival Poster</h2>
             )}
 
             {analyzing && (
@@ -223,86 +302,171 @@ export default function Upload() {
               </div>
             )}
 
-            {artists.length > 0 && (
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-semibold">
-                    Found {artists.length} artists:
-                  </h3>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                    {analysisProvider === 'gemini' ? '🤖 Gemini AI' : '👁️ Vision API'}
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto mb-6">
-                  <ul className="space-y-2">
-                    {[...artists]
-                      .sort((a, b) => (b.weight || 0) - (a.weight || 0))
-                      .map((artist, index) => (
-                        <li key={index} className="flex items-center justify-between py-1">
-                          <div className="flex items-center flex-1">
-                            <span className="text-purple-600 mr-2">•</span>
-                            <span className={`text-gray-800 ${artist.weight && artist.weight >= 8 ? 'font-bold text-lg' : artist.weight && artist.weight >= 6 ? 'font-semibold' : ''}`}>
-                              {artist.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {artist.tier && (
-                              <span className={`text-xs px-2 py-1 rounded-full ${
-                                artist.tier === 'headliner' ? 'bg-yellow-200 text-yellow-800' :
-                                artist.tier === 'sub-headliner' ? 'bg-blue-200 text-blue-800' :
-                                artist.tier === 'mid-tier' ? 'bg-green-200 text-green-800' :
-                                'bg-gray-200 text-gray-800'
-                              }`}>
-                                {artist.tier === 'headliner' ? '🎸 Headliner' :
-                                 artist.tier === 'sub-headliner' ? '⭐ Sub-headliner' :
-                                 artist.tier === 'mid-tier' ? 'Mid-tier' :
-                                 'Undercard'}
-                              </span>
-                            )}
-                            {artist.weight && (
-                              <span className="text-xs text-gray-500 font-mono">
-                                {artist.weight}/10
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-
-{creating ? (
-                  <div className="mt-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-8 text-white">
-                    <div className="flex flex-col items-center space-y-6">
-                      {/* Animated music notes */}
-                      <div className="flex space-x-4">
-                        <div className="text-5xl animate-bounce" style={{ animationDelay: '0ms' }}>🎵</div>
-                        <div className="text-5xl animate-bounce" style={{ animationDelay: '150ms' }}>🎶</div>
-                        <div className="text-5xl animate-bounce" style={{ animationDelay: '300ms' }}>🎵</div>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div className="w-full bg-white bg-opacity-30 rounded-full h-2 overflow-hidden">
-                        <div className="bg-white h-full rounded-full animate-pulse" style={{ width: '100%' }}></div>
-                      </div>
-
-                      {/* Rotating message */}
-                      <p className="text-xl font-semibold text-center animate-pulse">
-                        {loadingMessage}
-                      </p>
-
-                      <p className="text-sm text-center opacity-90">
-                        This might take a minute for large lineups...
-                      </p>
-                    </div>
+            {/* Two-pane layout: Image on left, Artist list on right */}
+            {previewUrl && artists.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                {/* Left Pane: Image Preview */}
+                <div className="flex flex-col">
+                  <h3 className="text-lg font-semibold mb-3">Festival Poster</h3>
+                  <div className="bg-gray-100 rounded-lg p-4 flex items-start justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewUrl}
+                      alt="Festival Poster"
+                      className="max-w-full h-auto rounded-lg shadow-lg"
+                      style={{ maxHeight: '70vh' }}
+                    />
                   </div>
-                ) : (
-                  <button
-                    onClick={handleCreatePlaylist}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-                  >
-                    Create Spotify Playlist
-                  </button>
-                )}
+                </div>
+
+                {/* Right Pane: Artist List with Summary */}
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">
+                      Extracted Artists
+                    </h3>
+                    <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                      {analysisProvider === 'gemini' ? '🤖 Gemini AI' : '👁️ Vision API'}
+                    </span>
+                  </div>
+
+                  {/* Summary Cards */}
+                  {analysisProvider === 'gemini' && artists.some(a => a.tier) ? (
+                    (() => {
+                      const counts = tierCounts;
+                      return (
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          {/* Total Artists */}
+                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                            <div className="text-2xl font-bold text-purple-800">{artists.length}</div>
+                            <div className="text-xs text-purple-600">🎵 Total Artists</div>
+                          </div>
+                          {counts.headliner > 0 && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                              <div className="text-2xl font-bold text-yellow-800">{counts.headliner}</div>
+                              <div className="text-xs text-yellow-600">🎸 Headliners</div>
+                            </div>
+                          )}
+                          {counts['sub-headliner'] > 0 && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                              <div className="text-2xl font-bold text-blue-800">{counts['sub-headliner']}</div>
+                              <div className="text-xs text-blue-600">⭐ Sub-headliners</div>
+                            </div>
+                          )}
+                          {counts['mid-tier'] > 0 && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                              <div className="text-2xl font-bold text-green-800">{counts['mid-tier']}</div>
+                              <div className="text-xs text-green-600">Mid-tier</div>
+                            </div>
+                          )}
+                          {counts.undercard > 0 && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                              <div className="text-2xl font-bold text-gray-800">{counts.undercard}</div>
+                              <div className="text-xs text-gray-600">Undercard</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    /* Vision API - just show total count */
+                    <div className="mb-4">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 inline-block">
+                        <div className="text-3xl font-bold text-purple-800">{artists.length}</div>
+                        <div className="text-sm text-purple-600">🎵 Total Artists</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Artist List */}
+                  <div className="bg-gray-50 rounded-lg p-4 flex-1 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+                    <ul className="space-y-2">
+                      {[...artists]
+                        .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+                        .map((artist, index) => (
+                          <li key={index} className="flex items-center justify-between py-1">
+                            <div className="flex items-center flex-1">
+                              <span className="text-purple-600 font-semibold mr-3 min-w-[2rem] text-right">{index + 1}.</span>
+                              <span className={getArtistNameClasses(artist.weight)}>
+                                {artist.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const tierBadge = getTierBadge(artist.tier);
+                                return tierBadge && (
+                                  <span className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor}`}>
+                                    {tierBadge.label}
+                                  </span>
+                                );
+                              })()}
+                              {artist.weight && (
+                                <span className="text-xs text-gray-500 font-mono">
+                                  {artist.weight}/10
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+
+                  {/* Create Playlist Button */}
+                  <div className="mt-4">
+                    {creating ? (
+                      <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-8 text-white">
+                        <div className="flex flex-col items-center space-y-6">
+                          {/* Animated music notes */}
+                          <div className="flex space-x-4">
+                            <div className="text-5xl animate-bounce" style={{ animationDelay: '0ms' }}>🎵</div>
+                            <div className="text-5xl animate-bounce" style={{ animationDelay: '150ms' }}>🎶</div>
+                            <div className="text-5xl animate-bounce" style={{ animationDelay: '300ms' }}>🎵</div>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="w-full bg-white bg-opacity-30 rounded-full h-2 overflow-hidden">
+                            <div className="bg-white h-full rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                          </div>
+
+                          {/* Rotating message */}
+                          <p className="text-xl font-semibold text-center animate-pulse">
+                            {loadingMessage}
+                          </p>
+
+                          <p className="text-sm text-center opacity-90">
+                            This might take a minute for large lineups...
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleCreatePlaylist}
+                        className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
+                      >
+                        Create Spotify Playlist
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Single image preview when no results yet */}
+            {previewUrl && artists.length === 0 && !analyzing && (
+              <div className="flex flex-col items-center mb-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="max-w-full max-h-96 rounded-lg shadow-md mb-4"
+                />
+                <button
+                  onClick={handleAnalyze}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 inline-flex items-center gap-2"
+                >
+                  <span>🔍</span>
+                  Analyze Poster
+                </button>
               </div>
             )}
           </div>
