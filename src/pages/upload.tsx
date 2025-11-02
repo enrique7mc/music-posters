@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
+import { Artist, AnalyzeResponse } from '@/types';
 
 // Fun loading messages
 const loadingMessages = [
@@ -28,7 +29,8 @@ export default function Upload() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [artists, setArtists] = useState<string[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini'>('vision');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
@@ -84,13 +86,14 @@ export default function Upload() {
       const formData = new FormData();
       formData.append('image', selectedFile);
 
-      const response = await axios.post('/api/analyze', formData, {
+      const response = await axios.post<AnalyzeResponse>('/api/analyze', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
       setArtists(response.data.artists);
+      setAnalysisProvider(response.data.provider);
 
       if (response.data.artists.length === 0) {
         setError('No artists found in the image. Try a different poster.');
@@ -110,8 +113,11 @@ export default function Upload() {
     setError(null);
 
     try {
+      // Extract artist names from Artist objects
+      const artistNames = artists.map(a => a.name);
+
       const response = await axios.post('/api/create-playlist', {
-        artists: artists,
+        artists: artistNames,
         playlistName: `Festival Mix - ${new Date().toLocaleDateString()}`,
       });
 
@@ -225,17 +231,48 @@ export default function Upload() {
 
             {artists.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-xl font-semibold mb-4">
-                  Found {artists.length} artists:
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">
+                    Found {artists.length} artists:
+                  </h3>
+                  <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                    {analysisProvider === 'gemini' ? '🤖 Gemini AI' : '👁️ Vision API'}
+                  </span>
+                </div>
                 <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto mb-6">
                   <ul className="space-y-2">
-                    {artists.map((artist, index) => (
-                      <li key={index} className="flex items-center">
-                        <span className="text-purple-600 mr-2">•</span>
-                        <span className="text-gray-800">{artist}</span>
-                      </li>
-                    ))}
+                    {artists
+                      .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+                      .map((artist, index) => (
+                        <li key={index} className="flex items-center justify-between py-1">
+                          <div className="flex items-center flex-1">
+                            <span className="text-purple-600 mr-2">•</span>
+                            <span className={`text-gray-800 ${artist.weight && artist.weight >= 8 ? 'font-bold text-lg' : artist.weight && artist.weight >= 6 ? 'font-semibold' : ''}`}>
+                              {artist.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {artist.tier && (
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                artist.tier === 'headliner' ? 'bg-yellow-200 text-yellow-800' :
+                                artist.tier === 'sub-headliner' ? 'bg-blue-200 text-blue-800' :
+                                artist.tier === 'mid-tier' ? 'bg-green-200 text-green-800' :
+                                'bg-gray-200 text-gray-800'
+                              }`}>
+                                {artist.tier === 'headliner' ? '🎸 Headliner' :
+                                 artist.tier === 'sub-headliner' ? '⭐ Sub-headliner' :
+                                 artist.tier === 'mid-tier' ? 'Mid-tier' :
+                                 'Undercard'}
+                              </span>
+                            )}
+                            {artist.weight && (
+                              <span className="text-xs text-gray-500 font-mono">
+                                {artist.weight}/10
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
                   </ul>
                 </div>
 

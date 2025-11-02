@@ -5,6 +5,7 @@ import {
   searchAndGetTopTracks,
   createPlaylist,
   addTracksToPlaylist,
+  getPlaylistTracks,
 } from '@/lib/spotify';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -38,10 +39,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Search for artists and get their top tracks with rate limiting
     console.log(`Creating playlist for ${user.display_name} with ${limitedArtists.length} artists`);
-    const { trackUris, foundArtists } = await searchAndGetTopTracks(
+    const { trackUris, foundArtists, artistMatches } = await searchAndGetTopTracks(
       limitedArtists,
       accessToken
     );
+
+    // Log mismatches for debugging
+    const poorMatches = artistMatches.filter(m => m.found && m.similarity < 0.9);
+    const noMatches = artistMatches.filter(m => !m.found);
+
+    if (poorMatches.length > 0) {
+      console.log(`\n⚠️  Artists with fuzzy matches (might be wrong):`);
+      poorMatches.forEach(m => {
+        console.log(`  "${m.requested}" → "${m.found}" (${(m.similarity * 100).toFixed(0)}%)`);
+      });
+    }
+
+    if (noMatches.length > 0) {
+      console.log(`\n❌ Artists not found on Spotify:`);
+      noMatches.forEach(m => {
+        console.log(`  "${m.requested}"`);
+      });
+    }
 
     if (trackUris.length === 0) {
       return res.status(400).json({
@@ -57,6 +76,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await addTracksToPlaylist(playlist.id, trackUris, accessToken);
 
     console.log(`Playlist created successfully: ${playlist.url}`);
+
+    // Fetch and log the actual tracks in the playlist for debugging
+    const playlistTracks = await getPlaylistTracks(playlist.id, accessToken);
+    console.log('\n=== PLAYLIST CONTENTS ===');
+    console.log(`Total tracks in playlist: ${playlistTracks.length}`);
+    console.log('\nTracks:');
+    playlistTracks.forEach((track, index) => {
+      console.log(`${index + 1}. ${track.artists.join(', ')} - ${track.name}`);
+    });
+    console.log('=== END PLAYLIST CONTENTS ===\n');
 
     res.status(200).json({
       playlistUrl: playlist.url,
