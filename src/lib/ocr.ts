@@ -1,4 +1,5 @@
 import vision from '@google-cloud/vision';
+import { Artist } from '@/types';
 
 const client = new vision.ImageAnnotatorClient({
   keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
@@ -155,11 +156,17 @@ export function parseArtistsFromText(text: string): string[] {
 }
 
 export async function analyzeImage(imageBuffer: Buffer): Promise<{
-  artists: string[];
+  artists: Artist[];
   rawText: string;
 }> {
   const rawText = await extractTextFromImage(imageBuffer);
-  const artists = parseArtistsFromText(rawText);
+  const artistNames = parseArtistsFromText(rawText);
+
+  // Convert string[] to Artist[] format (Vision API doesn't provide weights)
+  const artists: Artist[] = artistNames.map(name => ({
+    name,
+    // weight, tier, and reasoning are undefined for Vision API
+  }));
 
   return {
     artists,

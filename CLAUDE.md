@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, using Google Cloud Vision API for OCR and Spotify Web API for playlist creation.
+Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, supporting two image analysis providers:
+- **Google Cloud Vision API** (OCR-based): Traditional text extraction with heuristic filtering
+- **Gemini 2.0 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
+
+Both providers integrate with Spotify Web API for playlist creation. Switch providers via environment variable.
 
 ## Development Commands
 
@@ -30,15 +34,28 @@ npm run lint
 
 Required environment variables (see `.env.example`):
 ```bash
+# Spotify API
 SPOTIFY_CLIENT_ID=<from Spotify Developer Dashboard>
 SPOTIFY_CLIENT_SECRET=<from Spotify Developer Dashboard>
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback  # MUST use 127.0.0.1
+
+# Image Analysis Provider (choose one: 'vision' or 'gemini')
+IMAGE_ANALYSIS_PROVIDER=vision
+
+# Google Cloud Vision API (used when IMAGE_ANALYSIS_PROVIDER=vision)
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
+
+# Google Gemini API (used when IMAGE_ANALYSIS_PROVIDER=gemini)
+GEMINI_API_KEY=<from https://ai.google.dev>
+
+# Next.js
 NEXTAUTH_URL=http://127.0.0.1:3000
 NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 ```
 
-**Critical**: Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
+**Critical**:
+- Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
+- Set `IMAGE_ANALYSIS_PROVIDER=gemini` to enable artist ranking by visual prominence
 
 ## Architecture Overview
 
@@ -46,7 +63,10 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 - **Frontend**: Next.js 14 + React 18 + TypeScript + Tailwind CSS
 - **Backend**: Next.js API Routes (serverless)
 - **Auth**: OAuth 2.0 with httpOnly cookies (no database)
-- **External Services**: Google Cloud Vision API (OCR), Spotify Web API
+- **Image Analysis**:
+  - Google Cloud Vision API (OCR + filtering)
+  - Gemini 2.0 Flash (vision-first AI with ranking)
+- **External Services**: Spotify Web API
 
 ### Key Directories
 - `src/pages/` - Frontend pages + API routes
@@ -59,11 +79,24 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 ```
 1. User uploads image → POST /api/analyze
    ├─ Formidable parses multipart form
-   ├─ Google Vision API extracts text
-   ├─ parseArtistsFromText() filters OCR noise
-   └─ Returns artist array
+   ├─ Check IMAGE_ANALYSIS_PROVIDER environment variable
+   │
+   ├─ IF provider='vision':
+   │  ├─ Google Vision API extracts text via OCR
+   │  ├─ parseArtistsFromText() applies 10 heuristic filters
+   │  └─ Returns Artist[] (weight: undefined)
+   │
+   └─ IF provider='gemini':
+      ├─ Gemini 2.0 Flash analyzes image with vision
+      ├─ Few-shot prompt guides artist extraction
+      ├─ Returns Artist[] with weight scores (1-10)
+      └─ Artists ranked by font size/position
 
-2. User clicks create → POST /api/create-playlist
+2. User sees artist list (sorted by weight if available)
+   ├─ Vision API: Flat list, no ranking
+   └─ Gemini: Weighted list with tier badges (headliner/sub-headliner/mid-tier/undercard)
+
+3. User clicks create → POST /api/create-playlist
    ├─ searchAndGetTopTracks() with rate limiting
    │  ├─ Batch size: 3, delay: 1000ms (respects 180 req/min)
    │  ├─ Search each artist on Spotify
@@ -115,9 +148,11 @@ processBatch(items, processor, batchSize: 3, delayMs: 1000)
 
 **DO NOT** increase batch size or reduce delay without testing - this will cause HTTP 429 errors.
 
-## OCR Text Filtering
+## Image Analysis Methods
 
-The `parseArtistsFromText()` function in `src/lib/ocr.ts` applies 10 heuristic filters to remove festival poster noise:
+### Vision API Approach (`src/lib/ocr.ts`)
+
+Traditional OCR with heuristic filtering. The `parseArtistsFromText()` function applies 10 filters:
 
 1. Empty/short lines (< 2 chars)
 2. URLs and domain names
@@ -130,7 +165,28 @@ The `parseArtistsFromText()` function in `src/lib/ocr.ts` applies 10 heuristic f
 9. Sorts by length (longer = higher quality)
 10. Substring duplicates (keeps "Drake Bell", removes "Drake")
 
-**Accuracy**: ~60-80% depending on poster quality. Improves with clearer text.
+**Accuracy**: ~60-80% depending on poster quality. **No artist ranking** (all artists treated equally).
+
+### Gemini Approach (`src/lib/gemini.ts`)
+
+Vision-first AI analysis with intelligent ranking. Uses few-shot prompting with 3 examples:
+- Example 1: Clean poster (demonstrates basic weighting)
+- Example 2: Merged text (demonstrates text separation)
+- Example 3: Poster noise (demonstrates filtering non-artists)
+
+**Analysis Process**:
+1. Image sent directly to Gemini 2.0 Flash (no OCR step)
+2. AI analyzes visual hierarchy: font size, position, styling
+3. Returns Artist[] with:
+   - `weight`: 1-10 prominence score (10=headliner, 1=undercard)
+   - `tier`: "headliner" | "sub-headliner" | "mid-tier" | "undercard"
+   - `reasoning`: Why this weight was assigned
+
+**Accuracy**: ~80-95% depending on poster quality. **Includes artist ranking** by visual prominence.
+
+**Retry Logic**: 3 attempts with exponential backoff on API failures.
+
+**Cost**: ~$0.0001 per poster analysis (very cheap!).
 
 ## API Endpoint Patterns
 
@@ -177,9 +233,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 - **Purpose**: Extract artists from poster image
 - **Input**: multipart/form-data with `image` field
 - **Config**: `bodyParser: false` (required for formidable)
-- **Returns**: `{ artists: string[], rawText: string }`
+- **Returns**: `{ artists: Artist[], rawText: string, provider: 'vision' | 'gemini' }`
+  - **Artist type**: `{ name: string, weight?: number, tier?: string, reasoning?: string }`
+  - Vision API: weight/tier/reasoning are `undefined`
+  - Gemini: All fields populated with ranking data
 - **Max File Size**: 10MB
-- **Process**: Upload → Vision API → Filter noise → Return artist list
+- **Process**:
+  - Vision: Upload → OCR → Filter noise → Return artist list
+  - Gemini: Upload → Vision analysis → AI ranking → Return weighted artist list
 
 ### `/api/create-playlist` (POST)
 - **Purpose**: Create Spotify playlist
@@ -244,7 +305,9 @@ const imageBuffer = fs.readFileSync(imageFile.filepath);
 fs.unlinkSync(imageFile.filepath);
 ```
 
-## Google Cloud Vision Setup
+## Image Analysis Provider Setup
+
+### Google Cloud Vision Setup
 
 **Authentication**: Service account JSON file (not committed to Git)
 
@@ -264,6 +327,44 @@ const detections = result.textAnnotations;
 ```
 
 **Logging**: Full Vision API response is logged to console for debugging (see `src/lib/ocr.ts`).
+
+### Gemini Setup
+
+**Authentication**: API key from Google AI Studio (environment variable)
+
+```typescript
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+```
+
+**Getting API Key**:
+1. Visit https://ai.google.dev
+2. Create or select a project
+3. Generate API key
+4. Add to `.env`: `GEMINI_API_KEY=your_key_here`
+
+**Request Pattern**:
+```typescript
+// Convert image buffer to base64
+const imageBase64 = imageBuffer.toString('base64');
+const imagePart = {
+  inlineData: {
+    data: imageBase64,
+    mimeType: 'image/jpeg',
+  },
+};
+
+// Send prompt + image
+const result = await model.generateContent([FEW_SHOT_PROMPT, imagePart]);
+const response = await result.response;
+const responseText = response.text();
+```
+
+**Response Parsing**: Extracts JSON from markdown code blocks or raw response (see `src/lib/gemini.ts:parseGeminiResponse()`).
+
+**Logging**: Full Gemini response and extracted artists logged to console for debugging.
 
 ## Frontend State Management
 
@@ -343,7 +444,7 @@ console.error(`Error searching for artist "${artistName}":`, error);
 - **Fix**: Already handled with batch processing (3 req/sec). If still occurring, increase `delayMs` in `processBatch()`
 - **Check**: Console logs show batch progress
 
-### "Failed to analyze image"
+### "Failed to analyze image" (Vision API)
 - **Cause**: Google Cloud Vision API error
 - **Debug**: Check console for Vision API response logs
 - **Common Issues**:
@@ -351,10 +452,29 @@ console.error(`Error searching for artist "${artistName}":`, error);
   - Billing not enabled on Google Cloud project
   - Vision API not enabled
 
+### "Gemini analysis failed" / "GEMINI_API_KEY environment variable is not set"
+- **Cause**: Gemini API configuration issue
+- **Debug**: Check console for Gemini response logs
+- **Common Issues**:
+  - `GEMINI_API_KEY` not set in `.env`
+  - API key invalid or expired
+  - Gemini API quota exceeded (unlikely at ~$0.0001/request)
+  - Network connectivity issues
+- **Fix**: Verify API key at https://ai.google.dev
+- **Retry**: Built-in retry logic with exponential backoff (3 attempts)
+
+### "Could not parse Gemini response as JSON"
+- **Cause**: Gemini returned malformed JSON or unexpected format
+- **Debug**: Check console for raw Gemini response
+- **Fallback**: Code attempts to extract artist names from partial JSON
+- **Fix**: Usually resolves on retry (automatic)
+
 ### "Could not find any tracks"
 - **Cause**: All artist searches failed on Spotify
 - **Debug**: Check console logs for individual search failures
-- **Likely Issue**: OCR extracted non-artist text (dates, sponsors, etc.)
+- **Likely Issue**:
+  - Vision API: OCR extracted non-artist text (dates, sponsors, etc.)
+  - Gemini: Poster had no recognizable artists or very low quality image
 
 ## Deployment (Vercel)
 
@@ -367,30 +487,40 @@ console.error(`Error searching for artist "${artistName}":`, error);
 
 **Environment Variables in Vercel**:
 - All variables from `.env`
-- `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents
+- `IMAGE_ANALYSIS_PROVIDER`: Set to `vision` or `gemini`
+- `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents (if using Vision API)
+- `GEMINI_API_KEY`: Add API key from https://ai.google.dev (if using Gemini)
 - Update `SPOTIFY_REDIRECT_URI` to `https://your-domain.vercel.app/api/auth/callback`
+
+**Recommendation**: Start with `IMAGE_ANALYSIS_PROVIDER=gemini` for better accuracy and artist ranking.
 
 ## Testing Checklist
 
 1. **Auth Flow**: Login → Callback → Redirect to /upload
-2. **Image Analysis**: Upload poster → Verify artist list accuracy
-3. **Playlist Creation**: Create playlist → Verify tracks in Spotify
-4. **Rate Limiting**: Test with 50+ artist poster (should complete without 429 errors)
-5. **Error States**: Test with non-image file, expired auth, etc.
+2. **Image Analysis (Vision API)**: Set `IMAGE_ANALYSIS_PROVIDER=vision` → Upload poster → Verify artist list (no weights)
+3. **Image Analysis (Gemini)**: Set `IMAGE_ANALYSIS_PROVIDER=gemini` → Upload poster → Verify weighted artist list with tier badges
+4. **Playlist Creation**: Create playlist → Verify tracks in Spotify
+5. **Rate Limiting**: Test with 50+ artist poster (should complete without 429 errors)
+6. **Error States**: Test with non-image file, expired auth, etc.
+7. **Provider Comparison**: Same poster on both providers → Compare results
 
 ## MVP Constraints & V2 Backlog
 
 **Intentionally NOT Included** (by design):
-- Artist ranking by font size (all artists treated equally)
 - Manual artist review/editing before playlist creation
 - Apple Music integration
 - Database or caching
 - Job queue/async processing (all synchronous)
 - User history or saved playlists
 
+**Currently Available with Provider Choice**:
+- ✅ **Artist ranking by visual prominence** (Gemini only)
+  - Vision API: All artists treated equally
+  - Gemini: Weighted ranking with tier badges
+
 **Future Improvements** (see ARCHITECTURE.md):
-- Font size analysis using Vision API bounding boxes
 - Manual artist editing screen
 - Redis caching for Spotify search results
 - Async job queue for large posters
 - User accounts and playlist history
+- Hybrid mode: Use both providers and merge results

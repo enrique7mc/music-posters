@@ -53,24 +53,91 @@ export async function getCurrentUser(accessToken: string): Promise<SpotifyUser> 
   return response.data;
 }
 
+// Helper function to calculate string similarity (Levenshtein distance-based)
+function similarity(s1: string, s2: string): number {
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+
+  if (longer.length === 0) return 1.0;
+
+  const editDistance = levenshteinDistance(longer.toLowerCase(), shorter.toLowerCase());
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshteinDistance(s1: string, s2: string): number {
+  const costs = [];
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue;
+  }
+  return costs[s2.length];
+}
+
 export async function searchArtist(
   artistName: string,
   accessToken: string
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; matched: boolean; similarity: number } | null> {
   try {
     const response = await axios.get(`${SPOTIFY_API_BASE_URL}/search`, {
       params: {
         q: artistName,
         type: 'artist',
-        limit: 1,
+        limit: 5, // Get top 5 to find best match
       },
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
 
-    const artist = response.data.artists.items[0];
-    return artist ? { id: artist.id, name: artist.name } : null;
+    const artists = response.data.artists.items;
+
+    if (!artists || artists.length === 0) {
+      console.warn(`❌ No results for "${artistName}"`);
+      return null;
+    }
+
+    // Find the best matching artist by name similarity
+    let bestMatch = artists[0];
+    let bestSimilarity = similarity(artistName, artists[0].name);
+
+    for (const artist of artists) {
+      const sim = similarity(artistName, artist.name);
+      if (sim > bestSimilarity) {
+        bestSimilarity = sim;
+        bestMatch = artist;
+      }
+    }
+
+    // Require at least 60% similarity to avoid completely wrong matches
+    const SIMILARITY_THRESHOLD = 0.6;
+    const matched = bestSimilarity >= SIMILARITY_THRESHOLD;
+
+    if (!matched) {
+      console.warn(`⚠️  Low match for "${artistName}": got "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}% similar)`);
+    } else if (bestMatch.name !== artistName) {
+      console.log(`✓ Fuzzy match: "${artistName}" → "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}%)`);
+    } else {
+      console.log(`✓ Exact match: "${artistName}"`);
+    }
+
+    return {
+      id: bestMatch.id,
+      name: bestMatch.name,
+      matched,
+      similarity: bestSimilarity
+    };
   } catch (error) {
     console.error(`Error searching for artist "${artistName}":`, error);
     return null;
@@ -155,6 +222,31 @@ export async function addTracksToPlaylist(
   }
 }
 
+export async function getPlaylistTracks(
+  playlistId: string,
+  accessToken: string
+): Promise<Array<{ name: string; artists: string[]; uri: string }>> {
+  try {
+    const response = await axios.get(
+      `${SPOTIFY_API_BASE_URL}/playlists/${playlistId}/tracks`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    return response.data.items.map((item: any) => ({
+      name: item.track.name,
+      artists: item.track.artists.map((artist: any) => artist.name),
+      uri: item.track.uri,
+    }));
+  } catch (error) {
+    console.error(`Error fetching playlist tracks:`, error);
+    return [];
+  }
+}
+
 // Helper function to add delay between requests
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -188,7 +280,8 @@ async function processBatch<T, R>(
 export async function searchAndGetTopTracks(
   artistNames: string[],
   accessToken: string
-): Promise<{ trackUris: string[]; foundArtists: number }> {
+): Promise<{ trackUris: string[]; foundArtists: number; artistMatches: Array<{ requested: string; found: string | null; similarity: number }> }> {
+  console.log(`\n=== SEARCHING SPOTIFY ===`);
   console.log(`Searching for ${artistNames.length} artists...`);
 
   // Process artist searches in batches to avoid rate limiting
@@ -201,9 +294,25 @@ export async function searchAndGetTopTracks(
     1000  // delay in ms (increased from 100)
   );
 
-  // Filter out null results
-  const validArtists = artists.filter((artist): artist is { id: string; name: string } => artist !== null);
-  console.log(`Found ${validArtists.length}/${artistNames.length} artists on Spotify`);
+  // Track all matches for debugging
+  const artistMatches = artistNames.map((requested, index) => {
+    const found = artists[index];
+    return {
+      requested,
+      found: found ? found.name : null,
+      similarity: found ? found.similarity : 0,
+      matched: found ? found.matched : false
+    };
+  });
+
+  // Filter out null results and poorly matched results
+  const validArtists = artists.filter((artist): artist is { id: string; name: string; matched: boolean; similarity: number } =>
+    artist !== null && artist.matched
+  );
+
+  console.log(`\n📊 Match Statistics:`);
+  console.log(`✓ Exact/Good matches: ${validArtists.length}/${artistNames.length}`);
+  console.log(`⚠️  Poor/No matches: ${artistNames.length - validArtists.length}/${artistNames.length}`);
 
   // Get top tracks in batches (same conservative rate)
   const tracks = await processBatch(
@@ -216,9 +325,11 @@ export async function searchAndGetTopTracks(
   // Filter out null tracks
   const trackUris = tracks.filter((uri): uri is string => uri !== null);
   console.log(`Retrieved ${trackUris.length} tracks`);
+  console.log(`=== END SPOTIFY SEARCH ===\n`);
 
   return {
     trackUris,
     foundArtists: validArtists.length,
+    artistMatches,
   };
 }

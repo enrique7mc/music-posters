@@ -2,7 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import formidable, { Fields, Files } from 'formidable';
 import fs from 'fs';
 import { analyzeImage } from '@/lib/ocr';
+import { analyzeImageWithGeminiRetry } from '@/lib/gemini';
 import { isAuthenticated } from '@/lib/auth';
+import { AnalyzeResponse } from '@/types';
 
 export const config = {
   api: {
@@ -42,13 +44,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Read the image file
     const imageBuffer = fs.readFileSync(imageFile.filepath);
 
-    // Analyze the image using Google Vision
-    const result = await analyzeImage(imageBuffer);
+    // Determine which analysis provider to use
+    const provider = process.env.IMAGE_ANALYSIS_PROVIDER || 'vision';
+
+    console.log(`[Analyze API] Using provider: ${provider}`);
+
+    let result: { artists: any[]; rawText: string };
+
+    if (provider === 'gemini') {
+      // Use Gemini 2.0 Flash with vision-first approach
+      console.log('[Analyze API] Analyzing with Gemini...');
+      result = await analyzeImageWithGeminiRetry(imageBuffer, imageFile.mimetype ?? 'image/jpeg');
+    } else {
+      // Use Google Cloud Vision (default)
+      console.log('[Analyze API] Analyzing with Vision API...');
+      result = await analyzeImage(imageBuffer);
+    }
 
     // Clean up the temporary file
     fs.unlinkSync(imageFile.filepath);
 
-    res.status(200).json(result);
+    // Return result with provider information
+    const response: AnalyzeResponse = {
+      artists: result.artists,
+      rawText: result.rawText,
+      provider: provider as 'vision' | 'gemini',
+    };
+
+    // Log extracted artists for debugging
+    console.log(`\n=== IMAGE ANALYSIS COMPLETE (Provider: ${provider}) ===`);
+    console.log(`Total artists extracted: ${result.artists.length}`);
+    if (provider === 'gemini' && result.artists.some(a => a.weight)) {
+      console.log('\nArtists (sorted by weight):');
+      const sorted = [...result.artists].sort((a, b) => (b.weight || 0) - (a.weight || 0));
+      sorted.forEach((artist, index) => {
+        const weightStr = artist.weight ? ` [Weight: ${artist.weight}/10, Tier: ${artist.tier}]` : '';
+        console.log(`${index + 1}. ${artist.name}${weightStr}`);
+      });
+    } else {
+      console.log('\nArtists:');
+      result.artists.forEach((artist, index) => {
+        console.log(`${index + 1}. ${artist.name}`);
+      });
+    }
+    console.log('=== END IMAGE ANALYSIS ===\n');
+
+    res.status(200).json(response);
   } catch (error: any) {
     console.error('Error analyzing image:', error);
     res.status(500).json({

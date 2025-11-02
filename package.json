@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google-cloud/vision": "^4.3.0",
+    "@google/generative-ai": "^0.21.0",
     "axios": "^1.7.0",
     "cookie": "^1.0.2",
     "formidable": "^3.5.4",

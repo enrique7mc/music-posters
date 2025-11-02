@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 
@@ -7,17 +7,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Check if user is already authenticated
-    checkAuth();
-
-    // Handle OAuth errors
-    if (router.query.error) {
-      setError('Authentication failed. Please try again.');
-    }
-  }, [router.query.error]);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       const response = await axios.get('/api/auth/me');
       if (response.status === 200) {
@@ -28,7 +18,17 @@ export default function Home() {
       // Not authenticated, stay on this page
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    // Check if user is already authenticated
+    checkAuth();
+
+    // Handle OAuth errors
+    if (router.query.error) {
+      setError('Authentication failed. Please try again.');
+    }
+  }, [router.query.error, checkAuth]);
 
   const handleLogin = () => {
     window.location.href = '/api/auth/login';
