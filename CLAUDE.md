@@ -524,3 +524,5 @@ console.error(`Error searching for artist "${artistName}":`, error);
 - Async job queue for large posters
 - User accounts and playlist history
 - Hybrid mode: Use both providers and merge results
+- Environment variables are loaded when the Node.js process starts. Next.js reads your .env files during server initialization, and they're not 
+  hot-reloaded like your code changes are.
