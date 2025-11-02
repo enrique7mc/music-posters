@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+import Head from 'next/head';
 
 export default function Success() {
   const router = useRouter();
@@ -13,6 +14,9 @@ export default function Success() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 flex items-center justify-center">
+      <Head>
+        <title>Playlist Created! - Music Posters</title>
+      </Head>
       <div className="max-w-2xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-2xl p-12 text-center">
           <div className="mb-6">

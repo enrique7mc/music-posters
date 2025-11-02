@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import axios from 'axios';
 
 export default function Home() {
@@ -47,6 +48,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 via-pink-500 to-red-500">
+      <Head>
+        <title>Music Posters - Turn Festival Posters into Spotify Playlists</title>
+      </Head>
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-2xl mx-auto text-center text-white">
           <h1 className="text-6xl font-bold mb-6">Music Posters</h1>

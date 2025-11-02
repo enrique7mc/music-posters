@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import axios from 'axios';
 import { Artist, AnalyzeResponse } from '@/types';
 
@@ -141,6 +142,9 @@ export default function Upload() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Head>
+        <title>Upload Poster - Music Posters</title>
+      </Head>
       <nav className="bg-white shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-purple-600">Music Posters</h1>
