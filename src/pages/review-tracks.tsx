@@ -273,7 +273,7 @@ export default function ReviewTracks() {
               maxLength={100}
             />
             <p className="text-xs text-gray-500 mt-2">
-              This will be the name of your Spotify playlist
+              This will be the name of your Spotify playlist ({playlistName.length}/100 characters)
             </p>
           </div>
 
