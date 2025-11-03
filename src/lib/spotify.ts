@@ -148,6 +148,13 @@ export async function searchArtist(
   }
 }
 
+/**
+ * Retrieves an artist's top track (market: US) and maps it to a Track object.
+ *
+ * @param artistId - Spotify artist ID to retrieve the top track for
+ * @param accessToken - OAuth Bearer token with permission to read Spotify data
+ * @returns A `Track` object representing the artist's highest-ranked top track, or `null` if no top track is available or an error occurs. The returned `Track` includes `name`, `uri`, `artist`, `artistId`, `album`, `albumArtwork`, `duration`, `previewUrl`, and `spotifyUrl`.
+ */
 export async function getArtistTopTrack(
   artistId: string,
   accessToken: string
@@ -295,6 +302,16 @@ async function processBatch<T, R>(
   return results;
 }
 
+/**
+ * Searches Spotify for a list of artist names, retrieves each matched artist's top track, and returns the collected tracks and match metadata.
+ *
+ * @param artistNames - Array of artist names to search for on Spotify
+ * @param accessToken - OAuth bearer token with permission to read Spotify artist and track data
+ * @returns An object containing:
+ *  - `tracks`: an array of `Track` objects for artists that were matched and had an available top track,
+ *  - `foundArtists`: the number of artists that were successfully matched,
+ *  - `artistMatches`: an array of match records `{ requested, found, similarity }` where `requested` is the original query, `found` is the matched artist name or `null` if none, and `similarity` is the similarity score (0–1) between the requested and found names
+ */
 export async function searchAndGetTopTracks(
   artistNames: string[],
   accessToken: string

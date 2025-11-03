@@ -11,6 +11,16 @@ const formatDuration = (ms: number): string => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+/**
+ * Page component that lets a user review, select, and create a playlist from a list of tracks.
+ *
+ * Loads tracks from the router state or sessionStorage (redirecting to `/upload` if none are found),
+ * allows toggling individual tracks or selecting/deselecting all, and submits the selected track URIs
+ * to the server to create a playlist. On successful creation the stored tracks are cleared and the
+ * user is redirected to a success page; errors are surfaced inline.
+ *
+ * @returns A JSX element rendering the review tracks page UI
+ */
 export default function ReviewTracks() {
   const router = useRouter();
   const [tracks, setTracks] = useState<Track[]>([]);
