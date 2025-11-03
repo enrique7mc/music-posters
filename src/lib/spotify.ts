@@ -125,9 +125,13 @@ export async function searchArtist(
     const matched = bestSimilarity >= SIMILARITY_THRESHOLD;
 
     if (!matched) {
-      console.warn(`⚠️  Low match for "${artistName}": got "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}% similar)`);
+      console.warn(
+        `⚠️  Low match for "${artistName}": got "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}% similar)`
+      );
     } else if (bestMatch.name !== artistName) {
-      console.log(`✓ Fuzzy match: "${artistName}" → "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}%)`);
+      console.log(
+        `✓ Fuzzy match: "${artistName}" → "${bestMatch.name}" (${(bestSimilarity * 100).toFixed(0)}%)`
+      );
     } else {
       console.log(`✓ Exact match: "${artistName}"`);
     }
@@ -136,7 +140,7 @@ export async function searchArtist(
       id: bestMatch.id,
       name: bestMatch.name,
       matched,
-      similarity: bestSimilarity
+      similarity: bestSimilarity,
     };
   } catch (error) {
     console.error(`Error searching for artist "${artistName}":`, error);
@@ -149,17 +153,14 @@ export async function getArtistTopTrack(
   accessToken: string
 ): Promise<Track | null> {
   try {
-    const response = await axios.get(
-      `${SPOTIFY_API_BASE_URL}/artists/${artistId}/top-tracks`,
-      {
-        params: {
-          market: 'US',
-        },
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await axios.get(`${SPOTIFY_API_BASE_URL}/artists/${artistId}/top-tracks`, {
+      params: {
+        market: 'US',
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
     const topTrack = response.data.tracks[0];
     if (!topTrack) return null;
@@ -245,14 +246,11 @@ export async function getPlaylistTracks(
   accessToken: string
 ): Promise<Array<{ name: string; artists: string[]; uri: string }>> {
   try {
-    const response = await axios.get(
-      `${SPOTIFY_API_BASE_URL}/playlists/${playlistId}/tracks`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await axios.get(`${SPOTIFY_API_BASE_URL}/playlists/${playlistId}/tracks`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
     return response.data.items.map((item: any) => ({
       name: item.track.name,
@@ -267,7 +265,7 @@ export async function getPlaylistTracks(
 
 // Helper function to add delay between requests
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Process requests in batches to avoid rate limiting
@@ -281,7 +279,9 @@ async function processBatch<T, R>(
 
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
-    console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(items.length / batchSize)} (${batch.length} items)`);
+    console.log(
+      `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(items.length / batchSize)} (${batch.length} items)`
+    );
 
     const batchResults = await Promise.all(batch.map(processor));
     results.push(...batchResults);
@@ -298,7 +298,11 @@ async function processBatch<T, R>(
 export async function searchAndGetTopTracks(
   artistNames: string[],
   accessToken: string
-): Promise<{ tracks: Track[]; foundArtists: number; artistMatches: Array<{ requested: string; found: string | null; similarity: number }> }> {
+): Promise<{
+  tracks: Track[];
+  foundArtists: number;
+  artistMatches: Array<{ requested: string; found: string | null; similarity: number }>;
+}> {
   console.log(`\n=== SEARCHING SPOTIFY ===`);
   console.log(`Searching for ${artistNames.length} artists...`);
 
@@ -308,8 +312,8 @@ export async function searchAndGetTopTracks(
   const artists = await processBatch(
     artistNames,
     (name) => searchArtist(name, accessToken),
-    3,    // batch size (reduced from 10)
-    1000  // delay in ms (increased from 100)
+    3, // batch size (reduced from 10)
+    1000 // delay in ms (increased from 100)
   );
 
   // Track all matches for debugging
@@ -319,18 +323,21 @@ export async function searchAndGetTopTracks(
       requested,
       found: found ? found.name : null,
       similarity: found ? found.similarity : 0,
-      matched: found ? found.matched : false
+      matched: found ? found.matched : false,
     };
   });
 
   // Filter out null results and poorly matched results
-  const validArtists = artists.filter((artist): artist is { id: string; name: string; matched: boolean; similarity: number } =>
-    artist !== null && artist.matched
+  const validArtists = artists.filter(
+    (artist): artist is { id: string; name: string; matched: boolean; similarity: number } =>
+      artist !== null && artist.matched
   );
 
   console.log(`\n📊 Match Statistics:`);
   console.log(`✓ Exact/Good matches: ${validArtists.length}/${artistNames.length}`);
-  console.log(`⚠️  Poor/No matches: ${artistNames.length - validArtists.length}/${artistNames.length}`);
+  console.log(
+    `⚠️  Poor/No matches: ${artistNames.length - validArtists.length}/${artistNames.length}`
+  );
 
   // Get top tracks in batches (same conservative rate)
   const trackResults = await processBatch(

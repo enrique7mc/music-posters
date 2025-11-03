@@ -20,12 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const tokens = await exchangeCodeForTokens(code);
 
-    setAuthCookies(
-      res,
-      tokens.access_token,
-      tokens.refresh_token,
-      tokens.expires_in
-    );
+    setAuthCookies(res, tokens.access_token, tokens.refresh_token, tokens.expires_in);
 
     // Redirect to upload page after successful authentication
     res.redirect('/upload');

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+.next
+out
+
+# Build outputs
+build
+dist
+.vercel
+
+# Env files
+.env
+.env.local
+.env.production.local
+
+# Logs
+*.log
+
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Other
+.DS_Store
+*.pem

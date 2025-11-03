@@ -65,6 +65,7 @@ npm install
 ## 4. Configure Environment Variables
 
 1. Copy the example environment file:
+
 ```bash
 cp .env.example .env
 ```
@@ -86,6 +87,7 @@ NEXTAUTH_SECRET=generate_a_random_secret_here
 ```
 
 3. For `NEXTAUTH_SECRET`, generate a random string:
+
 ```bash
 # On macOS/Linux
 openssl rand -base64 32
@@ -96,6 +98,7 @@ openssl rand -base64 32
 ## 5. Verify Setup
 
 Make sure you have:
+
 - ✅ Created a Spotify Developer App
 - ✅ Set the redirect URI to `http://localhost:3000/api/auth/callback`
 - ✅ Enabled Google Cloud Vision API
@@ -123,22 +126,26 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Troubleshooting
 
 ### "Not authenticated" error
+
 - Make sure you've logged in with Spotify
 - Check that your Spotify credentials are correct in `.env`
 - Verify the redirect URI matches exactly in both Spotify Dashboard and `.env`
 
 ### "Failed to analyze image" error
+
 - Check that `google-credentials.json` exists in the project root
 - Verify the Vision API is enabled in Google Cloud Console
 - Make sure billing is enabled on your Google Cloud project
 - Check the file path in `GOOGLE_APPLICATION_CREDENTIALS`
 
 ### "Could not find any tracks" error
+
 - The OCR might not have detected any artist names
 - Try a different poster with clearer text
 - Check the console logs to see what text was extracted
 
 ### OAuth redirect issues
+
 - Make sure the redirect URI in Spotify Dashboard **exactly** matches the one in `.env`
 - It should be: `http://localhost:3000/api/auth/callback` (no trailing slash)
 - The redirect URI is case-sensitive
@@ -192,6 +199,7 @@ For posters with many artists (50+), the Spotify API calls might take 20-30 seco
 ## Support
 
 If you encounter issues:
+
 1. Check the browser console for errors
 2. Check the terminal/server logs
 3. Verify all environment variables are set correctly

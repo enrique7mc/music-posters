@@ -6,21 +6,21 @@ import { Artist, AnalyzeResponse } from '@/types';
 
 // Fun loading messages
 const loadingMessages = [
-  "🎸 Tuning the guitars...",
-  "🎤 Setting up the microphones...",
-  "🎵 Finding the perfect tracks...",
-  "🎧 Mixing the beats...",
-  "🎹 Playing the piano intro...",
-  "🥁 Getting the drums ready...",
-  "🎺 Warming up the horns...",
-  "🎻 Tuning the strings...",
-  "🎶 Arranging the setlist...",
-  "🔊 Testing the speakers...",
-  "💿 Spinning the records...",
-  "🎼 Reading the music sheets...",
-  "🎪 Setting up the stage...",
-  "✨ Adding some magic...",
-  "🌟 Making it perfect...",
+  '🎸 Tuning the guitars...',
+  '🎤 Setting up the microphones...',
+  '🎵 Finding the perfect tracks...',
+  '🎧 Mixing the beats...',
+  '🎹 Playing the piano intro...',
+  '🥁 Getting the drums ready...',
+  '🎺 Warming up the horns...',
+  '🎻 Tuning the strings...',
+  '🎶 Arranging the setlist...',
+  '🔊 Testing the speakers...',
+  '💿 Spinning the records...',
+  '🎼 Reading the music sheets...',
+  '🎪 Setting up the stage...',
+  '✨ Adding some magic...',
+  '🌟 Making it perfect...',
 ];
 
 // Helper function to get CSS classes for artist name based on weight
@@ -104,7 +104,7 @@ export default function Upload() {
       undercard: 0,
     };
 
-    artists.forEach(artist => {
+    artists.forEach((artist) => {
       if (artist.tier && artist.tier in counts) {
         counts[artist.tier as keyof typeof counts]++;
       }
@@ -166,7 +166,7 @@ export default function Upload() {
 
     try {
       // Extract artist names from Artist objects
-      const artistNames = artists.map(a => a.name);
+      const artistNames = artists.map((a) => a.name);
 
       // Search for tracks (this will take 20-70 seconds with rate limiting)
       const response = await axios.post('/api/search-tracks', {
@@ -217,10 +217,7 @@ export default function Upload() {
           <h1 className="text-2xl font-bold text-purple-600">Music Posters</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">Hi, {user?.display_name}</span>
-            <button
-              onClick={handleLogout}
-              className="text-gray-600 hover:text-gray-800"
-            >
+            <button onClick={handleLogout} className="text-gray-600 hover:text-gray-800">
               Logout
             </button>
           </div>
@@ -252,7 +249,8 @@ export default function Upload() {
                   <div className="text-8xl mb-4">🎸</div>
                   <h2 className="text-3xl font-semibold mb-3">Upload Festival Poster</h2>
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    Upload a photo of any festival lineup poster and we&apos;ll extract the artists to create a Spotify playlist
+                    Upload a photo of any festival lineup poster and we&apos;ll extract the artists
+                    to create a Spotify playlist
                   </p>
                 </div>
 
@@ -298,9 +296,18 @@ export default function Upload() {
                   <div className="text-6xl animate-bounce">🔍</div>
                   <p className="text-xl font-semibold">Scanning the poster...</p>
                   <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
+                    <div
+                      className="w-2 h-2 bg-white rounded-full animate-pulse"
+                      style={{ animationDelay: '0ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-white rounded-full animate-pulse"
+                      style={{ animationDelay: '200ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-white rounded-full animate-pulse"
+                      style={{ animationDelay: '400ms' }}
+                    ></div>
                   </div>
                   <p className="text-sm opacity-90">Using AI to extract artist names...</p>
                 </div>
@@ -327,46 +334,54 @@ export default function Upload() {
                 {/* Right Pane: Artist List with Summary */}
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">
-                      Extracted Artists
-                    </h3>
+                    <h3 className="text-lg font-semibold">Extracted Artists</h3>
                     <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                       {analysisProvider === 'gemini' ? '🤖 Gemini AI' : '👁️ Vision API'}
                     </span>
                   </div>
 
                   {/* Summary Cards */}
-                  {analysisProvider === 'gemini' && artists.some(a => a.tier) ? (
+                  {analysisProvider === 'gemini' && artists.some((a) => a.tier) ? (
                     (() => {
                       const counts = tierCounts;
                       return (
                         <div className="grid grid-cols-2 gap-3 mb-4">
                           {/* Total Artists */}
                           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                            <div className="text-2xl font-bold text-purple-800">{artists.length}</div>
+                            <div className="text-2xl font-bold text-purple-800">
+                              {artists.length}
+                            </div>
                             <div className="text-xs text-purple-600">🎵 Total Artists</div>
                           </div>
                           {counts.headliner > 0 && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                              <div className="text-2xl font-bold text-yellow-800">{counts.headliner}</div>
+                              <div className="text-2xl font-bold text-yellow-800">
+                                {counts.headliner}
+                              </div>
                               <div className="text-xs text-yellow-600">🎸 Headliners</div>
                             </div>
                           )}
                           {counts['sub-headliner'] > 0 && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                              <div className="text-2xl font-bold text-blue-800">{counts['sub-headliner']}</div>
+                              <div className="text-2xl font-bold text-blue-800">
+                                {counts['sub-headliner']}
+                              </div>
                               <div className="text-xs text-blue-600">⭐ Sub-headliners</div>
                             </div>
                           )}
                           {counts['mid-tier'] > 0 && (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                              <div className="text-2xl font-bold text-green-800">{counts['mid-tier']}</div>
+                              <div className="text-2xl font-bold text-green-800">
+                                {counts['mid-tier']}
+                              </div>
                               <div className="text-xs text-green-600">Mid-tier</div>
                             </div>
                           )}
                           {counts.undercard > 0 && (
                             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                              <div className="text-2xl font-bold text-gray-800">{counts.undercard}</div>
+                              <div className="text-2xl font-bold text-gray-800">
+                                {counts.undercard}
+                              </div>
                               <div className="text-xs text-gray-600">Undercard</div>
                             </div>
                           )}
@@ -384,14 +399,19 @@ export default function Upload() {
                   )}
 
                   {/* Artist List */}
-                  <div className="bg-gray-50 rounded-lg p-4 flex-1 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+                  <div
+                    className="bg-gray-50 rounded-lg p-4 flex-1 overflow-y-auto"
+                    style={{ maxHeight: '60vh' }}
+                  >
                     <ul className="space-y-2">
                       {[...artists]
                         .sort((a, b) => (b.weight || 0) - (a.weight || 0))
                         .map((artist, index) => (
                           <li key={index} className="flex items-center justify-between py-1">
                             <div className="flex items-center flex-1">
-                              <span className="text-purple-600 font-semibold mr-3 min-w-[2rem] text-right">{index + 1}.</span>
+                              <span className="text-purple-600 font-semibold mr-3 min-w-[2rem] text-right">
+                                {index + 1}.
+                              </span>
                               <span className={getArtistNameClasses(artist.weight)}>
                                 {artist.name}
                               </span>
@@ -399,10 +419,14 @@ export default function Upload() {
                             <div className="flex items-center gap-2">
                               {(() => {
                                 const tierBadge = getTierBadge(artist.tier);
-                                return tierBadge && (
-                                  <span className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor}`}>
-                                    {tierBadge.label}
-                                  </span>
+                                return (
+                                  tierBadge && (
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor}`}
+                                    >
+                                      {tierBadge.label}
+                                    </span>
+                                  )
                                 );
                               })()}
                               {artist.weight && (
@@ -423,14 +447,32 @@ export default function Upload() {
                         <div className="flex flex-col items-center space-y-6">
                           {/* Animated music notes */}
                           <div className="flex space-x-4">
-                            <div className="text-5xl animate-bounce" style={{ animationDelay: '0ms' }}>🎵</div>
-                            <div className="text-5xl animate-bounce" style={{ animationDelay: '150ms' }}>🎶</div>
-                            <div className="text-5xl animate-bounce" style={{ animationDelay: '300ms' }}>🎵</div>
+                            <div
+                              className="text-5xl animate-bounce"
+                              style={{ animationDelay: '0ms' }}
+                            >
+                              🎵
+                            </div>
+                            <div
+                              className="text-5xl animate-bounce"
+                              style={{ animationDelay: '150ms' }}
+                            >
+                              🎶
+                            </div>
+                            <div
+                              className="text-5xl animate-bounce"
+                              style={{ animationDelay: '300ms' }}
+                            >
+                              🎵
+                            </div>
                           </div>
 
                           {/* Progress bar */}
                           <div className="w-full bg-white bg-opacity-30 rounded-full h-2 overflow-hidden">
-                            <div className="bg-white h-full rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                            <div
+                              className="bg-white h-full rounded-full animate-pulse"
+                              style={{ width: '100%' }}
+                            ></div>
                           </div>
 
                           {/* Rotating message */}

@@ -64,7 +64,9 @@ export function parseArtistsFromText(text: string): string[] {
       line.match(
         /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i
       ) ||
-      line.match(/january|february|march|april|may|june|july|august|september|october|november|december/i)
+      line.match(
+        /january|february|march|april|may|june|july|august|september|october|november|december/i
+      )
     ) {
       return false;
     }
@@ -126,7 +128,8 @@ export function parseArtistsFromText(text: string): string[] {
     }
 
     // Remove lines with excessive punctuation
-    const punctuationRatio = (line.match(/[!@#$%^&*()_+=\[\]{}|;:,.<>?]/g) || []).length / line.length;
+    const punctuationRatio =
+      (line.match(/[!@#$%^&*()_+=\[\]{}|;:,.<>?]/g) || []).length / line.length;
     if (punctuationRatio > 0.3) {
       return false;
     }
@@ -135,9 +138,7 @@ export function parseArtistsFromText(text: string): string[] {
   });
 
   // Remove duplicates (case-insensitive)
-  const unique = Array.from(
-    new Map(filtered.map((item) => [item.toLowerCase(), item])).values()
-  );
+  const unique = Array.from(new Map(filtered.map((item) => [item.toLowerCase(), item])).values());
 
   // Sort by length (longer names first, as they're more likely to be headliners)
   // This also helps with deduplication of partial matches
@@ -163,7 +164,7 @@ export async function analyzeImage(imageBuffer: Buffer): Promise<{
   const artistNames = parseArtistsFromText(rawText);
 
   // Convert string[] to Artist[] format (Vision API doesn't provide weights)
-  const artists: Artist[] = artistNames.map(name => ({
+  const artists: Artist[] = artistNames.map((name) => ({
     name,
     // weight, tier, and reasoning are undefined for Vision API
   }));

@@ -55,7 +55,7 @@ export default function ReviewTracks() {
   }, [router]);
 
   const handleToggleTrack = useCallback((uri: string) => {
-    setSelectedTracks(prev => {
+    setSelectedTracks((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(uri)) {
         newSet.delete(uri);
@@ -67,7 +67,7 @@ export default function ReviewTracks() {
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    setSelectedTracks(new Set(tracks.map(t => t.uri)));
+    setSelectedTracks(new Set(tracks.map((t) => t.uri)));
   }, [tracks]);
 
   const handleDeselectAll = useCallback(() => {
@@ -158,9 +158,11 @@ export default function ReviewTracks() {
                   {selectedCount} of {totalCount} tracks selected
                 </div>
                 <div className="text-sm opacity-90">
-                  {selectedCount === totalCount ? 'All tracks selected' :
-                   selectedCount === 0 ? 'No tracks selected' :
-                   `${totalCount - selectedCount} track${totalCount - selectedCount !== 1 ? 's' : ''} will be excluded`}
+                  {selectedCount === totalCount
+                    ? 'All tracks selected'
+                    : selectedCount === 0
+                      ? 'No tracks selected'
+                      : `${totalCount - selectedCount} track${totalCount - selectedCount !== 1 ? 's' : ''} will be excluded`}
                 </div>
               </div>
               <div className="flex gap-3">
@@ -189,9 +191,7 @@ export default function ReviewTracks() {
                   key={track.uri}
                   onClick={() => handleToggleTrack(track.uri)}
                   className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all duration-200 ${
-                    isSelected
-                      ? 'ring-2 ring-purple-500 shadow-lg'
-                      : 'opacity-60 hover:opacity-80'
+                    isSelected ? 'ring-2 ring-purple-500 shadow-lg' : 'opacity-60 hover:opacity-80'
                   }`}
                 >
                   <div className="relative">
@@ -210,14 +210,22 @@ export default function ReviewTracks() {
                     )}
                     {/* Checkbox Overlay */}
                     <div className="absolute top-2 right-2">
-                      <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                        isSelected
-                          ? 'bg-purple-500'
-                          : 'bg-white bg-opacity-80'
-                      }`}>
+                      <div
+                        className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                          isSelected ? 'bg-purple-500' : 'bg-white bg-opacity-80'
+                        }`}
+                      >
                         {isSelected && (
-                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          <svg
+                            className="w-4 h-4 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                         )}
                       </div>
@@ -226,12 +234,8 @@ export default function ReviewTracks() {
 
                   {/* Track Info */}
                   <div className="p-4">
-                    <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1">
-                      {track.name}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-2 line-clamp-1">
-                      {track.artist}
-                    </p>
+                    <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1">{track.name}</h3>
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-1">{track.artist}</p>
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span className="line-clamp-1">{track.album}</span>
                       <span className="ml-2 flex-shrink-0">{formatDuration(track.duration)}</span>

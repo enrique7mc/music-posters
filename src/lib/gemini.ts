@@ -138,7 +138,9 @@ export async function analyzeImageWithGemini(
     };
   } catch (error) {
     console.error('[Gemini] Error analyzing image:', error);
-    throw new Error(`Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -197,7 +199,7 @@ function parseGeminiResponse(responseText: string): Artist[] {
  */
 function validateArtists(artists: any[]): Artist[] {
   return artists
-    .filter(artist => {
+    .filter((artist) => {
       // Must have a name
       if (!artist.name || typeof artist.name !== 'string') {
         console.warn('[Gemini] Skipping invalid artist (no name):', artist);
@@ -212,7 +214,7 @@ function validateArtists(artists: any[]): Artist[] {
 
       return true;
     })
-    .map(artist => ({
+    .map((artist) => ({
       name: artist.name.trim(),
       weight: artist.weight || 5,
       tier: artist.tier || inferTierFromWeight(artist.weight || 5),
@@ -223,7 +225,9 @@ function validateArtists(artists: any[]): Artist[] {
 /**
  * Infers tier category from weight score
  */
-function inferTierFromWeight(weight: number): 'headliner' | 'sub-headliner' | 'mid-tier' | 'undercard' {
+function inferTierFromWeight(
+  weight: number
+): 'headliner' | 'sub-headliner' | 'mid-tier' | 'undercard' {
   if (weight >= 8) return 'headliner';
   if (weight >= 6) return 'sub-headliner';
   if (weight >= 4) return 'mid-tier';
@@ -259,7 +263,7 @@ export async function analyzeImageWithGeminiRetry(
         // Exponential backoff: 2^attempt seconds
         const waitTime = Math.pow(2, attempt) * 1000;
         console.log(`[Gemini] Retrying in ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
   }

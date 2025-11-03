@@ -12,6 +12,7 @@ Convert festival posters into Spotify playlists using AI.
 See **[SETUP.md](SETUP.md)** for detailed setup instructions.
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
@@ -22,6 +23,7 @@ npm install
    - Configure `.env` file
 
 3. Run the development server:
+
 ```bash
 npm run dev
 ```

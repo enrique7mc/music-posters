@@ -37,19 +37,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Log mismatches for debugging
-    const poorMatches = artistMatches.filter(m => m.found && m.similarity < 0.9);
-    const noMatches = artistMatches.filter(m => !m.found);
+    const poorMatches = artistMatches.filter((m) => m.found && m.similarity < 0.9);
+    const noMatches = artistMatches.filter((m) => !m.found);
 
     if (poorMatches.length > 0) {
       console.log(`\n⚠️  Artists with fuzzy matches (might be wrong):`);
-      poorMatches.forEach(m => {
+      poorMatches.forEach((m) => {
         console.log(`  "${m.requested}" → "${m.found}" (${(m.similarity * 100).toFixed(0)}%)`);
       });
     }
 
     if (noMatches.length > 0) {
       console.log(`\n❌ Artists not found on Spotify:`);
-      noMatches.forEach(m => {
+      noMatches.forEach((m) => {
         console.log(`  "${m.requested}"`);
       });
     }

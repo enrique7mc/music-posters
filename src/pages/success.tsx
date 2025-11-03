@@ -35,13 +35,9 @@ export default function Success() {
             </svg>
           </div>
 
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            Playlist Created!
-          </h1>
+          <h1 className="text-4xl font-bold text-gray-800 mb-4">Playlist Created!</h1>
 
-          <p className="text-xl text-gray-600 mb-8">
-            Your festival playlist is ready to enjoy
-          </p>
+          <p className="text-xl text-gray-600 mb-8">Your festival playlist is ready to enjoy</p>
 
           {playlistUrl && (
             <div className="space-y-4">

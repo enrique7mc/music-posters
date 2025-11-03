@@ -13,6 +13,7 @@ The Music Posters MVP has been successfully built following the refined engineer
 ## What's Been Built
 
 ### ✅ Sprint 1: Setup & Auth (COMPLETE)
+
 - [x] Next.js 14 project initialized with TypeScript
 - [x] Project structure and configuration
 - [x] Spotify OAuth flow (login, callback, logout, me)
@@ -20,6 +21,7 @@ The Music Posters MVP has been successfully built following the refined engineer
 - [x] Spotify API client library
 
 ### ✅ Sprint 2: OCR Pipeline (COMPLETE)
+
 - [x] Google Cloud Vision API integration
 - [x] Image upload handling (FormData with Formidable)
 - [x] OCR text extraction
@@ -31,6 +33,7 @@ The Music Posters MVP has been successfully built following the refined engineer
   - Sorts by length
 
 ### ✅ Sprint 3: Spotify Integration (COMPLETE)
+
 - [x] Artist search functionality
 - [x] Top track retrieval
 - [x] Playlist creation
@@ -39,6 +42,7 @@ The Music Posters MVP has been successfully built following the refined engineer
 - [x] Complete `/api/create-playlist` endpoint
 
 ### ✅ Sprint 4: Frontend & Polish (COMPLETE)
+
 - [x] Home page with authentication
 - [x] Upload page with image preview
 - [x] Success page with playlist link
@@ -47,6 +51,7 @@ The Music Posters MVP has been successfully built following the refined engineer
 - [x] Responsive design with Tailwind CSS
 
 ### ✅ Documentation (COMPLETE)
+
 - [x] README.md - Quick start guide
 - [x] SETUP.md - Detailed setup instructions
 - [x] ARCHITECTURE.md - System design documentation
@@ -54,6 +59,7 @@ The Music Posters MVP has been successfully built following the refined engineer
 - [x] .env.example - Environment variable template
 
 ### ✅ Additional Features
+
 - [x] Health check endpoint
 - [x] Build verification (successful)
 - [x] Type safety (TypeScript throughout)
@@ -107,6 +113,7 @@ music-posters/
 ## Dependencies Installed
 
 ### Production
+
 - `next@^14.2.0` - React framework
 - `react@^18.3.0` - UI library
 - `axios@^1.7.0` - HTTP client
@@ -115,6 +122,7 @@ music-posters/
 - `cookie@latest` - Cookie parsing
 
 ### Development
+
 - `typescript@^5.0.0`
 - `@types/node`, `@types/react`, `@types/react-dom`
 - `@types/formidable`, `@types/cookie`
@@ -158,12 +166,14 @@ These features were explicitly cut for MVP speed:
 You need to set up two external services:
 
 #### Spotify Developer App
+
 1. Go to https://developer.spotify.com/dashboard
 2. Create a new app
 3. Set redirect URI: `http://localhost:3000/api/auth/callback`
 4. Copy Client ID and Secret
 
 #### Google Cloud Vision API
+
 1. Go to https://console.cloud.google.com
 2. Create/select a project
 3. Enable Cloud Vision API
@@ -217,11 +227,13 @@ Follow the deployment section in [SETUP.md](SETUP.md) for Vercel deployment.
 ## Cost Estimates
 
 ### Development
+
 - **Spotify API**: Free (no limits for personal use)
 - **Google Vision API**: Free tier = 1,000 requests/month
 - **Vercel Hosting**: Free tier sufficient for testing
 
 ### Production (Expected)
+
 - **Vercel Pro**: $20/month (if needed for longer timeouts)
 - **Google Vision**: $1.50 per 1,000 requests after free tier
 - **Spotify**: Free (unlimited for personal playlists)
@@ -247,6 +259,7 @@ npm run build
 ```
 
 ✅ Build successful with only minor warnings:
+
 - React Hook dependency warnings (expected, non-critical)
 - Image optimization suggestion (cosmetic)
 

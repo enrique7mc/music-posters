@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, supporting two image analysis providers:
+
 - **Google Cloud Vision API** (OCR-based): Traditional text extraction with heuristic filtering
 - **Gemini 2.0 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
 
@@ -33,6 +34,7 @@ npm run lint
 ## Environment Setup
 
 Required environment variables (see `.env.example`):
+
 ```bash
 # Spotify API
 SPOTIFY_CLIENT_ID=<from Spotify Developer Dashboard>
@@ -54,12 +56,14 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 ```
 
 **Critical**:
+
 - Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
 - Set `IMAGE_ANALYSIS_PROVIDER=gemini` to enable artist ranking by visual prominence
 
 ## Architecture Overview
 
 ### Tech Stack
+
 - **Frontend**: Next.js 14 + React 18 + TypeScript + Tailwind CSS
 - **Backend**: Next.js API Routes (serverless)
 - **Auth**: OAuth 2.0 with httpOnly cookies (no database)
@@ -69,6 +73,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 - **External Services**: Spotify Web API
 
 ### Key Directories
+
 - `src/pages/` - Frontend pages + API routes
 - `src/lib/` - Shared business logic (auth, spotify, ocr)
 - `src/types/` - TypeScript interfaces
@@ -117,12 +122,14 @@ Exchange code for tokens → Store in httpOnly cookies → Redirect to /upload
 ```
 
 **Security**:
+
 - Tokens stored in httpOnly cookies (not localStorage)
 - `secure` flag enabled in production
 - `sameSite: 'lax'` for CSRF protection
 - No user data persistence (stateless)
 
 **Cookie Access**:
+
 ```typescript
 import { getAccessToken, setAuthCookies, clearAuthCookies } from '@/lib/auth';
 const token = getAccessToken(req);
@@ -133,6 +140,7 @@ const token = getAccessToken(req);
 **Critical**: Spotify API has a 180 requests/minute limit. The app uses batch processing to avoid rate limit errors.
 
 **Implementation** (`src/lib/spotify.ts`):
+
 ```typescript
 processBatch(items, processor, batchSize: 3, delayMs: 1000)
 ```
@@ -142,6 +150,7 @@ processBatch(items, processor, batchSize: 3, delayMs: 1000)
 - ~3 requests/second = 180 requests/minute (safe)
 
 **For 100 artists**:
+
 - Artist searches: ~34 batches × 1s = 35 seconds
 - Top track fetches: ~34 batches × 1s = 35 seconds
 - Total: ~70 seconds
@@ -170,11 +179,13 @@ Traditional OCR with heuristic filtering. The `parseArtistsFromText()` function 
 ### Gemini Approach (`src/lib/gemini.ts`)
 
 Vision-first AI analysis with intelligent ranking. Uses few-shot prompting with 3 examples:
+
 - Example 1: Clean poster (demonstrates basic weighting)
 - Example 2: Merged text (demonstrates text separation)
 - Example 3: Poster noise (demonstrates filtering non-artists)
 
 **Analysis Process**:
+
 1. Image sent directly to Gemini 2.0 Flash (no OCR step)
 2. AI analyzes visual hierarchy: font size, position, styling
 3. Returns Artist[] with:
@@ -230,6 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 ## Key API Routes
 
 ### `/api/analyze` (POST)
+
 - **Purpose**: Extract artists from poster image
 - **Input**: multipart/form-data with `image` field
 - **Config**: `bodyParser: false` (required for formidable)
@@ -243,6 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   - Gemini: Upload → Vision analysis → AI ranking → Return weighted artist list
 
 ### `/api/create-playlist` (POST)
+
 - **Purpose**: Create Spotify playlist
 - **Input**: `{ artists: string[], playlistName?: string }`
 - **Max Artists**: 100 (enforced to prevent excessive API calls)
@@ -251,6 +264,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 - **Returns**: `{ playlistUrl, playlistId, tracksAdded, artistsFound, limitApplied }`
 
 ### `/api/auth/*`
+
 - `/api/auth/login` - Initiates Spotify OAuth
 - `/api/auth/callback` - Handles OAuth redirect
 - `/api/auth/me` - Returns current user (or 401)
@@ -261,6 +275,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 Located in `src/lib/spotify.ts`.
 
 **Key Functions**:
+
 - `searchArtist(name, token)` - Returns `{ id, name }` or null
 - `getArtistTopTrack(id, token)` - Returns track URI or null
 - `searchAndGetTopTracks(names, token)` - Orchestrates search with rate limiting
@@ -268,12 +283,14 @@ Located in `src/lib/spotify.ts`.
 - `addTracksToPlaylist(id, uris, token)` - Batches in groups of 100
 
 **Rate Limit Handling**:
+
 ```typescript
 // Uses processBatch() internally
 const { trackUris, foundArtists } = await searchAndGetTopTracks(artistNames, accessToken);
 ```
 
 **Error Handling**:
+
 - Returns null for individual failures (artist not found)
 - Logs errors to console
 - Throws on critical failures (auth expired)
@@ -283,10 +300,11 @@ const { trackUris, foundArtists } = await searchAndGetTopTracks(artistNames, acc
 **Library**: Formidable (for multipart parsing)
 
 **Pattern** (`src/pages/api/analyze.ts`):
+
 ```typescript
 export const config = {
   api: {
-    bodyParser: false,  // Required!
+    bodyParser: false, // Required!
   },
 };
 
@@ -318,6 +336,7 @@ const client = new vision.ImageAnnotatorClient({
 ```
 
 **Response Structure**:
+
 ```typescript
 const [result] = await client.textDetection(imageBuffer);
 const detections = result.textAnnotations;
@@ -340,12 +359,14 @@ const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 ```
 
 **Getting API Key**:
+
 1. Visit https://ai.google.dev
 2. Create or select a project
 3. Generate API key
 4. Add to `.env`: `GEMINI_API_KEY=your_key_here`
 
 **Request Pattern**:
+
 ```typescript
 // Convert image buffer to base64
 const imageBase64 = imageBuffer.toString('base64');
@@ -371,16 +392,17 @@ const responseText = response.text();
 **Pattern**: React hooks with multiple loading states
 
 ```typescript
-const [loading, setLoading] = useState(true);       // Page load
-const [analyzing, setAnalyzing] = useState(false);  // Image analysis
-const [creating, setCreating] = useState(false);    // Playlist creation
+const [loading, setLoading] = useState(true); // Page load
+const [analyzing, setAnalyzing] = useState(false); // Image analysis
+const [creating, setCreating] = useState(false); // Playlist creation
 const [error, setError] = useState<string | null>(null);
 ```
 
 **Auth Check on Page Load**:
+
 ```typescript
 useEffect(() => {
-  checkAuth();  // GET /api/auth/me
+  checkAuth(); // GET /api/auth/me
 }, []);
 
 const checkAuth = async () => {
@@ -388,7 +410,7 @@ const checkAuth = async () => {
     const response = await axios.get('/api/auth/me');
     setUser(response.data);
   } catch (err) {
-    router.push('/');  // Redirect if not authenticated
+    router.push('/'); // Redirect if not authenticated
   }
 };
 ```
@@ -398,10 +420,11 @@ const checkAuth = async () => {
 The app uses fun, rotating messages during long operations:
 
 **Implementation** (`src/pages/upload.tsx`):
+
 ```typescript
 const loadingMessages = [
-  "🎸 Tuning the guitars...",
-  "🎤 Setting up the microphones...",
+  '🎸 Tuning the guitars...',
+  '🎤 Setting up the microphones...',
   // ... 15 total messages
 ];
 
@@ -420,12 +443,14 @@ Messages change every 2 seconds to keep users engaged during 30-60 second playli
 ## Error Handling Strategy
 
 **User-Facing Errors**: Generic messages
+
 ```typescript
 setError('Failed to analyze image');
 setError('Could not find any tracks for the provided artists');
 ```
 
 **Server Logs**: Detailed stack traces
+
 ```typescript
 console.error('Error analyzing image:', error);
 console.error(`Error searching for artist "${artistName}":`, error);
@@ -436,15 +461,18 @@ console.error(`Error searching for artist "${artistName}":`, error);
 ## Common Debugging Scenarios
 
 ### "INVALID_CLIENT: Invalid redirect URI"
+
 - **Cause**: Spotify redirect URI mismatch
 - **Fix**: Use `127.0.0.1:3000` (not `localhost:3000`) in both `.env` and Spotify Dashboard
 
 ### "HTTP 429: Too Many Requests"
+
 - **Cause**: Spotify rate limit exceeded
 - **Fix**: Already handled with batch processing (3 req/sec). If still occurring, increase `delayMs` in `processBatch()`
 - **Check**: Console logs show batch progress
 
 ### "Failed to analyze image" (Vision API)
+
 - **Cause**: Google Cloud Vision API error
 - **Debug**: Check console for Vision API response logs
 - **Common Issues**:
@@ -453,6 +481,7 @@ console.error(`Error searching for artist "${artistName}":`, error);
   - Vision API not enabled
 
 ### "Gemini analysis failed" / "GEMINI_API_KEY environment variable is not set"
+
 - **Cause**: Gemini API configuration issue
 - **Debug**: Check console for Gemini response logs
 - **Common Issues**:
@@ -464,12 +493,14 @@ console.error(`Error searching for artist "${artistName}":`, error);
 - **Retry**: Built-in retry logic with exponential backoff (3 attempts)
 
 ### "Could not parse Gemini response as JSON"
+
 - **Cause**: Gemini returned malformed JSON or unexpected format
 - **Debug**: Check console for raw Gemini response
 - **Fallback**: Code attempts to extract artist names from partial JSON
 - **Fix**: Usually resolves on retry (automatic)
 
 ### "Could not find any tracks"
+
 - **Cause**: All artist searches failed on Spotify
 - **Debug**: Check console logs for individual search failures
 - **Likely Issue**:
@@ -479,6 +510,7 @@ console.error(`Error searching for artist "${artistName}":`, error);
 ## Deployment (Vercel)
 
 **Steps**:
+
 1. Push to GitHub (ensure `.env` and `google-credentials.json` in `.gitignore`)
 2. Import to Vercel
 3. Add environment variables in Vercel dashboard
@@ -486,6 +518,7 @@ console.error(`Error searching for artist "${artistName}":`, error);
 5. Add production redirect URI to Spotify Dashboard
 
 **Environment Variables in Vercel**:
+
 - All variables from `.env`
 - `IMAGE_ANALYSIS_PROVIDER`: Set to `vision` or `gemini`
 - `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents (if using Vision API)
@@ -507,6 +540,7 @@ console.error(`Error searching for artist "${artistName}":`, error);
 ## MVP Constraints & V2 Backlog
 
 **Intentionally NOT Included** (by design):
+
 - Manual artist review/editing before playlist creation
 - Apple Music integration
 - Database or caching
@@ -514,15 +548,17 @@ console.error(`Error searching for artist "${artistName}":`, error);
 - User history or saved playlists
 
 **Currently Available with Provider Choice**:
+
 - ✅ **Artist ranking by visual prominence** (Gemini only)
   - Vision API: All artists treated equally
   - Gemini: Weighted ranking with tier badges
 
 **Future Improvements** (see ARCHITECTURE.md):
+
 - Manual artist editing screen
 - Redis caching for Spotify search results
 - Async job queue for large posters
 - User accounts and playlist history
 - Hybrid mode: Use both providers and merge results
-- Environment variables are loaded when the Node.js process starts. Next.js reads your .env files during server initialization, and they're not 
+- Environment variables are loaded when the Node.js process starts. Next.js reads your .env files during server initialization, and they're not
   hot-reloaded like your code changes are.

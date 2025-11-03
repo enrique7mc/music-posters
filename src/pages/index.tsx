@@ -54,9 +54,7 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-2xl mx-auto text-center text-white">
           <h1 className="text-6xl font-bold mb-6">Music Posters</h1>
-          <p className="text-2xl mb-8">
-            Turn festival posters into Spotify playlists instantly
-          </p>
+          <p className="text-2xl mb-8">Turn festival posters into Spotify playlists instantly</p>
 
           <div className="bg-white rounded-lg shadow-2xl p-8 text-gray-800">
             <div className="mb-8">

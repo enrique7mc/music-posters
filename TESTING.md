@@ -5,6 +5,7 @@ Use this checklist to verify the MVP is working correctly.
 ## Prerequisites
 
 Before testing, ensure:
+
 - [ ] All dependencies are installed (`npm install`)
 - [ ] `.env` file is configured with valid credentials
 - [ ] `google-credentials.json` is in the project root
@@ -18,6 +19,7 @@ curl http://localhost:3000/api/health
 ```
 
 Expected response:
+
 ```json
 {
   "status": "ok",
@@ -57,6 +59,7 @@ Expected response:
 ### Test Images to Use
 
 Use these search terms to find good test images:
+
 - "Coachella 2024 poster"
 - "Lollapalooza lineup"
 - "Glastonbury festival poster"
@@ -98,9 +101,9 @@ Use these search terms to find good test images:
 7. [ ] Click "Open in Spotify"
 8. [ ] Verify new tab opens with your playlist
 9. [ ] Check playlist contents:
-    - [ ] Playlist exists in your Spotify account
-    - [ ] Playlist has a reasonable number of tracks
-    - [ ] Track artists match detected artists
+   - [ ] Playlist exists in your Spotify account
+   - [ ] Playlist has a reasonable number of tracks
+   - [ ] Track artists match detected artists
 
 ### Test Case: No Artists Found
 
@@ -113,8 +116,8 @@ Use these search terms to find good test images:
 
 1. [ ] Upload a very large festival poster image
 2. [ ] Verify either:
-    - [ ] Upload succeeds and analysis works
-    - [ ] Error message about file size
+   - [ ] Upload succeeds and analysis works
+   - [ ] Error message about file size
 
 ### Test Case: Image with 50+ Artists
 
@@ -129,10 +132,10 @@ Use these search terms to find good test images:
 
 1. [ ] Upload poster with lots of sponsor logos and non-artist text
 2. [ ] Verify filtering removes:
-    - [ ] URLs (www.festivaltix.com, etc.)
-    - [ ] Dates (July 4-6, 2025)
-    - [ ] Common keywords (presented by, tickets, VIP)
-    - [ ] Sponsor brands (Red Bull, Pepsi, etc.)
+   - [ ] URLs (www.festivaltix.com, etc.)
+   - [ ] Dates (July 4-6, 2025)
+   - [ ] Common keywords (presented by, tickets, VIP)
+   - [ ] Sponsor brands (Red Bull, Pepsi, etc.)
 
 ### Test Case: Duplicate Artists
 
@@ -162,6 +165,7 @@ curl -X GET http://localhost:3000/api/analyze
 ### Browser Console
 
 Open browser DevTools and check for:
+
 - [ ] No JavaScript errors
 - [ ] No 404 errors for resources
 - [ ] Successful API calls (200 status codes)
@@ -170,6 +174,7 @@ Open browser DevTools and check for:
 ### Server Console
 
 Check the terminal running `npm run dev` for:
+
 - [ ] No uncaught errors
 - [ ] Proper logging of API calls
 - [ ] Google Vision API responses
@@ -191,6 +196,7 @@ Check the terminal running `npm run dev` for:
 ## 9. Browser Compatibility
 
 Test in multiple browsers:
+
 - [ ] Chrome
 - [ ] Firefox
 - [ ] Safari
@@ -199,6 +205,7 @@ Test in multiple browsers:
 ## 10. Mobile Responsiveness
 
 Test on mobile device or browser dev tools:
+
 - [ ] Home page displays correctly
 - [ ] Upload page is usable
 - [ ] Image preview scales properly
@@ -220,6 +227,7 @@ Document any issues found during testing:
 ## Success Criteria
 
 The MVP is ready for deployment if:
+
 - [ ] All authentication flows work
 - [ ] Image analysis extracts reasonable artists (>50% accuracy)
 - [ ] Playlists are successfully created in Spotify

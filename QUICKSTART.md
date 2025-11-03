@@ -60,6 +60,7 @@ NEXTAUTH_SECRET=any_random_string_here
 ```
 
 Generate random secret:
+
 ```bash
 openssl rand -base64 32
 ```
@@ -91,15 +92,18 @@ Open: http://localhost:3000
 ## Troubleshooting
 
 ### "Not authenticated"
+
 - Spotify redirect URI must match **exactly**
 - Check `.env` file has correct credentials
 
 ### "Failed to analyze image"
+
 - Verify `google-credentials.json` exists in project root
 - Check Google Cloud billing is enabled
 - Verify Vision API is enabled
 
 ### "No artists found"
+
 - Try a different poster with clearer text
 - Check browser console for errors
 
