@@ -18,6 +18,9 @@ export default function ReviewTracks() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playlistName, setPlaylistName] = useState(
+    `Festival Mix - ${new Date().toLocaleDateString()}`
+  );
 
   useEffect(() => {
     // Try to get tracks from router state first, fallback to sessionStorage
@@ -80,6 +83,11 @@ export default function ReviewTracks() {
       return;
     }
 
+    if (!playlistName.trim()) {
+      setError('Please enter a playlist name');
+      return;
+    }
+
     setCreating(true);
     setError(null);
 
@@ -87,7 +95,7 @@ export default function ReviewTracks() {
       const trackUris = Array.from(selectedTracks);
       const response = await axios.post('/api/create-playlist', {
         trackUris,
-        playlistName: `Festival Mix - ${new Date().toLocaleDateString()}`,
+        playlistName: playlistName.trim(),
       });
 
       // Clear stored tracks
@@ -244,6 +252,29 @@ export default function ReviewTracks() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Playlist Name Input */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <label
+              htmlFor="playlistName"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              Playlist Name
+            </label>
+            <input
+              id="playlistName"
+              type="text"
+              value={playlistName}
+              onChange={(e) => setPlaylistName(e.target.value)}
+              disabled={creating}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100 text-gray-800"
+              placeholder="Enter playlist name..."
+              maxLength={100}
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              This will be the name of your Spotify playlist
+            </p>
           </div>
 
           {/* Action Buttons */}
