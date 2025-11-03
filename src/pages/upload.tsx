@@ -172,12 +172,10 @@ export default function Upload() {
     setError(null);
 
     try {
-      // Extract artist names from Artist objects
-      const artistNames = artists.map((a) => a.name);
-
       // Search for tracks (this will take 20-70 seconds with rate limiting)
+      // Pass full Artist objects to preserve tier information for dynamic track counts
       const response = await axios.post('/api/search-tracks', {
-        artists: artistNames,
+        artists: artists,
       });
 
       // Store tracks in sessionStorage for the review page
