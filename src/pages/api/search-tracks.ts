@@ -29,17 +29,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'No artists provided' });
   }
 
-  // Validate that artists are objects with name property
-  const invalidArtists = artists.filter((a) => !a || typeof a !== 'object' || !a.name);
+  // Validate that artists are objects with valid name strings
+  const invalidArtists = artists.filter(
+    (a) => !a || typeof a !== 'object' || typeof a.name !== 'string' || a.name.trim().length === 0
+  );
   if (invalidArtists.length > 0) {
-    return res
-      .status(400)
-      .json({ error: 'Invalid artist format. Expected Artist objects with name property.' });
+    return res.status(400).json({
+      error: 'Invalid artist format. Expected Artist objects with non-empty string name property.',
+    });
   }
+
+  // Normalize artist names by trimming whitespace
+  const normalizedArtists = artists.map((a) => ({
+    ...a,
+    name: a.name.trim(),
+  }));
 
   // Limit to 100 artists to avoid excessive API calls
   const MAX_ARTISTS = 100;
-  const limitedArtists = artists.slice(0, MAX_ARTISTS);
+  const limitedArtists = normalizedArtists.slice(0, MAX_ARTISTS);
 
   if (artists.length > MAX_ARTISTS) {
     console.log(`Limiting artists from ${artists.length} to ${MAX_ARTISTS}`);
