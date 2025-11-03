@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SpotifyTokens, SpotifyUser, Track } from '@/types';
+import { SpotifyTokens, SpotifyUser, Track, Artist } from '@/types';
 
 const SPOTIFY_ACCOUNTS_BASE_URL = 'https://accounts.spotify.com';
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
@@ -195,6 +195,53 @@ export async function getArtistTopTrack(
   }
 }
 
+/**
+ * Retrieves multiple top tracks for an artist (market: US) and maps them to Track objects.
+ *
+ * @param artistId - Spotify artist ID to retrieve top tracks for
+ * @param accessToken - OAuth Bearer token with permission to read Spotify data
+ * @param limit - Number of top tracks to retrieve (1-10, default: 1)
+ * @returns An array of `Track` objects representing the artist's top tracks, or an empty array if no tracks are available or an error occurs
+ */
+export async function getArtistTopTracks(
+  artistId: string,
+  accessToken: string,
+  limit: number = 1
+): Promise<Track[]> {
+  try {
+    const response = await axios.get(`${SPOTIFY_API_BASE_URL}/artists/${artistId}/top-tracks`, {
+      params: {
+        market: 'US',
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const tracks = response.data.tracks;
+    if (!tracks || tracks.length === 0) return [];
+
+    // Take only the requested number of tracks (Spotify returns up to 10)
+    const limitedTracks = tracks.slice(0, Math.min(limit, 10));
+
+    // Map to our Track interface
+    return limitedTracks.map((track: any) => ({
+      name: track.name,
+      uri: track.uri,
+      artist: track.artists[0]?.name || 'Unknown Artist',
+      artistId: track.artists[0]?.id || artistId,
+      album: track.album?.name || 'Unknown Album',
+      albumArtwork: track.album?.images?.[0]?.url || null,
+      duration: track.duration_ms || 0,
+      previewUrl: track.preview_url || null,
+      spotifyUrl: track.external_urls?.spotify || '',
+    }));
+  } catch (error) {
+    console.error(`Error getting top tracks for artist ${artistId}:`, error);
+    return [];
+  }
+}
+
 export async function createPlaylist(
   userId: string,
   playlistName: string,
@@ -303,17 +350,40 @@ async function processBatch<T, R>(
 }
 
 /**
- * Searches Spotify for a list of artist names, retrieves each matched artist's top track, and returns the collected tracks and match metadata.
+ * Maps artist tier to the number of tracks to fetch.
  *
- * @param artistNames - Array of artist names to search for on Spotify
+ * @param tier - The artist tier (headliner, sub-headliner, mid-tier, undercard)
+ * @returns Number of tracks to fetch (1-10)
+ */
+function getTrackCountForTier(tier?: string): number {
+  if (!tier) return 3; // Default for Vision API (no tier info)
+
+  switch (tier) {
+    case 'headliner':
+      return 10;
+    case 'sub-headliner':
+      return 5;
+    case 'mid-tier':
+      return 3;
+    case 'undercard':
+      return 1;
+    default:
+      return 3;
+  }
+}
+
+/**
+ * Searches Spotify for a list of artists, retrieves top tracks based on tier, and returns the collected tracks and match metadata.
+ *
+ * @param artists - Array of Artist objects to search for on Spotify
  * @param accessToken - OAuth bearer token with permission to read Spotify artist and track data
  * @returns An object containing:
- *  - `tracks`: an array of `Track` objects for artists that were matched and had an available top track,
+ *  - `tracks`: an array of `Track` objects for artists that were matched and had available tracks (quantity based on tier),
  *  - `foundArtists`: the number of artists that were successfully matched,
  *  - `artistMatches`: an array of match records `{ requested, found, similarity }` where `requested` is the original query, `found` is the matched artist name or `null` if none, and `similarity` is the similarity score (0–1) between the requested and found names
  */
 export async function searchAndGetTopTracks(
-  artistNames: string[],
+  artists: Artist[],
   accessToken: string
 ): Promise<{
   tracks: Track[];
@@ -321,12 +391,15 @@ export async function searchAndGetTopTracks(
   artistMatches: Array<{ requested: string; found: string | null; similarity: number }>;
 }> {
   console.log(`\n=== SEARCHING SPOTIFY ===`);
-  console.log(`Searching for ${artistNames.length} artists...`);
+  console.log(`Searching for ${artists.length} artists...`);
+
+  // Extract artist names for searching
+  const artistNames = artists.map((a) => a.name);
 
   // Process artist searches in batches to avoid rate limiting
   // Spotify allows ~180 req/min = 3 req/sec
   // Use batch of 3 with 1 second delay = ~3 req/sec (safe, within limit)
-  const artists = await processBatch(
+  const searchResults = await processBatch(
     artistNames,
     (name) => searchArtist(name, accessToken),
     3, // batch size (reduced from 10)
@@ -335,7 +408,7 @@ export async function searchAndGetTopTracks(
 
   // Track all matches for debugging
   const artistMatches = artistNames.map((requested, index) => {
-    const found = artists[index];
+    const found = searchResults[index];
     return {
       requested,
       found: found ? found.name : null,
@@ -344,11 +417,20 @@ export async function searchAndGetTopTracks(
     };
   });
 
-  // Filter out null results and poorly matched results
-  const validArtists = artists.filter(
-    (artist): artist is { id: string; name: string; matched: boolean; similarity: number } =>
-      artist !== null && artist.matched
-  );
+  // Filter out null results and poorly matched results, and pair with original Artist data
+  const validArtists = searchResults
+    .map((result, index) => ({
+      searchResult: result,
+      originalArtist: artists[index],
+    }))
+    .filter(
+      (
+        pair
+      ): pair is {
+        searchResult: { id: string; name: string; matched: boolean; similarity: number };
+        originalArtist: Artist;
+      } => pair.searchResult !== null && pair.searchResult.matched
+    );
 
   console.log(`\n📊 Match Statistics:`);
   console.log(`✓ Exact/Good matches: ${validArtists.length}/${artistNames.length}`);
@@ -357,16 +439,23 @@ export async function searchAndGetTopTracks(
   );
 
   // Get top tracks in batches (same conservative rate)
-  const trackResults = await processBatch(
+  // Use tier-based track count for each artist
+  const trackArrays = await processBatch(
     validArtists,
-    (artist) => getArtistTopTrack(artist.id, accessToken),
+    async (pair) => {
+      const trackCount = getTrackCountForTier(pair.originalArtist.tier);
+      console.log(
+        `  Fetching ${trackCount} tracks for ${pair.searchResult.name} (tier: ${pair.originalArtist.tier || 'unknown'})`
+      );
+      return getArtistTopTracks(pair.searchResult.id, accessToken, trackCount);
+    },
     3,
     1000
   );
 
-  // Filter out null tracks
-  const tracks = trackResults.filter((track): track is Track => track !== null);
-  console.log(`Retrieved ${tracks.length} tracks`);
+  // Flatten array of arrays into single array of tracks
+  const tracks = trackArrays.flat();
+  console.log(`Retrieved ${tracks.length} total tracks from ${validArtists.length} artists`);
   console.log(`=== END SPOTIFY SEARCH ===\n`);
 
   return {

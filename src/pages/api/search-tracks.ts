@@ -1,14 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
-import { SearchTracksResponse } from '@/types';
+import { SearchTracksResponse, Artist } from '@/types';
 
 /**
- * API route handler that searches Spotify for top tracks for a list of artist names.
+ * API route handler that searches Spotify for top tracks for a list of artists with tier-based track counts.
  *
- * Expects a POST request with a JSON body containing `artists` (an array of artist names).
+ * Expects a POST request with a JSON body containing `artists` (an array of Artist objects with name and optional tier).
  * Requires an access token retrievable from the incoming request; responds with 401 if missing.
  * Limits processing to 100 artists and returns a JSON response containing `tracks`, `artistsSearched`, and `tracksFound`.
+ * Track count per artist is determined by tier: headliner (10), sub-headliner (5), mid-tier (3), undercard (1), unknown (3).
  * Responds with appropriate HTTP status codes for invalid method (405), invalid input (400), expired Spotify auth (401), rate limiting (429), and other server errors (500).
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -26,6 +27,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!artists || !Array.isArray(artists) || artists.length === 0) {
     return res.status(400).json({ error: 'No artists provided' });
+  }
+
+  // Validate that artists are objects with name property
+  const invalidArtists = artists.filter((a) => !a || typeof a !== 'object' || !a.name);
+  if (invalidArtists.length > 0) {
+    return res
+      .status(400)
+      .json({ error: 'Invalid artist format. Expected Artist objects with name property.' });
   }
 
   // Limit to 100 artists to avoid excessive API calls
