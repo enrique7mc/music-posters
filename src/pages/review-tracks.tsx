@@ -21,6 +21,8 @@ const formatDuration = (ms: number): string => {
  *
  * @returns A JSX element rendering the review tracks page UI
  */
+type ViewMode = 'card' | 'list';
+
 export default function ReviewTracks() {
   const router = useRouter();
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -31,6 +33,25 @@ export default function ReviewTracks() {
   const [playlistName, setPlaylistName] = useState(
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
+
+  // Load view mode from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedViewMode = localStorage.getItem('trackViewMode') as ViewMode | null;
+      if (savedViewMode === 'card' || savedViewMode === 'list') {
+        setViewMode(savedViewMode);
+      }
+    }
+  }, []);
+
+  // Save view mode to localStorage when it changes
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('trackViewMode', mode);
+    }
+  }, []);
 
   useEffect(() => {
     // Try to get tracks from router state first, fallback to sessionStorage
@@ -183,7 +204,47 @@ export default function ReviewTracks() {
                       : `${totalCount - selectedCount} track${totalCount - selectedCount !== 1 ? 's' : ''} will be excluded`}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
+                {/* View Toggle */}
+                <div className="flex gap-1 bg-white bg-opacity-20 rounded-lg p-1">
+                  <button
+                    onClick={() => handleViewModeChange('card')}
+                    className={`p-2 rounded-md transition duration-200 ${
+                      viewMode === 'card'
+                        ? 'bg-white text-purple-600'
+                        : 'text-white hover:bg-white hover:bg-opacity-10'
+                    }`}
+                    title="Card View"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleViewModeChange('list')}
+                    className={`p-2 rounded-md transition duration-200 ${
+                      viewMode === 'list'
+                        ? 'bg-white text-purple-600'
+                        : 'text-white hover:bg-white hover:bg-opacity-10'
+                    }`}
+                    title="List View"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 6h16M4 12h16M4 18h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
                 <button
                   onClick={handleSelectAll}
                   className="bg-white text-purple-600 font-semibold py-2 px-4 rounded-lg hover:bg-purple-50 transition duration-200"
@@ -200,42 +261,143 @@ export default function ReviewTracks() {
             </div>
           </div>
 
-          {/* Track Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {tracks.map((track) => {
-              const isSelected = selectedTracks.has(track.uri);
-              return (
-                <div
-                  key={track.uri}
-                  onClick={() => handleToggleTrack(track.uri)}
-                  className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all duration-200 ${
-                    isSelected ? 'ring-2 ring-purple-500 shadow-lg' : 'opacity-60 hover:opacity-80'
-                  }`}
-                >
-                  <div className="relative">
-                    {/* Album Artwork */}
-                    {track.albumArtwork ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={track.albumArtwork}
-                        alt={track.album}
-                        className="w-full h-48 object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-48 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                        <span className="text-6xl">🎵</span>
+          {/* Track Grid - Card View */}
+          {viewMode === 'card' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {tracks.map((track) => {
+                const isSelected = selectedTracks.has(track.uri);
+                return (
+                  <div
+                    key={track.uri}
+                    onClick={() => handleToggleTrack(track.uri)}
+                    className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all duration-200 ${
+                      isSelected
+                        ? 'ring-2 ring-purple-500 shadow-lg'
+                        : 'opacity-60 hover:opacity-80'
+                    }`}
+                  >
+                    <div className="relative">
+                      {/* Album Artwork */}
+                      {track.albumArtwork ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={track.albumArtwork}
+                          alt={track.album}
+                          className="w-full h-48 object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-48 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                          <span className="text-6xl">🎵</span>
+                        </div>
+                      )}
+                      {/* Checkbox Overlay */}
+                      <div className="absolute top-2 right-2">
+                        <div
+                          className={`w-6 h-6 rounded-md flex items-center justify-center ${
+                            isSelected ? 'bg-purple-500' : 'bg-white bg-opacity-80'
+                          }`}
+                        >
+                          {isSelected && (
+                            <svg
+                              className="w-4 h-4 text-white"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    {/* Checkbox Overlay */}
-                    <div className="absolute top-2 right-2">
+                    </div>
+
+                    {/* Track Info */}
+                    <div className="p-4">
+                      <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1">
+                        {track.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-1">{track.artist}</p>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span className="line-clamp-1">{track.album}</span>
+                        <span className="ml-2 flex-shrink-0">{formatDuration(track.duration)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Compact List View */}
+          {viewMode === 'list' && (
+            <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+              {tracks.map((track, index) => {
+                const isSelected = selectedTracks.has(track.uri);
+                return (
+                  <div
+                    key={track.uri}
+                    onClick={() => handleToggleTrack(track.uri)}
+                    className={`flex items-center gap-3 p-3 cursor-pointer transition-all duration-150 ${
+                      index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                    } ${
+                      isSelected
+                        ? 'border-l-4 border-purple-500 bg-purple-50'
+                        : 'border-l-4 border-transparent hover:bg-gray-100'
+                    }`}
+                  >
+                    {/* Album Artwork Thumbnail */}
+                    <div className="flex-shrink-0">
+                      {track.albumArtwork ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={track.albumArtwork}
+                          alt={track.album}
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded flex items-center justify-center">
+                          <span className="text-2xl">🎵</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Track Info */}
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4">
+                      {/* Track Name */}
+                      <div className="sm:col-span-4">
+                        <p className="font-semibold text-gray-800 truncate">{track.name}</p>
+                      </div>
+                      {/* Artist */}
+                      <div className="sm:col-span-3">
+                        <p className="text-sm text-gray-600 truncate">{track.artist}</p>
+                      </div>
+                      {/* Album */}
+                      <div className="sm:col-span-3 hidden sm:block">
+                        <p className="text-sm text-gray-500 truncate">{track.album}</p>
+                      </div>
+                      {/* Duration */}
+                      <div className="sm:col-span-2 flex items-center justify-end">
+                        <p className="text-sm text-gray-500 tabular-nums">
+                          {formatDuration(track.duration)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Checkbox */}
+                    <div className="flex-shrink-0">
                       <div
-                        className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                          isSelected ? 'bg-purple-500' : 'bg-white bg-opacity-80'
+                        className={`w-5 h-5 rounded flex items-center justify-center border-2 ${
+                          isSelected
+                            ? 'bg-purple-500 border-purple-500'
+                            : 'bg-white border-gray-300'
                         }`}
                       >
                         {isSelected && (
                           <svg
-                            className="w-4 h-4 text-white"
+                            className="w-3 h-3 text-white"
                             fill="currentColor"
                             viewBox="0 0 20 20"
                           >
@@ -249,20 +411,10 @@ export default function ReviewTracks() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Track Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-gray-800 mb-1 line-clamp-1">{track.name}</h3>
-                    <p className="text-sm text-gray-600 mb-2 line-clamp-1">{track.artist}</p>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span className="line-clamp-1">{track.album}</span>
-                      <span className="ml-2 flex-shrink-0">{formatDuration(track.duration)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Playlist Name Input */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
