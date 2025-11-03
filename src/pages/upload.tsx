@@ -57,6 +57,13 @@ const getTierBadge = (tier?: string) => {
   return tierConfig[tier as keyof typeof tierConfig];
 };
 
+/**
+ * Render the Upload page UI that lets an authenticated user upload a festival poster, extract artists from the image, and continue to track selection.
+ *
+ * The component handles authentication check, image selection and preview, poster analysis (calling /api/analyze), displaying extracted artists with tier/weight badges, and initiating a track search (POST /api/search-tracks) whose results are saved to sessionStorage before navigating to the review page.
+ *
+ * @returns The Upload page React element composed of the upload/analyze UI, artist results panel, and controls for creating/searching tracks and logging out.
+ */
 export default function Upload() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);

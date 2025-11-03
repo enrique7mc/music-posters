@@ -3,6 +3,14 @@ import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
 import { SearchTracksResponse } from '@/types';
 
+/**
+ * API route handler that searches Spotify for top tracks for a list of artist names.
+ *
+ * Expects a POST request with a JSON body containing `artists` (an array of artist names).
+ * Requires an access token retrievable from the incoming request; responds with 401 if missing.
+ * Limits processing to 100 artists and returns a JSON response containing `tracks`, `artistsSearched`, and `tracksFound`.
+ * Responds with appropriate HTTP status codes for invalid method (405), invalid input (400), expired Spotify auth (401), rate limiting (429), and other server errors (500).
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

@@ -7,6 +7,20 @@ import {
   getPlaylistTracks,
 } from '@/lib/spotify';
 
+/**
+ * API route handler that creates a Spotify playlist for the authenticated user from provided track URIs.
+ *
+ * Validates that the request is a POST, that the user is authenticated, and that `trackUris` is a non-empty array.
+ * Uses an optional `playlistName` or a default name when creating the playlist, adds the provided tracks, and returns
+ * a JSON payload containing `playlistUrl`, `playlistId`, and `tracksAdded` on success.
+ *
+ * Responds with:
+ * - 405 if the HTTP method is not POST
+ * - 401 if the request is not authenticated or Spotify credentials have expired
+ * - 400 if `trackUris` is missing, not an array, or empty
+ * - 429 if Spotify rate limits the request
+ * - 500 for other failures
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
