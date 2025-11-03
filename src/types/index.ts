@@ -29,3 +29,21 @@ export interface SpotifyUser {
   display_name: string;
   email: string;
 }
+
+export interface Track {
+  name: string;
+  uri: string;
+  artist: string;
+  artistId: string;
+  album: string;
+  albumArtwork: string | null;  // URL to album image
+  duration: number;  // Duration in milliseconds
+  previewUrl: string | null;  // 30-second preview URL (may be null)
+  spotifyUrl: string;  // Direct Spotify link
+}
+
+export interface SearchTracksResponse {
+  tracks: Track[];
+  artistsSearched: number;
+  tracksFound: number;
+}

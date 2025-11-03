@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SpotifyTokens, SpotifyUser } from '@/types';
+import { SpotifyTokens, SpotifyUser, Track } from '@/types';
 
 const SPOTIFY_ACCOUNTS_BASE_URL = 'https://accounts.spotify.com';
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
@@ -147,7 +147,7 @@ export async function searchArtist(
 export async function getArtistTopTrack(
   artistId: string,
   accessToken: string
-): Promise<string | null> {
+): Promise<Track | null> {
   try {
     const response = await axios.get(
       `${SPOTIFY_API_BASE_URL}/artists/${artistId}/top-tracks`,
@@ -162,7 +162,25 @@ export async function getArtistTopTrack(
     );
 
     const topTrack = response.data.tracks[0];
-    return topTrack ? topTrack.uri : null;
+    if (!topTrack) return null;
+
+    // Log warning if spotifyUrl is missing (unexpected for valid tracks)
+    if (!topTrack.external_urls?.spotify) {
+      console.warn(`Track "${topTrack.name}" missing Spotify URL - this is unexpected`);
+    }
+
+    // Extract full track details
+    return {
+      name: topTrack.name,
+      uri: topTrack.uri,
+      artist: topTrack.artists[0]?.name || 'Unknown Artist',
+      artistId: topTrack.artists[0]?.id || artistId,
+      album: topTrack.album?.name || 'Unknown Album',
+      albumArtwork: topTrack.album?.images?.[0]?.url || null,
+      duration: topTrack.duration_ms || 0,
+      previewUrl: topTrack.preview_url || null,
+      spotifyUrl: topTrack.external_urls?.spotify || '',
+    };
   } catch (error) {
     console.error(`Error getting top track for artist ${artistId}:`, error);
     return null;
@@ -280,7 +298,7 @@ async function processBatch<T, R>(
 export async function searchAndGetTopTracks(
   artistNames: string[],
   accessToken: string
-): Promise<{ trackUris: string[]; foundArtists: number; artistMatches: Array<{ requested: string; found: string | null; similarity: number }> }> {
+): Promise<{ tracks: Track[]; foundArtists: number; artistMatches: Array<{ requested: string; found: string | null; similarity: number }> }> {
   console.log(`\n=== SEARCHING SPOTIFY ===`);
   console.log(`Searching for ${artistNames.length} artists...`);
 
@@ -315,7 +333,7 @@ export async function searchAndGetTopTracks(
   console.log(`⚠️  Poor/No matches: ${artistNames.length - validArtists.length}/${artistNames.length}`);
 
   // Get top tracks in batches (same conservative rate)
-  const tracks = await processBatch(
+  const trackResults = await processBatch(
     validArtists,
     (artist) => getArtistTopTrack(artist.id, accessToken),
     3,
@@ -323,12 +341,12 @@ export async function searchAndGetTopTracks(
   );
 
   // Filter out null tracks
-  const trackUris = tracks.filter((uri): uri is string => uri !== null);
-  console.log(`Retrieved ${trackUris.length} tracks`);
+  const tracks = trackResults.filter((track): track is Track => track !== null);
+  console.log(`Retrieved ${tracks.length} tracks`);
   console.log(`=== END SPOTIFY SEARCH ===\n`);
 
   return {
-    trackUris,
+    tracks,
     foundArtists: validArtists.length,
     artistMatches,
   };

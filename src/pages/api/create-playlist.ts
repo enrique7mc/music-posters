@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getAccessToken } from '@/lib/auth';
 import {
   getCurrentUser,
-  searchAndGetTopTracks,
   createPlaylist,
   addTracksToPlaylist,
   getPlaylistTracks,
@@ -19,57 +18,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const { artists, playlistName } = req.body;
+  const { trackUris, playlistName } = req.body;
 
-  if (!artists || !Array.isArray(artists) || artists.length === 0) {
-    return res.status(400).json({ error: 'No artists provided' });
-  }
-
-  // Limit to 100 artists to avoid excessive API calls
-  const MAX_ARTISTS = 100;
-  const limitedArtists = artists.slice(0, MAX_ARTISTS);
-
-  if (artists.length > MAX_ARTISTS) {
-    console.log(`Limiting artists from ${artists.length} to ${MAX_ARTISTS}`);
+  if (!trackUris || !Array.isArray(trackUris) || trackUris.length === 0) {
+    return res.status(400).json({ error: 'No track URIs provided' });
   }
 
   try {
     // Get current user
     const user = await getCurrentUser(accessToken);
 
-    // Search for artists and get their top tracks with rate limiting
-    console.log(`Creating playlist for ${user.display_name} with ${limitedArtists.length} artists`);
-    const { trackUris, foundArtists, artistMatches } = await searchAndGetTopTracks(
-      limitedArtists,
-      accessToken
-    );
-
-    // Log mismatches for debugging
-    const poorMatches = artistMatches.filter(m => m.found && m.similarity < 0.9);
-    const noMatches = artistMatches.filter(m => !m.found);
-
-    if (poorMatches.length > 0) {
-      console.log(`\n⚠️  Artists with fuzzy matches (might be wrong):`);
-      poorMatches.forEach(m => {
-        console.log(`  "${m.requested}" → "${m.found}" (${(m.similarity * 100).toFixed(0)}%)`);
-      });
-    }
-
-    if (noMatches.length > 0) {
-      console.log(`\n❌ Artists not found on Spotify:`);
-      noMatches.forEach(m => {
-        console.log(`  "${m.requested}"`);
-      });
-    }
-
-    if (trackUris.length === 0) {
-      return res.status(400).json({
-        error: 'Could not find any tracks for the provided artists',
-      });
-    }
-
     // Create playlist
     const name = playlistName || `Festival Mix - ${new Date().toLocaleDateString()}`;
+    console.log(`Creating playlist for ${user.display_name} with ${trackUris.length} tracks`);
     const playlist = await createPlaylist(user.id, name, accessToken);
 
     // Add tracks to playlist
@@ -91,9 +52,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       playlistUrl: playlist.url,
       playlistId: playlist.id,
       tracksAdded: trackUris.length,
-      artistsFound: foundArtists,
-      totalArtists: limitedArtists.length,
-      limitApplied: artists.length > MAX_ARTISTS,
     });
   } catch (error: any) {
     console.error('Error creating playlist:', error);
