@@ -541,7 +541,6 @@ console.error(`Error searching for artist "${artistName}":`, error);
 
 **Intentionally NOT Included** (by design):
 
-- Manual artist review/editing before playlist creation
 - Apple Music integration
 - Database or caching
 - Job queue/async processing (all synchronous)
