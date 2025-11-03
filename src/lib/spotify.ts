@@ -164,6 +164,11 @@ export async function getArtistTopTrack(
     const topTrack = response.data.tracks[0];
     if (!topTrack) return null;
 
+    // Log warning if spotifyUrl is missing (unexpected for valid tracks)
+    if (!topTrack.external_urls?.spotify) {
+      console.warn(`Track "${topTrack.name}" missing Spotify URL - this is unexpected`);
+    }
+
     // Extract full track details
     return {
       name: topTrack.name,

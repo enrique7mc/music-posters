@@ -21,12 +21,26 @@ export default function ReviewTracks() {
 
   useEffect(() => {
     // Try to get tracks from router state first, fallback to sessionStorage
-    const routerTracks = router.query.tracks
-      ? JSON.parse(router.query.tracks as string)
-      : null;
+    let routerTracks: Track[] | null = null;
+    if (router.query.tracks) {
+      const raw = Array.isArray(router.query.tracks) ? router.query.tracks[0] : router.query.tracks;
+      try {
+        routerTracks = JSON.parse(raw);
+      } catch (parseError) {
+        console.warn('Invalid tracks payload in query parameter', parseError);
+      }
+    }
 
-    const storedTracks = routerTracks ||
-      (typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('tracks') || '[]') : []);
+    let storedTracks: Track[] = [];
+    if (routerTracks) {
+      storedTracks = routerTracks;
+    } else if (typeof window !== 'undefined') {
+      try {
+        storedTracks = JSON.parse(sessionStorage.getItem('tracks') || '[]');
+      } catch (parseError) {
+        console.warn('Invalid tracks in sessionStorage', parseError);
+      }
+    }
 
     if (storedTracks.length === 0) {
       // No tracks found, redirect back to upload
