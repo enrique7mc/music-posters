@@ -353,9 +353,32 @@ async function processBatch<T, R>(
  * Maps artist tier to the number of tracks to fetch.
  *
  * @param tier - The artist tier (headliner, sub-headliner, mid-tier, undercard)
+ * @param options - Optional override settings for track count
  * @returns Number of tracks to fetch (1-10)
  */
-function getTrackCountForTier(tier?: string): number {
+function getTrackCountForTier(
+  tier?: string,
+  options?: {
+    mode?: 'tier-based' | 'custom';
+    customCount?: number;
+    artistName?: string;
+    perArtistCounts?: Record<string, number>;
+  }
+): number {
+  // Check for per-artist override first
+  if (options?.perArtistCounts && options.artistName) {
+    const override = options.perArtistCounts[options.artistName];
+    if (override !== undefined) {
+      return Math.max(1, Math.min(10, override)); // Ensure 1-10 range
+    }
+  }
+
+  // Check for custom mode
+  if (options?.mode === 'custom' && options.customCount !== undefined) {
+    return Math.max(1, Math.min(10, options.customCount)); // Ensure 1-10 range
+  }
+
+  // Default to tier-based
   if (!tier) return 3; // Default for Vision API (no tier info)
 
   switch (tier) {
@@ -377,6 +400,7 @@ function getTrackCountForTier(tier?: string): number {
  *
  * @param artists - Array of Artist objects to search for on Spotify
  * @param accessToken - OAuth bearer token with permission to read Spotify artist and track data
+ * @param trackCountOptions - Optional settings to customize track counts per artist
  * @returns An object containing:
  *  - `tracks`: an array of `Track` objects for artists that were matched and had available tracks (quantity based on tier),
  *  - `foundArtists`: the number of artists that were successfully matched,
@@ -384,7 +408,12 @@ function getTrackCountForTier(tier?: string): number {
  */
 export async function searchAndGetTopTracks(
   artists: Artist[],
-  accessToken: string
+  accessToken: string,
+  trackCountOptions?: {
+    mode?: 'tier-based' | 'custom';
+    customCount?: number;
+    perArtistCounts?: Record<string, number>;
+  }
 ): Promise<{
   tracks: Track[];
   foundArtists: number;
@@ -439,11 +468,16 @@ export async function searchAndGetTopTracks(
   );
 
   // Get top tracks in batches (same conservative rate)
-  // Use tier-based track count for each artist
+  // Use tier-based track count for each artist (or custom if specified)
   const trackArrays = await processBatch(
     validArtists,
     async (pair) => {
-      const trackCount = getTrackCountForTier(pair.originalArtist.tier);
+      const trackCount = getTrackCountForTier(pair.originalArtist.tier, {
+        mode: trackCountOptions?.mode,
+        customCount: trackCountOptions?.customCount,
+        artistName: pair.originalArtist.name,
+        perArtistCounts: trackCountOptions?.perArtistCounts,
+      });
       console.log(
         `  Fetching ${trackCount} tracks for ${pair.searchResult.name} (tier: ${pair.originalArtist.tier || 'unknown'})`
       );

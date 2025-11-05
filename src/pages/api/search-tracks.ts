@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { artists } = req.body;
+  const { artists, trackCountMode, customTrackCount, perArtistCounts } = req.body;
 
   if (!artists || !Array.isArray(artists) || artists.length === 0) {
     return res.status(400).json({ error: 'No artists provided' });
@@ -79,7 +79,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`Searching tracks for ${limitedArtists.length} artists`);
     const { tracks, foundArtists, artistMatches } = await searchAndGetTopTracks(
       limitedArtists,
-      accessToken
+      accessToken,
+      {
+        mode: trackCountMode || 'tier-based',
+        customCount: customTrackCount,
+        perArtistCounts: perArtistCounts,
+      }
     );
 
     // Log mismatches for debugging
