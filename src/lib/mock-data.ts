@@ -258,7 +258,7 @@ export const mockTracks: Track[] = [
  * @returns Track[]
  */
 export function getMockTracks(count?: number): Track[] {
-  if (count && count > 0) {
+  if (typeof count === 'number' && count >= 0) {
     return mockTracks.slice(0, count);
   }
   return mockTracks;
