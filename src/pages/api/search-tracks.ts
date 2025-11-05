@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Sanitize perArtistCounts by trimming keys to match normalized artist names
   const sanitizedPerArtistCounts =
     perArtistCounts && typeof perArtistCounts === 'object'
-      ? Object.entries(perArtistCounts).reduce(
+      ? Object.entries(perArtistCounts as Record<string, number>).reduce(
           (acc, [artistName, count]) => {
             acc[artistName.trim()] = count;
             return acc;
