@@ -74,6 +74,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`Limiting artists from ${artists.length} to ${MAX_ARTISTS}`);
   }
 
+  // Sanitize perArtistCounts by trimming keys to match normalized artist names
+  const sanitizedPerArtistCounts =
+    perArtistCounts && typeof perArtistCounts === 'object'
+      ? Object.entries(perArtistCounts).reduce(
+          (acc, [artistName, count]) => {
+            acc[artistName.trim()] = count;
+            return acc;
+          },
+          {} as Record<string, number>
+        )
+      : undefined;
+
   try {
     // Search for artists and get their top tracks with rate limiting
     console.log(`Searching tracks for ${limitedArtists.length} artists`);
@@ -83,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       {
         mode: trackCountMode || 'tier-based',
         customCount: customTrackCount,
-        perArtistCounts: perArtistCounts,
+        perArtistCounts: sanitizedPerArtistCounts,
       }
     );
 
