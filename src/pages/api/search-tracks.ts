@@ -17,16 +17,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const accessToken = getAccessToken(req);
-
-  if (!accessToken) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-
   const { artists } = req.body;
 
   if (!artists || !Array.isArray(artists) || artists.length === 0) {
     return res.status(400).json({ error: 'No artists provided' });
+  }
+
+  // Check if mock data mode is enabled
+  if (process.env.USE_MOCK_DATA === 'true') {
+    console.log('⚠️  Using mock data (USE_MOCK_DATA=true)');
+    const { mockTracks } = await import('@/lib/mock-data');
+
+    // Simulate API delay for realistic testing (1-2 seconds)
+    const delay = 1000 + Math.random() * 1000; // Random delay between 1-2 seconds
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    const response: SearchTracksResponse = {
+      tracks: mockTracks,
+      artistsSearched: artists.length,
+      tracksFound: mockTracks.length,
+    };
+
+    console.log(
+      `✅ Returned ${mockTracks.length} mock tracks (simulated ${(delay / 1000).toFixed(1)}s delay)`
+    );
+    return res.status(200).json(response);
+  }
+
+  const accessToken = getAccessToken(req);
+
+  if (!accessToken) {
+    return res.status(401).json({ error: 'Not authenticated' });
   }
 
   // Validate that artists are objects with valid name strings
