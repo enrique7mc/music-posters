@@ -44,6 +44,9 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback  # MUST use 127.0.0
 # Image Analysis Provider (choose one: 'vision' or 'gemini')
 IMAGE_ANALYSIS_PROVIDER=vision
 
+# Development: Use mock data instead of real API calls (optional, for development/testing)
+USE_MOCK_DATA=false
+
 # Google Cloud Vision API (used when IMAGE_ANALYSIS_PROVIDER=vision)
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
 
@@ -59,6 +62,16 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 
 - Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
 - Set `IMAGE_ANALYSIS_PROVIDER=gemini` to enable artist ranking by visual prominence
+
+**Development Features**:
+
+- Set `USE_MOCK_DATA=true` to bypass Spotify API calls and use mock track data instead. This enables:
+  - **Faster development**: No waiting for API calls during UI development
+  - **No rate limiting**: Test without hitting Spotify's 180 requests/minute limit
+  - **Offline development**: Work without internet connection or valid Spotify credentials
+  - **Consistent test data**: Predictable data for testing edge cases (long names, missing artwork, etc.)
+  - Mock data includes tracks representing all artist tiers with edge cases (see `src/lib/mock-data.ts`)
+  - Simulates realistic API delay (1-2 seconds) for accurate testing experience
 
 ## Architecture Overview
 
@@ -506,6 +519,33 @@ console.error(`Error searching for artist "${artistName}":`, error);
 - **Likely Issue**:
   - Vision API: OCR extracted non-artist text (dates, sponsors, etc.)
   - Gemini: Poster had no recognizable artists or very low quality image
+
+### Using Mock Data for Development
+
+To avoid Spotify API calls during development or testing:
+
+1. Set `USE_MOCK_DATA=true` in `.env`
+2. Restart your development server (environment variables are loaded at startup)
+3. Navigate to `/review-tracks` page (after uploading and analyzing an image)
+4. The `/api/search-tracks` endpoint will return mock data instead of calling Spotify API
+
+**What you'll see**:
+
+- Console logs: `⚠️  Using mock data (USE_MOCK_DATA=true)`
+- Mock tracks include all artist tiers (headliner, sub-headliner, mid-tier, undercard)
+- Edge cases: long names, missing artwork, no preview URLs
+- Simulated 1-2 second API delay for realistic testing
+- 30+ mock tracks available in `src/lib/mock-data.ts`
+
+**When to use**:
+
+- UI development on review-tracks page
+- Testing edge cases without finding real posters
+- Offline development
+- Avoiding rate limits during rapid testing
+- CI/CD environments without Spotify credentials
+
+**Note**: Remember to set `USE_MOCK_DATA=false` (or remove it) when testing real Spotify integration.
 
 ## Deployment (Vercel)
 

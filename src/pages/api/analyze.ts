@@ -4,6 +4,7 @@ import fs from 'fs';
 import { analyzeImage } from '@/lib/ocr';
 import { analyzeImageWithGeminiRetry } from '@/lib/gemini';
 import { isAuthenticated } from '@/lib/auth';
+import { mockVisionArtists, mockGeminiArtists } from '@/lib/mock-data';
 import { AnalyzeResponse } from '@/types';
 
 export const config = {
@@ -11,149 +12,6 @@ export const config = {
     bodyParser: false, // Disable default body parser for file uploads
   },
 };
-
-// Mock data for development (Vision API style - no weights)
-const MOCK_VISION_ARTISTS = [
-  { name: 'Tame Impala' },
-  { name: 'The Strokes' },
-  { name: 'Billie Eilish' },
-  { name: 'Tyler, The Creator' },
-  { name: 'Arctic Monkeys' },
-  { name: 'Frank Ocean' },
-  { name: 'Disclosure' },
-  { name: 'LCD Soundsystem' },
-  { name: 'Childish Gambino' },
-  { name: 'ODESZA' },
-  { name: 'Vampire Weekend' },
-  { name: 'The 1975' },
-  { name: 'Khruangbin' },
-  { name: 'Japanese Breakfast' },
-  { name: 'Wet Leg' },
-  { name: 'boygenius' },
-  { name: 'Turnstile' },
-  { name: 'Fontaines D.C.' },
-  { name: 'Remi Wolf' },
-  { name: 'Wallows' },
-];
-
-// Mock data for development (Gemini style - with weights and tiers)
-const MOCK_GEMINI_ARTISTS = [
-  {
-    name: 'Tame Impala',
-    weight: 10,
-    tier: 'headliner',
-    reasoning: 'Largest text at top of poster',
-  },
-  {
-    name: 'The Strokes',
-    weight: 10,
-    tier: 'headliner',
-    reasoning: 'Large text, prominent position',
-  },
-  {
-    name: 'Billie Eilish',
-    weight: 9,
-    tier: 'sub-headliner',
-    reasoning: 'Second line, large font',
-  },
-  {
-    name: 'Tyler, The Creator',
-    weight: 9,
-    tier: 'sub-headliner',
-    reasoning: 'Second tier positioning',
-  },
-  {
-    name: 'Arctic Monkeys',
-    weight: 8,
-    tier: 'sub-headliner',
-    reasoning: 'Third line, still prominent',
-  },
-  {
-    name: 'Frank Ocean',
-    weight: 8,
-    tier: 'sub-headliner',
-    reasoning: 'Third tier, notable size',
-  },
-  {
-    name: 'Disclosure',
-    weight: 7,
-    tier: 'mid-tier',
-    reasoning: 'Mid-tier placement',
-  },
-  {
-    name: 'LCD Soundsystem',
-    weight: 7,
-    tier: 'mid-tier',
-    reasoning: 'Medium font size',
-  },
-  {
-    name: 'Childish Gambino',
-    weight: 6,
-    tier: 'mid-tier',
-    reasoning: 'Middle section',
-  },
-  {
-    name: 'ODESZA',
-    weight: 6,
-    tier: 'mid-tier',
-    reasoning: 'Medium prominence',
-  },
-  {
-    name: 'Vampire Weekend',
-    weight: 5,
-    tier: 'mid-tier',
-    reasoning: 'Mid-lower section',
-  },
-  {
-    name: 'The 1975',
-    weight: 5,
-    tier: 'mid-tier',
-    reasoning: 'Standard font size',
-  },
-  {
-    name: 'Khruangbin',
-    weight: 4,
-    tier: 'undercard',
-    reasoning: 'Lower third of lineup',
-  },
-  {
-    name: 'Japanese Breakfast',
-    weight: 4,
-    tier: 'undercard',
-    reasoning: 'Smaller text',
-  },
-  {
-    name: 'Wet Leg',
-    weight: 3,
-    tier: 'undercard',
-    reasoning: 'Bottom section',
-  },
-  {
-    name: 'boygenius',
-    weight: 3,
-    tier: 'undercard',
-    reasoning: 'Small font near bottom',
-  },
-  { name: 'Turnstile', weight: 2, tier: 'undercard', reasoning: 'Lower tier' },
-  {
-    name: 'Fontaines D.C.',
-    weight: 2,
-    tier: 'undercard',
-    reasoning: 'Small text',
-  },
-  {
-    name: 'Remi Wolf',
-    weight: 1,
-    tier: 'undercard',
-    reasoning: 'Smallest text at bottom',
-  },
-  {
-    name: 'Wallows',
-    weight: 1,
-    tier: 'undercard',
-    reasoning: 'Bottom tier placement',
-  },
-];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -202,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (useMockData) {
       // Return mock data instead of calling real APIs
-      const mockArtists = provider === 'gemini' ? MOCK_GEMINI_ARTISTS : MOCK_VISION_ARTISTS;
+      const mockArtists = provider === 'gemini' ? mockGeminiArtists : mockVisionArtists;
       result = {
         artists: mockArtists,
         rawText: mockArtists.map((a) => a.name).join('\n'),
