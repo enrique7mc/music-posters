@@ -138,7 +138,9 @@ export default function ReviewTracks() {
       router.push(`/success?playlistUrl=${encodeURIComponent(response.data.playlistUrl)}`);
     } catch (err: any) {
       console.error('Error creating playlist:', err);
-      setError(err.response?.data?.error || 'Failed to create playlist');
+      const errorMessage = err.response?.data?.error || 'Failed to create playlist';
+      const errorDetails = err.response?.data?.details;
+      setError(errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage);
       setCreating(false);
     }
   };
