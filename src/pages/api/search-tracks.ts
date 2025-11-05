@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
 import { SearchTracksResponse, Artist } from '@/types';
+import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 
 /**
  * API route handler that searches Spotify for top tracks for a list of artists with tier-based track counts.
@@ -15,6 +16,11 @@ import { SearchTracksResponse, Artist } from '@/types';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Apply rate limiting (10 requests per minute for track searches)
+  if (await applyRateLimit(req, res, RateLimitPresets.moderate())) {
+    return; // Rate limit exceeded, response already sent
   }
 
   const { artists, trackCountMode, customTrackCount, perArtistCounts } = req.body;
