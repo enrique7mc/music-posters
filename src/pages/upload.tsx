@@ -78,6 +78,12 @@ export default function Upload() {
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Track count customization state
+  const [trackCountMode, setTrackCountMode] = useState<'tier-based' | 'custom'>('tier-based');
+  const [customTrackCount, setCustomTrackCount] = useState(3);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [perArtistCounts, setPerArtistCounts] = useState<Record<string, number>>({});
+
   const checkAuth = useCallback(async () => {
     try {
       const response = await axios.get('/api/auth/me');
@@ -119,6 +125,32 @@ export default function Upload() {
 
     return counts;
   }, [artists]);
+
+  // Calculate estimated total track count based on current settings
+  const estimatedTrackCount = useMemo(() => {
+    if (artists.length === 0) return 0;
+
+    return artists.reduce((total, artist) => {
+      // Check if there's a per-artist override
+      if (perArtistCounts[artist.name] !== undefined) {
+        return total + perArtistCounts[artist.name];
+      }
+
+      // Otherwise use the mode setting
+      if (trackCountMode === 'custom') {
+        return total + customTrackCount;
+      }
+
+      // Tier-based (default)
+      const tierTrackCounts: Record<string, number> = {
+        headliner: 10,
+        'sub-headliner': 5,
+        'mid-tier': 3,
+        undercard: 1,
+      };
+      return total + (artist.tier ? tierTrackCounts[artist.tier] || 3 : 3);
+    }, 0);
+  }, [artists, trackCountMode, customTrackCount, perArtistCounts]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -176,6 +208,9 @@ export default function Upload() {
       // Pass full Artist objects to preserve tier information for dynamic track counts
       const response = await axios.post('/api/search-tracks', {
         artists: artists,
+        trackCountMode: trackCountMode,
+        customTrackCount: trackCountMode === 'custom' ? customTrackCount : undefined,
+        perArtistCounts: Object.keys(perArtistCounts).length > 0 ? perArtistCounts : undefined,
       });
 
       // Store tracks in sessionStorage for the review page
@@ -443,6 +478,179 @@ export default function Upload() {
                           </li>
                         ))}
                     </ul>
+                  </div>
+
+                  {/* Track Count Configuration */}
+                  <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Track Count Settings</h4>
+
+                    {/* Radio options for mode selection */}
+                    <div className="space-y-2">
+                      <label className="flex items-start cursor-pointer">
+                        <input
+                          type="radio"
+                          name="trackCountMode"
+                          value="tier-based"
+                          checked={trackCountMode === 'tier-based'}
+                          onChange={(e) => setTrackCountMode(e.target.value as 'tier-based')}
+                          className="mt-1 mr-2"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            Use tier-based{' '}
+                            <span className="text-green-600 text-sm">(Recommended)</span>
+                          </div>
+                          {analysisProvider === 'gemini' && artists.some((a) => a.tier) ? (
+                            <div className="text-xs text-gray-500 ml-0 mt-1">
+                              Headliners: 10 tracks, Sub-headliners: 5 tracks, Mid-tier: 3 tracks,
+                              Undercard: 1 track
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500 ml-0 mt-1">
+                              3 tracks per artist (no tier information available)
+                            </div>
+                          )}
+                        </div>
+                      </label>
+
+                      <label className="flex items-start cursor-pointer">
+                        <input
+                          type="radio"
+                          name="trackCountMode"
+                          value="custom"
+                          checked={trackCountMode === 'custom'}
+                          onChange={(e) => setTrackCountMode(e.target.value as 'custom')}
+                          className="mt-1 mr-2"
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800">Custom:</span>
+                          <select
+                            value={String(customTrackCount)}
+                            onChange={(e) => setCustomTrackCount(parseInt(e.target.value))}
+                            disabled={trackCountMode !== 'custom'}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed w-16 bg-white text-gray-900"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                              <option key={num} value={num}>
+                                {num}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-sm text-gray-600">tracks for all artists</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Advanced customization toggle */}
+                    <button
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                    >
+                      <span>{showAdvanced ? '▼' : '▶'}</span>
+                      <span>⚙️ Advanced: Customize Individual Artists</span>
+                    </button>
+
+                    {/* Advanced per-artist controls */}
+                    {showAdvanced && (
+                      <div className="mt-3 border-t border-gray-200 pt-3">
+                        <div className="mb-3 flex items-center gap-2">
+                          <span className="text-sm text-gray-600">Bulk actions:</span>
+                          <select
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-32 bg-white text-gray-900"
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              if (value > 0) {
+                                const newCounts: Record<string, number> = {};
+                                artists.forEach((artist) => {
+                                  newCounts[artist.name] = value;
+                                });
+                                setPerArtistCounts(newCounts);
+                              }
+                            }}
+                          >
+                            <option value="">Set all to...</option>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                              <option key={num} value={num}>
+                                {num} tracks
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => setPerArtistCounts({})}
+                            className="text-sm text-gray-600 hover:text-gray-800 underline"
+                          >
+                            Reset all
+                          </button>
+                        </div>
+
+                        <div
+                          className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 rounded p-2"
+                          style={{ maxHeight: '15rem' }}
+                        >
+                          {artists.map((artist, index) => {
+                            const defaultCount =
+                              trackCountMode === 'custom'
+                                ? customTrackCount
+                                : artist.tier
+                                  ? {
+                                      headliner: 10,
+                                      'sub-headliner': 5,
+                                      'mid-tier': 3,
+                                      undercard: 1,
+                                    }[artist.tier] || 3
+                                  : 3;
+
+                            const currentCount = perArtistCounts[artist.name] ?? defaultCount;
+
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between text-sm py-1"
+                              >
+                                <div className="flex items-center flex-1">
+                                  <span className="text-purple-600 font-semibold mr-2 min-w-[2rem] text-right">
+                                    {index + 1}.
+                                  </span>
+                                  <span className="text-gray-800 truncate">{artist.name}</span>
+                                  {artist.tier && (
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      ({artist.tier})
+                                    </span>
+                                  )}
+                                </div>
+                                <select
+                                  value={String(currentCount)}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value);
+                                    setPerArtistCounts((prev) => ({
+                                      ...prev,
+                                      [artist.name]: value,
+                                    }));
+                                  }}
+                                  className="border border-gray-300 rounded px-2 py-1 text-xs ml-2 w-14 bg-white text-gray-900"
+                                >
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                    <option key={num} value={num}>
+                                      {num}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Estimated track count preview */}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="text-sm text-gray-600">
+                        Estimated total:{' '}
+                        <span className="font-semibold text-purple-600">
+                          ~{estimatedTrackCount} tracks
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Create Playlist Button */}
