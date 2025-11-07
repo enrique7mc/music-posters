@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Apply rate limiting (5 requests per minute for expensive image analysis)
-  if (await applyRateLimit(req, res, RateLimitPresets.strict())) {
+  if (applyRateLimit(req, res, RateLimitPresets.strict())) {
     return; // Rate limit exceeded, response already sent
   }
 

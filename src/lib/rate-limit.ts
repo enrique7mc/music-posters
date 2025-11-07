@@ -22,7 +22,7 @@ interface RateLimitOptions {
 }
 
 /**
- * Rate limit entry storing request timestamps
+ * Rate limit entry tracking request count and window expiry
  */
 interface RateLimitEntry {
   count: number;
@@ -88,7 +88,7 @@ function getIdentifier(req: NextApiRequest): string {
  * // In your API route:
  * export default async function handler(req: NextApiRequest, res: NextApiResponse) {
  *   // Apply rate limit: 5 requests per minute
- *   if (await applyRateLimit(req, res, { interval: 60000, maxRequests: 5 })) {
+ *   if (applyRateLimit(req, res, { interval: 60000, maxRequests: 5 })) {
  *     return; // Rate limit exceeded, response already sent
  *   }
  *
@@ -96,15 +96,20 @@ function getIdentifier(req: NextApiRequest): string {
  * }
  * ```
  */
-export async function applyRateLimit(
+export function applyRateLimit(
   req: NextApiRequest,
   res: NextApiResponse,
   options: RateLimitOptions
-): Promise<boolean> {
+): boolean {
   const { interval, maxRequests, errorMessage } = options;
 
-  // Get endpoint identifier (e.g., "/api/analyze")
-  const endpoint = req.url || 'unknown';
+  // Validate options
+  if (interval <= 0 || maxRequests <= 0) {
+    throw new Error('interval and maxRequests must be positive numbers');
+  }
+
+  // Get endpoint identifier without query parameters (e.g., "/api/analyze")
+  const endpoint = req.url?.split('?')[0] || 'unknown';
 
   // Get request identifier (IP address)
   const identifier = getIdentifier(req);

@@ -28,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Apply rate limiting (10 requests per minute for playlist creation)
-  if (await applyRateLimit(req, res, RateLimitPresets.moderate())) {
+  if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
     return; // Rate limit exceeded, response already sent
   }
 

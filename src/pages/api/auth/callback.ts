@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Apply rate limiting (20 requests per minute for auth endpoints)
-  if (await applyRateLimit(req, res, RateLimitPresets.relaxed())) {
+  if (applyRateLimit(req, res, RateLimitPresets.relaxed())) {
     return; // Rate limit exceeded, response already sent
   }
 
