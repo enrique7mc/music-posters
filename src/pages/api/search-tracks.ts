@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
 import { SearchTracksResponse, Artist } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { searchTracksSchema, validateRequest } from '@/lib/validation';
 
 /**
  * API route handler that searches Spotify for top tracks for a list of artists with tier-based track counts.
@@ -23,11 +24,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
-  const { artists, trackCountMode, customTrackCount, perArtistCounts } = req.body;
-
-  if (!artists || !Array.isArray(artists) || artists.length === 0) {
-    return res.status(400).json({ error: 'No artists provided' });
+  // Validate request body
+  let validatedData;
+  try {
+    validatedData = validateRequest(searchTracksSchema, req.body);
+  } catch (error: any) {
+    console.error('[Search Tracks API] Validation error:', error.message);
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.message,
+    });
   }
+
+  const { artists, trackCountMode, customTrackCount, perArtistCounts } = validatedData;
 
   // Check if mock data mode is enabled
   if (process.env.USE_MOCK_DATA === 'true') {
@@ -56,31 +65,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  // Validate that artists are objects with valid name strings
-  const invalidArtists = artists.filter(
-    (a) => !a || typeof a !== 'object' || typeof a.name !== 'string' || a.name.trim().length === 0
-  );
-  if (invalidArtists.length > 0) {
-    return res.status(400).json({
-      error: 'Invalid artist format. Expected Artist objects with non-empty string name property.',
-    });
-  }
-
-  // Normalize artist names by trimming whitespace
-  const normalizedArtists = artists.map((a) => ({
-    ...a,
-    name: a.name.trim(),
-  }));
-
-  // Limit to 100 artists to avoid excessive API calls
-  const MAX_ARTISTS = 100;
-  const limitedArtists = normalizedArtists.slice(0, MAX_ARTISTS);
-
-  if (artists.length > MAX_ARTISTS) {
-    console.log(`Limiting artists from ${artists.length} to ${MAX_ARTISTS}`);
-  }
+  // Artist names are already trimmed by the validation schema
+  // The schema also enforces the 100 artist limit
+  console.log(`Validated ${artists.length} artists for track search`);
 
   // Sanitize perArtistCounts by trimming keys to match normalized artist names
+  // (already validated by schema, just need to normalize keys)
   const sanitizedPerArtistCounts =
     perArtistCounts && typeof perArtistCounts === 'object'
       ? Object.entries(perArtistCounts as Record<string, number>).reduce(
@@ -94,9 +84,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Search for artists and get their top tracks with rate limiting
-    console.log(`Searching tracks for ${limitedArtists.length} artists`);
+    console.log(`Searching tracks for ${artists.length} artists`);
     const { tracks, foundArtists, artistMatches } = await searchAndGetTopTracks(
-      limitedArtists,
+      artists,
       accessToken,
       {
         mode: trackCountMode || 'tier-based',
@@ -133,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const response: SearchTracksResponse = {
       tracks,
-      artistsSearched: limitedArtists.length,
+      artistsSearched: artists.length,
       tracksFound: tracks.length,
     };
 

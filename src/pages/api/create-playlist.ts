@@ -7,6 +7,7 @@ import {
   getPlaylistTracks,
 } from '@/lib/spotify';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 
 /**
  * API route handler that creates a Spotify playlist for the authenticated user from provided track URIs.
@@ -38,11 +39,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const { trackUris, playlistName } = req.body;
-
-  if (!trackUris || !Array.isArray(trackUris) || trackUris.length === 0) {
-    return res.status(400).json({ error: 'No track URIs provided' });
+  // Validate request body
+  let validatedData;
+  try {
+    validatedData = validateRequest(createPlaylistSchema, req.body);
+  } catch (error: any) {
+    console.error('[Create Playlist API] Validation error:', error.message);
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.message,
+    });
   }
+
+  const { trackUris, playlistName } = validatedData;
 
   try {
     // Get current user

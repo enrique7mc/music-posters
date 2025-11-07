@@ -7,6 +7,7 @@ import { isAuthenticated } from '@/lib/auth';
 import { mockVisionArtists, mockGeminiArtists } from '@/lib/mock-data';
 import { AnalyzeResponse } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { validateImageFile, ALLOWED_IMAGE_MIME_TYPES } from '@/lib/validation';
 
 export const config = {
   api: {
@@ -50,6 +51,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Read the image file
     const imageBuffer = fs.readFileSync(imageFile.filepath);
+
+    // Validate file type and size using magic bytes
+    console.log('[Analyze API] Validating file type and size...');
+    const validation = await validateImageFile(imageBuffer);
+    if (!validation.isValid) {
+      // Clean up temp file before returning error
+      fs.unlinkSync(imageFile.filepath);
+      return res.status(400).json({
+        error: validation.error || 'Invalid file',
+        allowedTypes: ALLOWED_IMAGE_MIME_TYPES,
+      });
+    }
+
+    console.log(`[Analyze API] File validation passed. Detected type: ${validation.detectedType}`);
 
     // Check if we should use mock data (for dev/UI iteration)
     const useMockData = process.env.USE_MOCK_DATA === 'true';

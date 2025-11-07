@@ -191,7 +191,9 @@ export default function Upload() {
       }
     } catch (err: any) {
       console.error('Error analyzing image:', err);
-      setError(err.response?.data?.error || 'Failed to analyze image');
+      const errorMessage = err.response?.data?.error || 'Failed to analyze image';
+      const errorDetails = err.response?.data?.details;
+      setError(errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage);
     } finally {
       setAnalyzing(false);
     }
@@ -222,7 +224,9 @@ export default function Upload() {
       router.push('/review-tracks');
     } catch (err: any) {
       console.error('Error searching tracks:', err);
-      setError(err.response?.data?.error || 'Failed to search tracks');
+      const errorMessage = err.response?.data?.error || 'Failed to search tracks';
+      const errorDetails = err.response?.data?.details;
+      setError(errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage);
       setCreating(false);
     }
   };
