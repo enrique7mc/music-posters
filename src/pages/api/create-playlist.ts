@@ -6,6 +6,7 @@ import {
   addTracksToPlaylist,
   getPlaylistTracks,
 } from '@/lib/spotify';
+import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 
 /**
@@ -25,6 +26,11 @@ import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Apply rate limiting (10 requests per minute for playlist creation)
+  if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
+    return; // Rate limit exceeded, response already sent
   }
 
   const accessToken = getAccessToken(req);

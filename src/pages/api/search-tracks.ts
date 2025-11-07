@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
 import { SearchTracksResponse, Artist } from '@/types';
+import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { searchTracksSchema, validateRequest } from '@/lib/validation';
 
 /**
@@ -16,6 +17,11 @@ import { searchTracksSchema, validateRequest } from '@/lib/validation';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Apply rate limiting (10 requests per minute for track searches)
+  if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
+    return; // Rate limit exceeded, response already sent
   }
 
   // Validate request body
