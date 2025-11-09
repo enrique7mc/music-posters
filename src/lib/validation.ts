@@ -39,13 +39,13 @@ export const artistSchema = z.object({
 
 /**
  * Schema for validating search tracks request body.
- * Limits artists to 100 to prevent excessive API calls and rate limiting.
+ * Limits artists to 150 to prevent excessive API calls and rate limiting.
  */
 export const searchTracksSchema = z.object({
   artists: z
     .array(artistSchema)
     .min(1, 'At least one artist must be provided')
-    .max(100, 'Maximum 100 artists allowed to prevent excessive API calls'),
+    .max(150, 'Maximum 150 artists allowed to prevent excessive API calls'),
   trackCountMode: z.enum(['tier-based', 'custom']).optional(),
   customTrackCount: z.number().int().min(1).max(50).optional(),
   perArtistCounts: z

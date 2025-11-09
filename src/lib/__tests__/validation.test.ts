@@ -86,9 +86,9 @@ describe('validation.ts', () => {
       expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
     });
 
-    it('should reject more than 100 artists', () => {
+    it('should reject more than 150 artists', () => {
       const invalidRequest = {
-        artists: Array.from({ length: 101 }, (_, i) => ({ name: `Artist ${i}` })),
+        artists: Array.from({ length: 151 }, (_, i) => ({ name: `Artist ${i}` })),
       };
 
       expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
