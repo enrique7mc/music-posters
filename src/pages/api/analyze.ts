@@ -100,11 +100,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Clean up the temporary file
     fs.unlinkSync(imageFile.filepath);
 
+    // Generate a thumbnail version of the poster for playlist cover (300x300)
+    // This is stored in sessionStorage and later used to create the playlist cover
+    let posterThumbnail: string | undefined;
+    try {
+      const sharp = (await import('sharp')).default;
+      const thumbnailBuffer = await sharp(imageBuffer)
+        .resize(300, 300, { fit: 'cover', position: 'center' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      posterThumbnail = thumbnailBuffer.toString('base64');
+      console.log(`Generated poster thumbnail: ${thumbnailBuffer.length} bytes`);
+    } catch (thumbnailError) {
+      console.error('Failed to generate poster thumbnail:', thumbnailError);
+      // Non-critical error, continue without thumbnail
+    }
+
     // Return result with provider information
     const response: AnalyzeResponse = {
       artists: result.artists,
       rawText: result.rawText,
       provider: provider as 'vision' | 'gemini',
+      posterThumbnail, // Optional: base64 thumbnail for playlist cover
     };
 
     // Log extracted artists for debugging

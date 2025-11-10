@@ -73,6 +73,7 @@ export default function Upload() {
   const [analyzing, setAnalyzing] = useState(false);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini'>('vision');
+  const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
@@ -185,6 +186,7 @@ export default function Upload() {
 
       setArtists(response.data.artists);
       setAnalysisProvider(response.data.provider);
+      setPosterThumbnail(response.data.posterThumbnail || null);
 
       if (response.data.artists.length === 0) {
         setError('No artists found in the image. Try a different poster.');
@@ -215,9 +217,12 @@ export default function Upload() {
         perArtistCounts: Object.keys(perArtistCounts).length > 0 ? perArtistCounts : undefined,
       });
 
-      // Store tracks in sessionStorage for the review page
+      // Store tracks and poster thumbnail in sessionStorage for the review page
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('tracks', JSON.stringify(response.data.tracks));
+        if (posterThumbnail) {
+          sessionStorage.setItem('posterThumbnail', posterThumbnail);
+        }
       }
 
       // Navigate to review-tracks page

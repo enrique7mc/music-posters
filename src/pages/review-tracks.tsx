@@ -34,6 +34,7 @@ export default function ReviewTracks() {
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
   const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
 
   // Load view mode from localStorage
   useEffect(() => {
@@ -85,6 +86,15 @@ export default function ReviewTracks() {
     setTracks(storedTracks);
     // Select all tracks by default
     setSelectedTracks(new Set(storedTracks.map((t: Track) => t.uri)));
+
+    // Load poster thumbnail from sessionStorage (if available)
+    if (typeof window !== 'undefined') {
+      const storedThumbnail = sessionStorage.getItem('posterThumbnail');
+      if (storedThumbnail) {
+        setPosterThumbnail(storedThumbnail);
+      }
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -127,11 +137,13 @@ export default function ReviewTracks() {
       const response = await axios.post('/api/create-playlist', {
         trackUris,
         playlistName: playlistName.trim(),
+        posterThumbnail: posterThumbnail || undefined, // Include poster thumbnail if available
       });
 
-      // Clear stored tracks
+      // Clear stored tracks and poster thumbnail
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('tracks');
+        sessionStorage.removeItem('posterThumbnail');
       }
 
       // Redirect to success page

@@ -10,6 +10,7 @@ export interface AnalyzeResponse {
   artists: Artist[]; // Changed from string[] to support both Vision (weight: undefined) and Gemini (weight: 1-10)
   rawText: string;
   provider: 'vision' | 'gemini'; // Which analysis method was used
+  posterThumbnail?: string; // Optional: base64 encoded 300x300 JPEG thumbnail for playlist cover
 }
 
 export interface CreatePlaylistResponse {

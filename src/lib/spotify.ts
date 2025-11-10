@@ -295,6 +295,46 @@ export async function addTracksToPlaylist(
   }
 }
 
+/**
+ * Uploads a custom cover image to a Spotify playlist.
+ *
+ * @param playlistId - The Spotify playlist ID to upload the cover to
+ * @param base64ImageData - Base64-encoded JPEG image data (without data URI prefix)
+ * @param accessToken - OAuth Bearer token with playlist-modify-public or playlist-modify-private scope
+ * @throws Error if the upload fails or image exceeds 256 KB limit
+ *
+ * Note: Spotify requires the image to be:
+ * - JPEG format
+ * - Base64 encoded
+ * - Maximum 256 KB in size
+ * - Sent as raw request body (not JSON)
+ */
+export async function uploadPlaylistCover(
+  playlistId: string,
+  base64ImageData: string,
+  accessToken: string
+): Promise<void> {
+  try {
+    const response = await axios.put(
+      `${SPOTIFY_API_BASE_URL}/playlists/${playlistId}/images`,
+      base64ImageData, // Send raw base64 string (no JSON wrapper)
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'image/jpeg',
+        },
+      }
+    );
+
+    if (response.status === 202) {
+      console.log(`✓ Successfully uploaded custom cover for playlist ${playlistId}`);
+    }
+  } catch (error) {
+    console.error(`Failed to upload playlist cover for ${playlistId}:`, error);
+    throw new Error('Failed to upload playlist cover to Spotify');
+  }
+}
+
 export async function getPlaylistTracks(
   playlistId: string,
   accessToken: string
