@@ -78,6 +78,7 @@ const spotifyTrackUriSchema = z
 /**
  * Schema for validating create playlist request body.
  * Playlist names are sanitized to prevent injection attacks.
+ * Optionally accepts a base64-encoded poster thumbnail for custom cover art.
  */
 export const createPlaylistSchema = z.object({
   trackUris: z
@@ -101,6 +102,11 @@ export const createPlaylistSchema = z.object({
         message: 'Playlist name must not contain HTML tags',
       }
     ),
+  posterThumbnail: z
+    .string()
+    .max(500000, 'Poster thumbnail too large (max 500KB base64)')
+    .regex(/^[A-Za-z0-9+/=]+$/, 'Invalid base64 format')
+    .optional(),
 });
 
 // ============================================================================

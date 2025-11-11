@@ -34,6 +34,9 @@ export default function ReviewTracks() {
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
   const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [generatingCover, setGeneratingCover] = useState(false);
 
   // Load view mode from localStorage
   useEffect(() => {
@@ -52,6 +55,36 @@ export default function ReviewTracks() {
       localStorage.setItem('trackViewMode', mode);
     }
   }, []);
+
+  // Generate cover preview whenever playlist name or poster thumbnail changes
+  useEffect(() => {
+    const generatePreview = async () => {
+      if (!playlistName.trim()) {
+        setCoverPreview(null);
+        return;
+      }
+
+      setGeneratingCover(true);
+      try {
+        const response = await axios.post('/api/preview-cover', {
+          playlistName: playlistName.trim(),
+          posterThumbnail: posterThumbnail || undefined,
+        });
+
+        // Convert to data URI for preview
+        setCoverPreview(`data:image/jpeg;base64,${response.data.coverPreview}`);
+      } catch (error) {
+        console.error('Failed to generate cover preview:', error);
+        setCoverPreview(null);
+      } finally {
+        setGeneratingCover(false);
+      }
+    };
+
+    // Debounce the preview generation to avoid too many updates while typing
+    const timeoutId = setTimeout(generatePreview, 500);
+    return () => clearTimeout(timeoutId);
+  }, [playlistName, posterThumbnail]);
 
   useEffect(() => {
     // Try to get tracks from router state first, fallback to sessionStorage
@@ -85,6 +118,15 @@ export default function ReviewTracks() {
     setTracks(storedTracks);
     // Select all tracks by default
     setSelectedTracks(new Set(storedTracks.map((t: Track) => t.uri)));
+
+    // Load poster thumbnail from sessionStorage (if available)
+    if (typeof window !== 'undefined') {
+      const storedThumbnail = sessionStorage.getItem('posterThumbnail');
+      if (storedThumbnail) {
+        setPosterThumbnail(storedThumbnail);
+      }
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -127,11 +169,13 @@ export default function ReviewTracks() {
       const response = await axios.post('/api/create-playlist', {
         trackUris,
         playlistName: playlistName.trim(),
+        posterThumbnail: posterThumbnail || undefined, // Include poster thumbnail if available
       });
 
-      // Clear stored tracks
+      // Clear stored tracks and poster thumbnail
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('tracks');
+        sessionStorage.removeItem('posterThumbnail');
       }
 
       // Redirect to success page
@@ -418,27 +462,76 @@ export default function ReviewTracks() {
             </div>
           )}
 
-          {/* Playlist Name Input */}
+          {/* Playlist Details */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <label
-              htmlFor="playlistName"
-              className="block text-sm font-semibold text-gray-700 mb-2"
-            >
-              Playlist Name
-            </label>
-            <input
-              id="playlistName"
-              type="text"
-              value={playlistName}
-              onChange={(e) => setPlaylistName(e.target.value)}
-              disabled={creating}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100 text-gray-800"
-              placeholder="Enter playlist name..."
-              maxLength={100}
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              This will be the name of your Spotify playlist ({playlistName.length}/100 characters)
-            </p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Playlist Details</h3>
+
+            <div className="flex gap-6 items-start flex-col sm:flex-row">
+              {/* Cover Preview */}
+              <div className="flex-shrink-0">
+                <div className="text-sm font-semibold text-gray-700 mb-2">Cover Preview</div>
+                <div className="relative w-48 h-48 rounded-lg overflow-hidden border-2 border-gray-200 bg-gray-50">
+                  {generatingCover ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                        <p className="text-xs text-gray-500">Generating...</p>
+                      </div>
+                    </div>
+                  ) : coverPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={coverPreview}
+                      alt="Playlist cover preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                      <div className="text-center px-4">
+                        <div className="text-4xl mb-2">🎵</div>
+                        <p className="text-xs text-gray-500">Cover preview</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Playlist Name Input */}
+              <div className="flex-1 w-full">
+                <label
+                  htmlFor="playlistName"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Playlist Name
+                </label>
+                <input
+                  id="playlistName"
+                  type="text"
+                  value={playlistName}
+                  onChange={(e) => setPlaylistName(e.target.value)}
+                  disabled={creating}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100 text-gray-800"
+                  placeholder="Enter playlist name..."
+                  maxLength={100}
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  This will be the name of your Spotify playlist ({playlistName.length}/100
+                  characters)
+                </p>
+                {posterThumbnail && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Custom cover with poster background
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}

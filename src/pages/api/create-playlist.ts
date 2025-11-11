@@ -5,9 +5,11 @@ import {
   createPlaylist,
   addTracksToPlaylist,
   getPlaylistTracks,
+  uploadPlaylistCover,
 } from '@/lib/spotify';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { createPlaylistSchema, validateRequest } from '@/lib/validation';
+import { generatePlaylistCover } from '@/lib/cover-generator';
 
 /**
  * API route handler that creates a Spotify playlist for the authenticated user from provided track URIs.
@@ -51,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const { trackUris, playlistName } = validatedData;
+  const { trackUris, playlistName, posterThumbnail } = validatedData;
 
   try {
     // Get current user
@@ -66,6 +68,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await addTracksToPlaylist(playlist.id, trackUris, accessToken);
 
     console.log(`Playlist created successfully: ${playlist.url}`);
+
+    // Generate and upload custom playlist cover (non-blocking)
+    if (posterThumbnail) {
+      try {
+        console.log('Generating custom playlist cover...');
+        const posterBuffer = Buffer.from(posterThumbnail, 'base64');
+        const coverBase64 = await generatePlaylistCover({
+          playlistName: name,
+          posterBuffer,
+        });
+        await uploadPlaylistCover(playlist.id, coverBase64, accessToken);
+      } catch (coverError) {
+        // Non-critical error - log but don't fail the request
+        console.error('Failed to upload playlist cover (non-critical):', coverError);
+      }
+    } else {
+      console.log('No poster thumbnail provided, skipping custom cover generation');
+    }
 
     // Fetch and log the actual tracks in the playlist for debugging
     const playlistTracks = await getPlaylistTracks(playlist.id, accessToken);
