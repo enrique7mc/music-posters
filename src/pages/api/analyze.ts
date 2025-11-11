@@ -3,6 +3,7 @@ import formidable, { Fields, Files } from 'formidable';
 import fs from 'fs';
 import { analyzeImage } from '@/lib/ocr';
 import { analyzeImageWithGeminiRetry } from '@/lib/gemini';
+import { analyzeImageHybrid } from '@/lib/hybrid-analyzer';
 import { isAuthenticated } from '@/lib/auth';
 import { mockVisionArtists, mockGeminiArtists } from '@/lib/mock-data';
 import { AnalyzeResponse } from '@/types';
@@ -81,12 +82,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (useMockData) {
       // Return mock data instead of calling real APIs
-      const mockArtists = provider === 'gemini' ? mockGeminiArtists : mockVisionArtists;
+      const mockArtists = provider === 'gemini' || provider === 'hybrid' ? mockGeminiArtists : mockVisionArtists;
       result = {
         artists: mockArtists,
         rawText: mockArtists.map((a) => a.name).join('\n'),
       };
       console.log(`[Analyze API] Returning ${mockArtists.length} mock artists (${provider} style)`);
+    } else if (provider === 'hybrid') {
+      // Use Hybrid Mode: Vision OCR + Gemini AI
+      console.log('[Analyze API] Analyzing with Hybrid Mode (Vision + Gemini)...');
+      result = await analyzeImageHybrid(imageBuffer, imageFile.mimetype ?? 'image/jpeg');
     } else if (provider === 'gemini') {
       // Use Gemini 2.0 Flash with vision-first approach
       console.log('[Analyze API] Analyzing with Gemini...');
@@ -120,7 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const response: AnalyzeResponse = {
       artists: result.artists,
       rawText: result.rawText,
-      provider: provider as 'vision' | 'gemini',
+      provider: provider as 'vision' | 'gemini' | 'hybrid',
       posterThumbnail, // Optional: base64 thumbnail for playlist cover
     };
 

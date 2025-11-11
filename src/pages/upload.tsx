@@ -72,7 +72,9 @@ export default function Upload() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini'>('vision');
+  const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini' | 'hybrid'>(
+    'vision'
+  );
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -385,12 +387,17 @@ export default function Upload() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold">Extracted Artists</h3>
                     <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                      {analysisProvider === 'gemini' ? '🤖 Gemini AI' : '👁️ Vision API'}
+                      {analysisProvider === 'hybrid'
+                        ? '🔄 Hybrid (Vision + Gemini)'
+                        : analysisProvider === 'gemini'
+                        ? '🤖 Gemini AI'
+                        : '👁️ Vision API'}
                     </span>
                   </div>
 
                   {/* Summary Cards */}
-                  {analysisProvider === 'gemini' && artists.some((a) => a.tier) ? (
+                  {(analysisProvider === 'gemini' || analysisProvider === 'hybrid') &&
+                  artists.some((a) => a.tier) ? (
                     (() => {
                       const counts = tierCounts;
                       return (
@@ -509,7 +516,8 @@ export default function Upload() {
                             Use tier-based{' '}
                             <span className="text-green-600 text-sm">(Recommended)</span>
                           </div>
-                          {analysisProvider === 'gemini' && artists.some((a) => a.tier) ? (
+                          {(analysisProvider === 'gemini' || analysisProvider === 'hybrid') &&
+                          artists.some((a) => a.tier) ? (
                             <div className="text-xs text-gray-500 ml-0 mt-1">
                               Headliners: 10 tracks, Sub-headliners: 5 tracks, Mid-tier: 3 tracks,
                               Undercard: 1 track
