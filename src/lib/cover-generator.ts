@@ -185,8 +185,33 @@ function calculateTextLayout(
 }
 
 /**
+ * Hard-wraps a word that exceeds the maximum characters per line.
+ * Breaks it into chunks of maxCharsPerLine.
+ *
+ * @param word - The word to break into chunks
+ * @param maxCharsPerLine - Maximum characters allowed per line
+ * @returns Array of word chunks
+ */
+function hardWrapWord(word: string, maxCharsPerLine: number): string[] {
+  const chunks: string[] = [];
+  let remaining = word;
+
+  while (remaining.length > maxCharsPerLine) {
+    chunks.push(remaining.slice(0, maxCharsPerLine));
+    remaining = remaining.slice(maxCharsPerLine);
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+/**
  * Wraps text into multiple lines based on character limit per line.
  * Tries to break at word boundaries when possible.
+ * Hard-wraps oversized words to guarantee every line respects the character budget.
  */
 function wrapText(text: string, maxCharsPerLine: number): string[] {
   const words = text.split(' ');
@@ -194,6 +219,25 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   let currentLine = '';
 
   for (const word of words) {
+    // Check if the word itself exceeds maxCharsPerLine
+    if (word.length > maxCharsPerLine) {
+      // Push current line if it exists
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = '';
+      }
+
+      // Hard-wrap the oversized word
+      const chunks = hardWrapWord(word, maxCharsPerLine);
+      // Push all complete chunks
+      for (let i = 0; i < chunks.length - 1; i++) {
+        lines.push(chunks[i]);
+      }
+      // Set the last chunk as current line
+      currentLine = chunks[chunks.length - 1];
+      continue;
+    }
+
     const testLine = currentLine ? `${currentLine} ${word}` : word;
 
     if (testLine.length <= maxCharsPerLine) {
@@ -204,8 +248,9 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
         lines.push(currentLine);
         currentLine = word;
       } else {
-        // Single word is too long, force break
-        lines.push(word);
+        // This should not happen since we handle oversized words above
+        // But keep as fallback
+        currentLine = word;
       }
     }
   }
