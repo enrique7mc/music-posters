@@ -85,6 +85,15 @@ export async function generatePlaylistCover(options: CoverOptions): Promise<stri
       .toBuffer();
   }
 
+  // Final size check
+  if (buffer.length > 256000) {
+    console.warn(
+      `Cover size ${buffer.length} bytes still exceeds 256 KB limit after quality reduction. Upload may fail.`
+    );
+  }
+
+  console.log(`Final cover size: ${buffer.length} bytes`);
+
   console.log(`Final cover size: ${buffer.length} bytes`);
 
   return buffer.toString('base64');
