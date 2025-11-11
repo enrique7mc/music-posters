@@ -20,69 +20,65 @@ export async function generatePlaylistCover(options: CoverOptions): Promise<stri
   const width = 300;
   const height = 300;
 
-  let baseImage;
-
-  if (posterBuffer) {
-    // Option: Use poster as background with blur and darkening
-    baseImage = sharp(posterBuffer)
-      .resize(width, height, { fit: 'cover', position: 'center' })
-      .blur(3) // Slight blur for readability
-      .modulate({ brightness: 0.5 }); // Darken by 50%
-  } else {
-    // Fallback: Create gradient background
-    baseImage = sharp({
-      create: {
-        width,
-        height,
-        channels: 3,
-        background: { r: 30, g: 30, b: 60 }, // Dark blue
-      },
-    });
-  }
+  // Helper function to create a fresh Sharp instance from the original source
+  const createBaseImage = () => {
+    if (posterBuffer) {
+      // Option: Use poster as background with blur and darkening
+      return sharp(posterBuffer)
+        .resize(width, height, { fit: 'cover', position: 'center' })
+        .blur(3) // Slight blur for readability
+        .modulate({ brightness: 0.5 }); // Darken by 50%
+    } else {
+      // Fallback: Create gradient background
+      return sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: 30, g: 30, b: 60 }, // Dark blue
+        },
+      });
+    }
+  };
 
   // Generate SVG overlay with text
   const svgOverlay = generateTextOverlay(playlistName, width, height);
+  const svgBuffer = Buffer.from(svgOverlay);
 
-  // Composite and convert to JPEG
-  let buffer = await baseImage
-    .composite([
-      {
-        input: Buffer.from(svgOverlay),
-        top: 0,
-        left: 0,
-      },
-    ])
-    .jpeg({ quality: 90, mozjpeg: true })
-    .toBuffer();
+  // Try different quality levels to stay under 256 KB limit
+  const qualityLevels = [90, 75, 60];
+  let buffer: Buffer | null = null;
 
-  // Check size and reduce quality if needed to stay under 256 KB
-  if (buffer.length > 256000) {
-    console.log(`Cover size ${buffer.length} bytes, reducing quality to fit under 256 KB`);
-    buffer = await baseImage
+  for (const quality of qualityLevels) {
+    // Create a fresh Sharp instance for each attempt
+    const image = createBaseImage();
+
+    buffer = await image
       .composite([
         {
-          input: Buffer.from(svgOverlay),
+          input: svgBuffer,
           top: 0,
           left: 0,
         },
       ])
-      .jpeg({ quality: 75, mozjpeg: true })
+      .jpeg({ quality, mozjpeg: true })
       .toBuffer();
+
+    console.log(`Cover size at quality ${quality}: ${buffer.length} bytes`);
+
+    // If under 256 KB, we're done
+    if (buffer.length <= 256000) {
+      break;
+    }
+
+    // If this was not the last quality level, log and try lower quality
+    if (quality !== qualityLevels[qualityLevels.length - 1]) {
+      console.log(`Cover size ${buffer.length} bytes exceeds limit, trying lower quality...`);
+    }
   }
 
-  // If still too large, reduce quality further
-  if (buffer.length > 256000) {
-    console.log(`Cover size ${buffer.length} bytes, reducing quality further`);
-    buffer = await baseImage
-      .composite([
-        {
-          input: Buffer.from(svgOverlay),
-          top: 0,
-          left: 0,
-        },
-      ])
-      .jpeg({ quality: 60, mozjpeg: true })
-      .toBuffer();
+  if (!buffer) {
+    throw new Error('Failed to generate playlist cover');
   }
 
   // Final size check
