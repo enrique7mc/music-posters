@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, supporting two image analysis providers:
+Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, supporting three image analysis providers:
 
 - **Google Cloud Vision API** (OCR-based): Traditional text extraction with heuristic filtering
 - **Gemini 2.0 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
+- **Hybrid Mode** (Best of both): Combines Vision OCR for comprehensive text extraction with Gemini AI for intelligent filtering and ranking
 
-Both providers integrate with Spotify Web API for playlist creation. Switch providers via environment variable.
+All providers integrate with Spotify Web API for playlist creation. Switch providers via environment variable.
 
 ## Development Commands
 
@@ -41,7 +42,7 @@ SPOTIFY_CLIENT_ID=<from Spotify Developer Dashboard>
 SPOTIFY_CLIENT_SECRET=<from Spotify Developer Dashboard>
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback  # MUST use 127.0.0.1
 
-# Image Analysis Provider (choose one: 'vision' or 'gemini')
+# Image Analysis Provider (choose one: 'vision', 'gemini', or 'hybrid')
 IMAGE_ANALYSIS_PROVIDER=vision
 
 # Development: Use mock data instead of real API calls (optional, for development/testing)
@@ -61,7 +62,9 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 **Critical**:
 
 - Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
-- Set `IMAGE_ANALYSIS_PROVIDER=gemini` to enable artist ranking by visual prominence
+- Set `IMAGE_ANALYSIS_PROVIDER=hybrid` for best results (comprehensive OCR + intelligent AI filtering)
+- Set `IMAGE_ANALYSIS_PROVIDER=gemini` for vision-first AI with ranking (may miss small text on dense posters)
+- Set `IMAGE_ANALYSIS_PROVIDER=vision` for traditional OCR only (no ranking, more noise)
 
 **Development Features**:
 
@@ -83,6 +86,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 - **Image Analysis**:
   - Google Cloud Vision API (OCR + filtering)
   - Gemini 2.0 Flash (vision-first AI with ranking)
+  - Hybrid Mode (Vision OCR + Gemini AI)
 - **External Services**: Spotify Web API
 
 ### Key Directories
@@ -104,15 +108,24 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
    │  ├─ parseArtistsFromText() applies 10 heuristic filters
    │  └─ Returns Artist[] (weight: undefined)
    │
-   └─ IF provider='gemini':
-      ├─ Gemini 2.0 Flash analyzes image with vision
-      ├─ Few-shot prompt guides artist extraction
+   ├─ IF provider='gemini':
+   │  ├─ Gemini 2.0 Flash analyzes image with vision
+   │  ├─ Few-shot prompt guides artist extraction
+   │  ├─ Returns Artist[] with weight scores (1-10)
+   │  └─ Artists ranked by font size/position
+   │
+   └─ IF provider='hybrid':
+      ├─ Step 1: Google Vision API extracts comprehensive OCR text
+      ├─ Step 2: Gemini analyzes image + uses OCR text as context
+      ├─ Enhanced prompt with OCR supplementation
       ├─ Returns Artist[] with weight scores (1-10)
-      └─ Artists ranked by font size/position
+      ├─ Artists ranked by visual prominence + OCR completeness
+      └─ Graceful degradation: Falls back to single-provider if one fails
 
 2. User sees artist list (sorted by weight if available)
    ├─ Vision API: Flat list, no ranking
-   └─ Gemini: Weighted list with tier badges (headliner/sub-headliner/mid-tier/undercard)
+   ├─ Gemini: Weighted list with tier badges (headliner/sub-headliner/mid-tier/undercard)
+   └─ Hybrid: Weighted list with tier badges + OCR completeness indicator
 
 3. User clicks create → POST /api/create-playlist
    ├─ searchAndGetTopTracks() with rate limiting
@@ -212,6 +225,44 @@ Vision-first AI analysis with intelligent ranking. Uses few-shot prompting with 
 
 **Cost**: ~$0.0001 per poster analysis (very cheap!).
 
+**Limitations**: May miss artists in very small text on dense posters with 50+ artists.
+
+### Hybrid Approach (`src/lib/hybrid-analyzer.ts`)
+
+**RECOMMENDED**: Combines the strengths of both Vision API and Gemini for maximum accuracy and completeness.
+
+**Analysis Process**:
+
+1. **Step 1 - OCR Extraction**: Vision API extracts ALL text (comprehensive, catches everything)
+2. **Step 2 - AI Analysis**: Gemini analyzes image + uses OCR text as supplementary context
+3. Enhanced prompt instructs Gemini to cross-reference OCR text with visual analysis
+4. Returns Artist[] with full ranking data like Gemini mode
+
+**Key Benefits**:
+
+- ✅ **Comprehensive Coverage**: Vision OCR ensures no artist names are missed (even tiny text)
+- ✅ **Intelligent Filtering**: Gemini removes noise (dates, sponsors, venue info)
+- ✅ **Visual Ranking**: Artists weighted by prominence (font size, position, styling)
+- ✅ **Best for Dense Posters**: Handles 50-100+ artist festivals that Gemini alone might miss
+- ✅ **Graceful Degradation**: Falls back to single-provider if one API fails
+
+**Error Handling**:
+
+```
+Both APIs succeed    → Full hybrid result (best case)
+Vision fails only    → Gemini-only result (no OCR context, may miss small text)
+Gemini fails only    → Vision-only result (no ranking, unfiltered OCR)
+Both fail            → Error thrown
+```
+
+**Accuracy**: ~90-98% depending on poster quality. **Includes artist ranking** by visual prominence with OCR completeness.
+
+**Retry Logic**: 3 attempts with exponential backoff for Gemini (Vision runs once).
+
+**Cost**: Vision API cost + ~$0.0001 for Gemini = still very cheap!
+
+**Latency**: ~3-5 seconds total (1-2s OCR + 2-3s Gemini analysis).
+
 ## API Endpoint Patterns
 
 All API routes follow this structure:
@@ -258,14 +309,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 - **Purpose**: Extract artists from poster image
 - **Input**: multipart/form-data with `image` field
 - **Config**: `bodyParser: false` (required for formidable)
-- **Returns**: `{ artists: Artist[], rawText: string, provider: 'vision' | 'gemini' }`
+- **Returns**: `{ artists: Artist[], rawText: string, provider: 'vision' | 'gemini' | 'hybrid' }`
   - **Artist type**: `{ name: string, weight?: number, tier?: string, reasoning?: string }`
   - Vision API: weight/tier/reasoning are `undefined`
   - Gemini: All fields populated with ranking data
+  - Hybrid: All fields populated with ranking data + OCR context
 - **Max File Size**: 10MB
 - **Process**:
   - Vision: Upload → OCR → Filter noise → Return artist list
   - Gemini: Upload → Vision analysis → AI ranking → Return weighted artist list
+  - Hybrid: Upload → OCR extraction → Gemini analysis with OCR context → Return weighted artist list
 
 ### `/api/create-playlist` (POST)
 
@@ -560,22 +613,24 @@ To avoid Spotify API calls during development or testing:
 **Environment Variables in Vercel**:
 
 - All variables from `.env`
-- `IMAGE_ANALYSIS_PROVIDER`: Set to `vision` or `gemini`
-- `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents (if using Vision API)
-- `GEMINI_API_KEY`: Add API key from https://ai.google.dev (if using Gemini)
+- `IMAGE_ANALYSIS_PROVIDER`: Set to `vision`, `gemini`, or `hybrid`
+- `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents (required for Vision API and Hybrid mode)
+- `GEMINI_API_KEY`: Add API key from https://ai.google.dev (required for Gemini and Hybrid mode)
 - Update `SPOTIFY_REDIRECT_URI` to `https://your-domain.vercel.app/api/auth/callback`
 
-**Recommendation**: Start with `IMAGE_ANALYSIS_PROVIDER=gemini` for better accuracy and artist ranking.
+**Recommendation**: Start with `IMAGE_ANALYSIS_PROVIDER=hybrid` for best results (requires both Vision and Gemini credentials).
 
 ## Testing Checklist
 
 1. **Auth Flow**: Login → Callback → Redirect to /upload
 2. **Image Analysis (Vision API)**: Set `IMAGE_ANALYSIS_PROVIDER=vision` → Upload poster → Verify artist list (no weights)
 3. **Image Analysis (Gemini)**: Set `IMAGE_ANALYSIS_PROVIDER=gemini` → Upload poster → Verify weighted artist list with tier badges
-4. **Playlist Creation**: Create playlist → Verify tracks in Spotify
-5. **Rate Limiting**: Test with 50+ artist poster (should complete without 429 errors)
-6. **Error States**: Test with non-image file, expired auth, etc.
-7. **Provider Comparison**: Same poster on both providers → Compare results
+4. **Image Analysis (Hybrid)**: Set `IMAGE_ANALYSIS_PROVIDER=hybrid` → Upload poster → Verify weighted artist list with comprehensive coverage
+5. **Playlist Creation**: Create playlist → Verify tracks in Spotify
+6. **Rate Limiting**: Test with 50+ artist poster (should complete without 429 errors)
+7. **Error States**: Test with non-image file, expired auth, etc.
+8. **Provider Comparison**: Same poster on all three providers → Compare results and coverage
+9. **Hybrid Fallback**: Test hybrid mode with one API disabled → Verify graceful degradation
 
 ## MVP Constraints & V2 Backlog
 
@@ -588,9 +643,10 @@ To avoid Spotify API calls during development or testing:
 
 **Currently Available with Provider Choice**:
 
-- ✅ **Artist ranking by visual prominence** (Gemini only)
-  - Vision API: All artists treated equally
-  - Gemini: Weighted ranking with tier badges
+- ✅ **Artist ranking by visual prominence** (Gemini and Hybrid modes)
+  - Vision API: All artists treated equally (no ranking)
+  - Gemini: Weighted ranking with tier badges (vision-first)
+  - Hybrid: Weighted ranking with tier badges + OCR completeness (RECOMMENDED)
 
 **Future Improvements** (see ARCHITECTURE.md):
 
@@ -598,6 +654,5 @@ To avoid Spotify API calls during development or testing:
 - Redis caching for Spotify search results
 - Async job queue for large posters
 - User accounts and playlist history
-- Hybrid mode: Use both providers and merge results
 - Environment variables are loaded when the Node.js process starts. Next.js reads your .env files during server initialization, and they're not
   hot-reloaded like your code changes are.
