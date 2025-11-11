@@ -82,7 +82,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (useMockData) {
       // Return mock data instead of calling real APIs
-      const mockArtists = provider === 'gemini' || provider === 'hybrid' ? mockGeminiArtists : mockVisionArtists;
+      const mockArtists =
+        provider === 'gemini' || provider === 'hybrid' ? mockGeminiArtists : mockVisionArtists;
       result = {
         artists: mockArtists,
         rawText: mockArtists.map((a) => a.name).join('\n'),

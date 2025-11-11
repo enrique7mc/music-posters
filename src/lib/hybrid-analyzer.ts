@@ -291,9 +291,7 @@ export async function analyzeImageHybrid(
 
   if (!visionFailed && geminiFailed) {
     // Vision succeeded, but Gemini failed - fallback to Vision-only
-    console.warn(
-      '[Hybrid] ⚠️  Gemini failed, falling back to Vision API only (no ranking)'
-    );
+    console.warn('[Hybrid] ⚠️  Gemini failed, falling back to Vision API only (no ranking)');
 
     // Import parseArtistsFromText on demand to avoid circular dependency
     const { parseArtistsFromText } = await import('./ocr');

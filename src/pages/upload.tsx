@@ -390,8 +390,8 @@ export default function Upload() {
                       {analysisProvider === 'hybrid'
                         ? '🔄 Hybrid (Vision + Gemini)'
                         : analysisProvider === 'gemini'
-                        ? '🤖 Gemini AI'
-                        : '👁️ Vision API'}
+                          ? '🤖 Gemini AI'
+                          : '👁️ Vision API'}
                     </span>
                   </div>
 
