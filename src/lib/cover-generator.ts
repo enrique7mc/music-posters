@@ -90,8 +90,6 @@ export async function generatePlaylistCover(options: CoverOptions): Promise<stri
 
   console.log(`Final cover size: ${buffer.length} bytes`);
 
-  console.log(`Final cover size: ${buffer.length} bytes`);
-
   return buffer.toString('base64');
 }
 
