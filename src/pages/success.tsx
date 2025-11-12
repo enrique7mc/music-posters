@@ -1,11 +1,12 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 
 export default function Success() {
   const router = useRouter();
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (router.query.playlistUrl) {
@@ -13,16 +14,39 @@ export default function Success() {
     }
   }, [router.query]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCopyLink = async () => {
     if (!playlistUrl) return;
+
+    // Check if Clipboard API is available
+    if (!navigator.clipboard) {
+      console.error('Clipboard API not available');
+      return;
+    }
 
     try {
       await navigator.clipboard.writeText(playlistUrl);
       setCopied(true);
 
+      // Clear any existing timeout before setting a new one
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
       // Reset the copied state after 3 seconds
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         setCopied(false);
+        timeoutRef.current = null;
       }, 3000);
     } catch (err) {
       console.error('Failed to copy:', err);
