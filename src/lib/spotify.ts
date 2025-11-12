@@ -315,6 +315,14 @@ export async function uploadPlaylistCover(
   accessToken: string
 ): Promise<void> {
   try {
+    // Validate base64 image size (Spotify limit: 256 KB)
+    const sizeInBytes = Math.ceil((base64ImageData.length * 3) / 4);
+    console.log(`Uploading playlist cover: ${sizeInBytes} bytes (limit: 256000 bytes)`);
+
+    if (sizeInBytes > 256000) {
+      throw new Error(`Cover image size ${sizeInBytes} bytes exceeds Spotify's 256 KB limit`);
+    }
+
     const response = await axios.put(
       `${SPOTIFY_API_BASE_URL}/playlists/${playlistId}/images`,
       base64ImageData, // Send raw base64 string (no JSON wrapper)
@@ -323,15 +331,34 @@ export async function uploadPlaylistCover(
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'image/jpeg',
         },
+        // Ensure axios doesn't try to transform the data
+        transformRequest: [(data) => data],
       }
     );
 
     if (response.status === 202) {
       console.log(`✓ Successfully uploaded custom cover for playlist ${playlistId}`);
     }
-  } catch (error) {
-    console.error(`Failed to upload playlist cover for ${playlistId}:`, error);
-    throw new Error('Failed to upload playlist cover to Spotify');
+  } catch (error: any) {
+    // Log detailed error information
+    console.error(`Failed to upload playlist cover for ${playlistId}:`);
+    console.error('Error details:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    // Provide more specific error message
+    if (error.response?.status === 401) {
+      throw new Error('Unauthorized: Spotify token may be invalid or expired');
+    } else if (error.response?.status === 403) {
+      throw new Error('Forbidden: Missing required Spotify scopes for uploading playlist covers');
+    } else if (error.response?.data?.error?.message) {
+      throw new Error(`Spotify API error: ${error.response.data.error.message}`);
+    } else {
+      throw new Error(`Failed to upload playlist cover to Spotify: ${error.message}`);
+    }
   }
 }
 
