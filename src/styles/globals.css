@@ -2,19 +2,151 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Variables for theming */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
+  /* Light mode (fallback) */
+  --color-bg-primary: 245, 245, 245;
+  --color-bg-secondary: 255, 255, 255;
+  --color-text-primary: 15, 15, 15;
+  --color-text-secondary: 115, 115, 115;
+  --color-border: 212, 212, 212;
+
+  /* Accent colors */
+  --color-accent: 242, 149, 32;
+  --color-accent-hover: 227, 119, 22;
+  --color-muted: 118, 118, 146;
+  --color-ember: 239, 68, 68;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-rgb: 0, 0, 0;
+.dark {
+  /* Dark mode (default experience) */
+  --color-bg-primary: 10, 10, 10;
+  --color-bg-secondary: 26, 26, 26;
+  --color-text-primary: 245, 245, 245;
+  --color-text-secondary: 163, 163, 163;
+  --color-border: 64, 64, 64;
+}
+
+@layer base {
+  /* Smooth theme transitions */
+  * {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+
+  /* Remove transition from animations to avoid conflicts */
+  *[class*='animate-'] {
+    transition: none !important;
+  }
+
+  html {
+    @apply antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-dark-950 text-dark-50;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  /* Custom scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-700 rounded-lg;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-dark-600;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(42, 42, 42) rgb(15, 15, 15);
+  }
+
+  /* Typography improvements */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display font-bold tracking-tight;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-accent-500/30 text-accent-100;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+@layer components {
+  /* Glassmorphism utility */
+  .glass {
+    @apply bg-dark-800/50 backdrop-blur-md border border-dark-700/50;
+  }
+
+  /* Overlay utility for asymmetric panels */
+  .panel-overlay {
+    @apply absolute inset-0 bg-gradient-to-br from-dark-900/95 to-dark-950/95 backdrop-blur-sm;
+  }
+
+  /* Text gradient utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-400 via-accent-500 to-ember-500;
+  }
+
+  /* Elegant focus rings */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-500/50 focus:ring-offset-2 focus:ring-offset-dark-950;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Asymmetric grid utilities */
+  .grid-asymmetric {
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+
+  .grid-asymmetric-reverse {
+    grid-template-columns: 0.8fr 1.2fr;
+  }
+}
+
+/* Animations for page transitions */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.4s ease-out;
 }
