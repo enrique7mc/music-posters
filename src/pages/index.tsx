@@ -9,6 +9,8 @@ import Card from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
+import { CustomMusicNote, Sparkles } from '@/components/icons';
+import { Zap, Target } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
@@ -244,35 +246,40 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               {[
                 {
-                  icon: '⚡',
+                  Icon: Zap,
                   title: 'Lightning Fast',
                   description: 'From poster to playlist in under 60 seconds',
                 },
                 {
-                  icon: '🎯',
+                  Icon: Target,
                   title: 'Artist Ranking',
                   description: 'Headliners first, undercard last - naturally ordered',
                 },
                 {
-                  icon: '🎵',
+                  Icon: CustomMusicNote,
                   title: 'Top Tracks',
                   description: "Curated with each artist's most popular song",
                 },
-              ].map((feature, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1, duration: 0.5 }}
-                >
-                  <Card hover className="p-6 text-center h-full">
-                    <div className="text-4xl mb-4">{feature.icon}</div>
-                    <h3 className="text-lg font-bold text-dark-50 mb-2">{feature.title}</h3>
-                    <p className="text-sm text-dark-400">{feature.description}</p>
-                  </Card>
-                </motion.div>
-              ))}
+              ].map((feature, index) => {
+                const IconComponent = feature.Icon;
+                return (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.1, duration: 0.5 }}
+                  >
+                    <Card hover className="p-6 text-center h-full">
+                      <div className="mb-4 flex justify-center">
+                        <IconComponent className="w-16 h-16 text-accent-500" />
+                      </div>
+                      <h3 className="text-lg font-bold text-dark-50 mb-2">{feature.title}</h3>
+                      <p className="text-sm text-dark-400">{feature.description}</p>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
         </section>

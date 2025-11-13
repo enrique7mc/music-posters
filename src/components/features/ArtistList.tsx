@@ -3,6 +3,7 @@ import { Artist } from '@/types';
 import { TierBadge } from '../ui/Badge';
 import Card from '../ui/Card';
 import { staggerContainer, staggerItem } from '@/lib/animations';
+import { HeadlinerIcon, SubHeadlinerIcon, CustomMusicNote, Sparkles } from '@/components/icons';
 
 interface ArtistListProps {
   artists: Artist[];
@@ -29,11 +30,7 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-bold text-dark-50">Extracted Artists ({artists.length})</h3>
         <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
-          {provider === 'hybrid'
-            ? '🔄 Hybrid AI'
-            : provider === 'gemini'
-              ? '🤖 Gemini AI'
-              : '👁️ Vision API'}
+          {provider === 'hybrid' ? 'Hybrid AI' : provider === 'gemini' ? 'Gemini AI' : 'Vision API'}
         </span>
       </div>
 
@@ -46,14 +43,16 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
           animate="visible"
         >
           {[
-            { tier: 'headliner', label: 'Headliners', icon: '★' },
-            { tier: 'sub-headliner', label: 'Sub-Headliners', icon: '⭐' },
-            { tier: 'mid-tier', label: 'Mid-Tier', icon: '•' },
-            { tier: 'undercard', label: 'Undercard', icon: '·' },
-          ].map(({ tier, label, icon }) => (
+            { tier: 'headliner', label: 'Headliners', Icon: HeadlinerIcon },
+            { tier: 'sub-headliner', label: 'Sub-Headliners', Icon: SubHeadlinerIcon },
+            { tier: 'mid-tier', label: 'Mid-Tier', Icon: CustomMusicNote },
+            { tier: 'undercard', label: 'Undercard', Icon: CustomMusicNote },
+          ].map(({ tier, label, Icon }) => (
             <motion.div key={tier} variants={staggerItem}>
               <Card variant="glass" className="p-3 text-center">
-                <div className="text-2xl mb-1">{icon}</div>
+                <div className="mb-1 flex justify-center">
+                  <Icon className="w-8 h-8 text-accent-400" />
+                </div>
                 <div className="text-xl font-bold text-dark-100">{tierCounts[tier] || 0}</div>
                 <div className="text-xs text-dark-400">{label}</div>
               </Card>
@@ -110,10 +109,23 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
 
       {/* Instructions */}
       <div className="mt-6 p-4 bg-dark-900/50 rounded-lg border border-dark-800">
-        <p className="text-sm text-dark-400">
-          {hasRanking
-            ? '✨ Artists are ranked by visual prominence on the poster. Headliners get more tracks in your playlist.'
-            : '📋 All artists extracted from the poster. Review and create your playlist below.'}
+        <p className="text-sm text-dark-400 flex items-center gap-2">
+          {hasRanking ? (
+            <>
+              <Sparkles className="w-4 h-4 text-accent-400 flex-shrink-0" />
+              <span>
+                Artists are ranked by visual prominence on the poster. Headliners get more tracks in
+                your playlist.
+              </span>
+            </>
+          ) : (
+            <>
+              <CustomMusicNote className="w-4 h-4 text-accent-400 flex-shrink-0" />
+              <span>
+                All artists extracted from the poster. Review and create your playlist below.
+              </span>
+            </>
+          )}
         </p>
       </div>
     </div>

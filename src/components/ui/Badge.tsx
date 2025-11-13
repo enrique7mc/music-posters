@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { HeadlinerIcon, SubHeadlinerIcon, CustomMusicNote } from '@/components/icons';
 
 export interface BadgeProps {
   variant?: 'headliner' | 'sub-headliner' | 'mid-tier' | 'undercard' | 'default';
@@ -37,34 +38,36 @@ export function TierBadge({ tier }: { tier: string }) {
     headliner: {
       label: 'Headliner',
       variant: 'headliner' as const,
-      icon: '★',
+      Icon: HeadlinerIcon,
     },
     'sub-headliner': {
       label: 'Sub-Headliner',
       variant: 'sub-headliner' as const,
-      icon: '⭐',
+      Icon: SubHeadlinerIcon,
     },
     'mid-tier': {
       label: 'Mid-Tier',
       variant: 'mid-tier' as const,
-      icon: '•',
+      Icon: CustomMusicNote,
     },
     undercard: {
       label: 'Undercard',
       variant: 'undercard' as const,
-      icon: '·',
+      Icon: CustomMusicNote,
     },
   };
 
   const config = tierConfig[tier as keyof typeof tierConfig] || {
     label: tier,
     variant: 'default' as const,
-    icon: '·',
+    Icon: CustomMusicNote,
   };
+
+  const IconComponent = config.Icon;
 
   return (
     <Badge variant={config.variant}>
-      <span className="text-xs">{config.icon}</span>
+      <IconComponent className="w-3 h-3" />
       {config.label}
     </Badge>
   );

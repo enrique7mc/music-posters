@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 import { scaleIn } from '@/lib/animations';
+import { CustomGuitar } from '@/components/icons';
 
 interface UploadZoneProps {
   onFileSelect: (file: File) => void;
@@ -59,7 +60,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
       <div className="p-12 lg:p-16 text-center">
         {/* Icon */}
         <motion.div
-          className="text-7xl mb-6"
+          className="mb-6 flex justify-center"
           animate={{
             scale: [1, 1.1, 1],
           }}
@@ -69,7 +70,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
             ease: 'easeInOut',
           }}
         >
-          🎸
+          <CustomGuitar className="w-28 h-28 text-accent-500" />
         </motion.div>
 
         <h3 className="text-2xl font-bold text-dark-100 mb-3">Upload Festival Poster</h3>

@@ -11,6 +11,7 @@ import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
+import { CustomMusicNote } from '@/components/icons';
 
 // Helper function to format duration (ms to mm:ss)
 const formatDuration = (ms: number): string => {
@@ -389,7 +390,7 @@ export default function ReviewTracks() {
                             />
                           ) : (
                             <div className="w-full h-48 bg-gradient-to-br from-dark-700 to-dark-800 flex items-center justify-center">
-                              <span className="text-6xl">🎵</span>
+                              <CustomMusicNote className="w-24 h-24 text-dark-600" />
                             </div>
                           )}
 
@@ -483,7 +484,7 @@ export default function ReviewTracks() {
                               />
                             ) : (
                               <div className="w-14 h-14 bg-gradient-to-br from-dark-700 to-dark-800 rounded-lg flex items-center justify-center">
-                                <span className="text-2xl">🎵</span>
+                                <CustomMusicNote className="w-8 h-8 text-dark-600" />
                               </div>
                             )}
                           </div>
@@ -578,7 +579,7 @@ export default function ReviewTracks() {
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-dark-800 to-dark-900">
                           <div className="text-center px-4">
-                            <div className="text-4xl mb-2">🎵</div>
+                            <CustomMusicNote className="w-16 h-16 text-dark-600 mx-auto mb-2" />
                             <p className="text-xs text-dark-400">Cover preview</p>
                           </div>
                         </div>
