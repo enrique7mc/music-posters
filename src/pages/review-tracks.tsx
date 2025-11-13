@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
 import { Track } from '@/types';
+import { CustomMusicNote } from '@/components/icons';
 
 // Helper function to format duration (ms to mm:ss)
 const formatDuration = (ms: number): string => {
@@ -333,7 +334,7 @@ export default function ReviewTracks() {
                         />
                       ) : (
                         <div className="w-full h-48 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                          <span className="text-6xl">🎵</span>
+                          <CustomMusicNote className="w-24 h-24 text-gray-400" />
                         </div>
                       )}
                       {/* Checkbox Overlay */}
@@ -405,7 +406,7 @@ export default function ReviewTracks() {
                         />
                       ) : (
                         <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded flex items-center justify-center">
-                          <span className="text-2xl">🎵</span>
+                          <CustomMusicNote className="w-8 h-8 text-gray-400" />
                         </div>
                       )}
                     </div>
@@ -488,7 +489,7 @@ export default function ReviewTracks() {
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                       <div className="text-center px-4">
-                        <div className="text-4xl mb-2">🎵</div>
+                        <CustomMusicNote className="w-16 h-16 text-gray-400 mx-auto mb-2" />
                         <p className="text-xs text-gray-500">Cover preview</p>
                       </div>
                     </div>
@@ -555,9 +556,10 @@ export default function ReviewTracks() {
               <button
                 onClick={handleCreatePlaylist}
                 disabled={selectedCount === 0}
-                className="flex-1 max-w-md bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 max-w-md bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
-                🎵 Create Playlist with {selectedCount} Track{selectedCount !== 1 ? 's' : ''}
+                <CustomMusicNote className="w-5 h-5" />
+                Create Playlist with {selectedCount} Track{selectedCount !== 1 ? 's' : ''}
               </button>
             )}
           </div>

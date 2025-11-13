@@ -3,24 +3,42 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
 import { Artist, AnalyzeResponse } from '@/types';
+import {
+  Folder,
+  Search,
+  CustomGuitar,
+  CustomMicrophone,
+  CustomMusicNote,
+  CustomMusicNotes,
+  CustomHeadphones,
+  CustomPiano,
+  CustomTrumpet,
+  CustomViolin,
+  CustomMusicSheet,
+  CustomVinyl,
+  CustomPartyPopper,
+  Sparkles,
+  HeadlinerIcon,
+  SubHeadlinerIcon,
+} from '@/components/icons';
 
-// Fun loading messages
+// Fun loading messages with icon components
 const loadingMessages = [
-  '🎸 Tuning the guitars...',
-  '🎤 Setting up the microphones...',
-  '🎵 Finding the perfect tracks...',
-  '🎧 Mixing the beats...',
-  '🎹 Playing the piano intro...',
-  '🥁 Getting the drums ready...',
-  '🎺 Warming up the horns...',
-  '🎻 Tuning the strings...',
-  '🎶 Arranging the setlist...',
-  '🔊 Testing the speakers...',
-  '💿 Spinning the records...',
-  '🎼 Reading the music sheets...',
-  '🎪 Setting up the stage...',
-  '✨ Adding some magic...',
-  '🌟 Making it perfect...',
+  { icon: CustomGuitar, text: 'Tuning the guitars...' },
+  { icon: CustomMicrophone, text: 'Setting up the microphones...' },
+  { icon: CustomMusicNote, text: 'Finding the perfect tracks...' },
+  { icon: CustomHeadphones, text: 'Mixing the beats...' },
+  { icon: CustomPiano, text: 'Playing the piano intro...' },
+  { icon: CustomMusicNote, text: 'Getting the drums ready...' },
+  { icon: CustomTrumpet, text: 'Warming up the horns...' },
+  { icon: CustomViolin, text: 'Tuning the strings...' },
+  { icon: CustomMusicNotes, text: 'Arranging the setlist...' },
+  { icon: CustomMusicNote, text: 'Testing the speakers...' },
+  { icon: CustomVinyl, text: 'Spinning the records...' },
+  { icon: CustomMusicSheet, text: 'Reading the music sheets...' },
+  { icon: CustomPartyPopper, text: 'Setting up the stage...' },
+  { icon: Sparkles, text: 'Adding some magic...' },
+  { icon: Sparkles, text: 'Making it perfect...' },
 ];
 
 // Helper function to get CSS classes for artist name based on weight
@@ -38,18 +56,22 @@ const getTierBadge = (tier?: string) => {
   const tierConfig = {
     headliner: {
       bgColor: 'bg-yellow-200 text-yellow-800',
-      label: '🎸 Headliner',
+      icon: HeadlinerIcon,
+      label: 'Headliner',
     },
     'sub-headliner': {
       bgColor: 'bg-blue-200 text-blue-800',
-      label: '⭐ Sub-headliner',
+      icon: SubHeadlinerIcon,
+      label: 'Sub-headliner',
     },
     'mid-tier': {
       bgColor: 'bg-green-200 text-green-800',
+      icon: null,
       label: 'Mid-tier',
     },
     undercard: {
       bgColor: 'bg-gray-200 text-gray-800',
+      icon: null,
       label: 'Undercard',
     },
   };
@@ -78,7 +100,10 @@ export default function Upload() {
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
+  const [loadingMessage, setLoadingMessage] = useState<{
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    text: string;
+  }>(loadingMessages[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Track count customization state
@@ -297,7 +322,9 @@ export default function Upload() {
             {!selectedFile && !analyzing && artists.length === 0 && (
               <div className="text-center py-12">
                 <div className="mb-6">
-                  <div className="text-8xl mb-4">🎸</div>
+                  <div className="mb-4 flex justify-center">
+                    <CustomGuitar className="w-32 h-32 text-purple-600" />
+                  </div>
                   <h2 className="text-3xl font-semibold mb-3">Upload Festival Poster</h2>
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
                     Upload a photo of any festival lineup poster and we&apos;ll extract the artists
@@ -309,7 +336,7 @@ export default function Upload() {
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 inline-flex items-center gap-2"
                 >
-                  <span>📁</span>
+                  <Folder className="w-5 h-5" />
                   Choose Image
                 </button>
 
@@ -328,7 +355,7 @@ export default function Upload() {
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 inline-flex items-center gap-2 mb-4"
                   >
-                    <span>📁</span>
+                    <Folder className="w-5 h-5" />
                     Choose Different Image
                   </button>
                 </div>
@@ -344,7 +371,7 @@ export default function Upload() {
               <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg p-8 text-white">
                 <div className="flex flex-col items-center space-y-4">
                   {/* Animated magnifying glass/search */}
-                  <div className="text-6xl animate-bounce">🔍</div>
+                  <Search className="w-16 h-16 animate-bounce" />
                   <p className="text-xl font-semibold">Scanning the poster...</p>
                   <div className="flex space-x-2">
                     <div
@@ -407,14 +434,18 @@ export default function Upload() {
                             <div className="text-2xl font-bold text-purple-800">
                               {artists.length}
                             </div>
-                            <div className="text-xs text-purple-600">🎵 Total Artists</div>
+                            <div className="text-xs text-purple-600 flex items-center gap-1">
+                              <CustomMusicNote className="w-3 h-3" /> Total Artists
+                            </div>
                           </div>
                           {counts.headliner > 0 && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                               <div className="text-2xl font-bold text-yellow-800">
                                 {counts.headliner}
                               </div>
-                              <div className="text-xs text-yellow-600">🎸 Headliners</div>
+                              <div className="text-xs text-yellow-600 flex items-center gap-1">
+                                <HeadlinerIcon className="w-3 h-3" /> Headliners
+                              </div>
                             </div>
                           )}
                           {counts['sub-headliner'] > 0 && (
@@ -422,7 +453,9 @@ export default function Upload() {
                               <div className="text-2xl font-bold text-blue-800">
                                 {counts['sub-headliner']}
                               </div>
-                              <div className="text-xs text-blue-600">⭐ Sub-headliners</div>
+                              <div className="text-xs text-blue-600 flex items-center gap-1">
+                                <SubHeadlinerIcon className="w-3 h-3" /> Sub-headliners
+                              </div>
                             </div>
                           )}
                           {counts['mid-tier'] > 0 && (
@@ -449,7 +482,9 @@ export default function Upload() {
                     <div className="mb-4">
                       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 inline-block">
                         <div className="text-3xl font-bold text-purple-800">{artists.length}</div>
-                        <div className="text-sm text-purple-600">🎵 Total Artists</div>
+                        <div className="text-sm text-purple-600 flex items-center gap-1 justify-center">
+                          <CustomMusicNote className="w-4 h-4" /> Total Artists
+                        </div>
                       </div>
                     </div>
                   )}
@@ -478,8 +513,9 @@ export default function Upload() {
                                 return (
                                   tierBadge && (
                                     <span
-                                      className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor}`}
+                                      className={`text-xs px-2 py-1 rounded-full ${tierBadge.bgColor} flex items-center gap-1`}
                                     >
+                                      {tierBadge.icon && <tierBadge.icon className="w-3 h-3" />}
                                       {tierBadge.label}
                                     </span>
                                   )
@@ -564,7 +600,7 @@ export default function Upload() {
                       className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
                     >
                       <span>{showAdvanced ? '▼' : '▶'}</span>
-                      <span>⚙️ Advanced: Customize Individual Artists</span>
+                      <span>Advanced: Customize Individual Artists</span>
                     </button>
 
                     {/* Advanced per-artist controls */}
@@ -677,24 +713,18 @@ export default function Upload() {
                         <div className="flex flex-col items-center space-y-6">
                           {/* Animated music notes */}
                           <div className="flex space-x-4">
-                            <div
-                              className="text-5xl animate-bounce"
+                            <CustomMusicNote
+                              className="w-12 h-12 animate-bounce"
                               style={{ animationDelay: '0ms' }}
-                            >
-                              🎵
-                            </div>
-                            <div
-                              className="text-5xl animate-bounce"
+                            />
+                            <CustomMusicNotes
+                              className="w-12 h-12 animate-bounce"
                               style={{ animationDelay: '150ms' }}
-                            >
-                              🎶
-                            </div>
-                            <div
-                              className="text-5xl animate-bounce"
+                            />
+                            <CustomMusicNote
+                              className="w-12 h-12 animate-bounce"
                               style={{ animationDelay: '300ms' }}
-                            >
-                              🎵
-                            </div>
+                            />
                           </div>
 
                           {/* Progress bar */}
@@ -705,10 +735,11 @@ export default function Upload() {
                             ></div>
                           </div>
 
-                          {/* Rotating message */}
-                          <p className="text-xl font-semibold text-center animate-pulse">
-                            {loadingMessage}
-                          </p>
+                          {/* Rotating message with icon */}
+                          <div className="flex items-center gap-3 animate-pulse">
+                            <loadingMessage.icon className="w-8 h-8" />
+                            <p className="text-xl font-semibold text-center">{loadingMessage.text}</p>
+                          </div>
 
                           <p className="text-sm text-center opacity-90">
                             This might take a minute for large lineups...
@@ -741,7 +772,7 @@ export default function Upload() {
                   onClick={handleAnalyze}
                   className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 inline-flex items-center gap-2"
                 >
-                  <span>🔍</span>
+                  <Search className="w-5 h-5" />
                   Analyze Poster
                 </button>
               </div>
