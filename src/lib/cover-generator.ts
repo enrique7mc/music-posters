@@ -64,10 +64,10 @@ export async function generatePlaylistCover(options: CoverOptions): Promise<stri
       .jpeg({ quality, mozjpeg: true })
       .toBuffer();
 
-    console.log(`Cover size at quality ${quality}: ${buffer.length} bytes`);
+    console.log(`Cover size at quality ${quality}: ${buffer.length} bytes (limit: 262144 bytes)`);
 
-    // If under 256 KB, we're done
-    if (buffer.length <= 256000) {
+    // If under 256 KB (262,144 bytes), we're done
+    if (buffer.length <= 262144) {
       break;
     }
 
@@ -82,9 +82,9 @@ export async function generatePlaylistCover(options: CoverOptions): Promise<stri
   }
 
   // Final size check
-  if (buffer.length > 256000) {
+  if (buffer.length > 262144) {
     console.warn(
-      `Cover size ${buffer.length} bytes still exceeds 256 KB limit after quality reduction. Upload may fail.`
+      `Cover size ${buffer.length} bytes still exceeds 256 KB (262,144 bytes) limit after quality reduction. Upload may fail.`
     );
   }
 
