@@ -19,15 +19,19 @@
   "dependencies": {
     "@google-cloud/vision": "^4.3.0",
     "@google/generative-ai": "^0.21.0",
+    "@headlessui/react": "^2.2.9",
     "axios": "^1.7.0",
+    "clsx": "^2.1.1",
     "cookie": "^1.0.2",
     "file-type": "^16.5.4",
     "formidable": "^3.5.4",
+    "framer-motion": "^12.23.24",
     "lru-cache": "^11.2.2",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "sharp": "^0.34.5",
+    "tailwind-merge": "^3.4.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
