@@ -70,7 +70,10 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
         animate="visible"
       >
         {artists.map((artist, index) => (
-          <motion.div key={index} variants={staggerItem}>
+          <motion.div
+            key={artist.spotifyId || `${artist.name}-${artist.tier || 'unknown'}`}
+            variants={staggerItem}
+          >
             <Card hover className="p-4 flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3">

@@ -23,11 +23,12 @@ export default defineConfig({
         '**/__tests__/**',
       ],
       include: ['src/**/*.{ts,tsx}'],
-      all: true,
-      lines: 30,
-      functions: 30,
-      branches: 30,
-      statements: 30,
+      thresholds: {
+        lines: 30,
+        functions: 30,
+        branches: 30,
+        statements: 30,
+      },
     },
   },
   resolve: {

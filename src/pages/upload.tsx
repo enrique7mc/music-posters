@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
@@ -31,6 +31,8 @@ export default function Upload() {
   const [error, setError] = useState<string | null>(null);
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
   const [customTrackCount, setCustomTrackCount] = useState<number>(3);
+  // Track latest analysis request to prevent race conditions
+  const latestAnalysisToken = useRef<Symbol | null>(null);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -52,6 +54,10 @@ export default function Upload() {
     setError(null);
     setArtists([]);
 
+    // Create a token for this analysis request to prevent race conditions
+    const requestToken = Symbol('analysis');
+    latestAnalysisToken.current = requestToken;
+
     // Auto-analyze on file select
     setAnalyzing(true);
     try {
@@ -62,6 +68,12 @@ export default function Upload() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      // Only update state if this is still the latest request
+      if (latestAnalysisToken.current !== requestToken) {
+        console.log('Ignoring stale analysis response');
+        return;
+      }
+
       setArtists(response.data.artists);
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
@@ -70,11 +82,23 @@ export default function Upload() {
         setError('No artists found in the image. Try a different poster.');
       }
     } catch (err: any) {
+      // Only show error if this is still the latest request
+      if (latestAnalysisToken.current !== requestToken) {
+        return;
+      }
+
       console.error('Error analyzing image:', err);
       const errorMessage = err.response?.data?.error || 'Failed to analyze image';
       setError(errorMessage);
+      // Clear upload state on error for better recovery
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setPosterThumbnail(null);
     } finally {
-      setAnalyzing(false);
+      // Only update analyzing state if this is still the latest request
+      if (latestAnalysisToken.current === requestToken) {
+        setAnalyzing(false);
+      }
     }
   };
 

@@ -59,32 +59,51 @@ export default function ReviewTracks() {
 
   // Generate cover preview whenever playlist name or poster thumbnail changes
   useEffect(() => {
+    // Track if this effect is still current to prevent race conditions
+    let isCurrent = true;
+
     const generatePreview = async () => {
       if (!playlistName.trim()) {
-        setCoverPreview(null);
+        if (isCurrent) {
+          setCoverPreview(null);
+        }
         return;
       }
 
-      setGeneratingCover(true);
+      if (isCurrent) {
+        setGeneratingCover(true);
+      }
+
       try {
         const response = await axios.post('/api/preview-cover', {
           playlistName: playlistName.trim(),
           posterThumbnail: posterThumbnail || undefined,
         });
 
-        // Convert to data URI for preview
-        setCoverPreview(`data:image/jpeg;base64,${response.data.coverPreview}`);
+        // Only update state if this effect is still current
+        if (isCurrent) {
+          // Convert to data URI for preview
+          setCoverPreview(`data:image/jpeg;base64,${response.data.coverPreview}`);
+        }
       } catch (error) {
-        console.error('Failed to generate cover preview:', error);
-        setCoverPreview(null);
+        if (isCurrent) {
+          console.error('Failed to generate cover preview:', error);
+          setCoverPreview(null);
+        }
       } finally {
-        setGeneratingCover(false);
+        if (isCurrent) {
+          setGeneratingCover(false);
+        }
       }
     };
 
     // Debounce the preview generation to avoid too many updates while typing
     const timeoutId = setTimeout(generatePreview, 500);
-    return () => clearTimeout(timeoutId);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timeoutId);
+    };
   }, [playlistName, posterThumbnail]);
 
   useEffect(() => {

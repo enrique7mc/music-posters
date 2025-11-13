@@ -81,17 +81,17 @@ export const pageTransition: Variants = {
 };
 
 // Hover lift (for cards, buttons)
-export const hoverLift = {
+export const hoverLift: Variants = {
   rest: { scale: 1, y: 0 },
   hover: {
     scale: 1.02,
     y: -2,
-    transition: { duration: 0.2, ease: 'easeOut' },
+    transition: { duration: 0.2, ease: 'easeOut' as const },
   },
 };
 
 // Button press
-export const buttonPress = {
+export const buttonPress: Variants = {
   rest: { scale: 1 },
   hover: { scale: 1.02 },
   tap: { scale: 0.98 },

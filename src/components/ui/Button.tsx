@@ -51,7 +51,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         initial="rest"
         whileHover="hover"
         whileTap="tap"
-        {...props}
+        {...(props as any)}
       >
         {isLoading ? (
           <>

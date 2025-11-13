@@ -17,17 +17,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setMounted(true);
     // Check localStorage for saved preference
     try {
-      const savedTheme = localStorage.getItem('theme') as Theme;
-      if (savedTheme) {
+      const savedTheme = localStorage.getItem('theme');
+      // Validate theme value explicitly instead of type assertion
+      if (savedTheme === 'light' || savedTheme === 'dark') {
         setTheme(savedTheme);
-      } else {
-        // Default to dark mode
-        setTheme('dark');
       }
+      // If savedTheme is null or invalid, keep the default 'dark' from initial state
     } catch (error) {
       // Fall back to default dark theme if localStorage is unavailable
       console.warn('Failed to access localStorage:', error);
-      setTheme('dark');
     }
   }, []);
 
@@ -41,19 +39,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.remove('dark');
     }
 
-    localStorage.setItem('theme', theme);
+    // Add error handling for localStorage.setItem
+    try {
+      localStorage.setItem('theme', theme);
+    } catch (error) {
+      console.warn('Failed to save theme to localStorage:', error);
+    }
   }, [theme, mounted]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Prevent flash of unstyled content
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
-  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
+  // Always wrap children in provider to prevent useTheme() errors
+  // Return null before mount to prevent flash of unstyled content
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {mounted ? children : null}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

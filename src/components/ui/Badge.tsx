@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+export interface BadgeProps {
   variant?: 'headliner' | 'sub-headliner' | 'mid-tier' | 'undercard' | 'default';
   children: React.ReactNode;
+  className?: string;
 }
 
-export default function Badge({ className, variant = 'default', children, ...props }: BadgeProps) {
+export default function Badge({ className, variant = 'default', children }: BadgeProps) {
   const baseStyles =
     'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors';
 
@@ -25,7 +25,6 @@ export default function Badge({ className, variant = 'default', children, ...pro
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      {...props}
     >
       {children}
     </motion.span>
