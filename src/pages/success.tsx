@@ -77,7 +77,7 @@ export default function Success() {
 
   const handleOpenSpotify = () => {
     if (playlistUrl) {
-      window.open(playlistUrl, '_blank');
+      window.open(playlistUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

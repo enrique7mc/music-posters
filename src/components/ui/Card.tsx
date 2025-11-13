@@ -27,7 +27,8 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         ref={ref}
         className={cn(baseStyles, variants[variant], hover && 'cursor-pointer', className)}
         variants={hover ? hoverLift : undefined}
-        initial="rest"
+        initial={hover ? 'rest' : undefined}
+        animate={hover ? 'rest' : undefined}
         whileHover={hover ? 'hover' : undefined}
         {...props}
       >

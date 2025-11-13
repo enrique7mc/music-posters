@@ -16,11 +16,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true);
     // Check localStorage for saved preference
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else {
-      // Default to dark mode
+    try {
+      const savedTheme = localStorage.getItem('theme') as Theme;
+      if (savedTheme) {
+        setTheme(savedTheme);
+      } else {
+        // Default to dark mode
+        setTheme('dark');
+      }
+    } catch (error) {
+      // Fall back to default dark theme if localStorage is unavailable
+      console.warn('Failed to access localStorage:', error);
       setTheme('dark');
     }
   }, []);

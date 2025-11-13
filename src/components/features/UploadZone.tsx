@@ -21,6 +21,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    if (disabled) return;
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
       onFileSelect(file);
@@ -29,6 +30,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    if (disabled) return;
   };
 
   return (

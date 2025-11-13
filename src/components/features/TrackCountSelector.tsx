@@ -23,7 +23,7 @@ export default function TrackCountSelector({
   onCustomCountChange,
   disabled = false,
 }: TrackCountSelectorProps) {
-  const trackCounts = [1, 2, 3, 5, 10];
+  const trackCounts = Array.from({ length: 10 }, (_, index) => index + 1);
 
   return (
     <Card variant="glass" className="overflow-hidden">
