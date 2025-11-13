@@ -3,12 +3,7 @@ import { Artist } from '@/types';
 import { TierBadge } from '../ui/Badge';
 import Card from '../ui/Card';
 import { staggerContainer, staggerItem } from '@/lib/animations';
-import {
-  HeadlinerIcon,
-  SubHeadlinerIcon,
-  CustomMusicNote,
-  Sparkles,
-} from '@/components/icons';
+import { HeadlinerIcon, SubHeadlinerIcon, CustomMusicNote, Sparkles } from '@/components/icons';
 
 interface ArtistListProps {
   artists: Artist[];
@@ -35,11 +30,7 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-bold text-dark-50">Extracted Artists ({artists.length})</h3>
         <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
-          {provider === 'hybrid'
-            ? 'Hybrid AI'
-            : provider === 'gemini'
-              ? 'Gemini AI'
-              : 'Vision API'}
+          {provider === 'hybrid' ? 'Hybrid AI' : provider === 'gemini' ? 'Gemini AI' : 'Vision API'}
         </span>
       </div>
 
@@ -123,14 +114,16 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
             <>
               <Sparkles className="w-4 h-4 text-accent-400 flex-shrink-0" />
               <span>
-                Artists are ranked by visual prominence on the poster. Headliners get more tracks
-                in your playlist.
+                Artists are ranked by visual prominence on the poster. Headliners get more tracks in
+                your playlist.
               </span>
             </>
           ) : (
             <>
               <CustomMusicNote className="w-4 h-4 text-accent-400 flex-shrink-0" />
-              <span>All artists extracted from the poster. Review and create your playlist below.</span>
+              <span>
+                All artists extracted from the poster. Review and create your playlist below.
+              </span>
             </>
           )}
         </p>
