@@ -16,7 +16,7 @@ export default function LoadingSpinner({ size = 'md', className }: LoadingSpinne
   return (
     <motion.div
       className={cn(
-        'rounded-full border-accent-500/30 border-t-accent-500',
+        'rounded-full border-accent-500/30 border-t-accent-500 mx-auto',
         sizes[size],
         className
       )}
