@@ -15,6 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const scopes = [
     'playlist-modify-public',
     'playlist-modify-private',
+    'ugc-image-upload', // Required for uploading custom playlist covers
     'user-read-email',
     'user-read-private',
   ].join(' ');
