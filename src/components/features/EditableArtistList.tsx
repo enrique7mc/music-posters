@@ -41,7 +41,8 @@ export default function EditableArtistList({
   );
 
   const hasRanking = provider === 'gemini' || provider === 'hybrid';
-  const trackCountOptions = Array.from({ length: 10 }, (_, i) => i + 1);
+  // Curated track count options for better UX (per-artist mode)
+  const trackCountOptions = [1, 2, 3, 5, 10];
 
   return (
     <div className="space-y-6">

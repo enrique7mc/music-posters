@@ -3,6 +3,7 @@ import { Artist } from '@/types';
 import Card from '../ui/Card';
 import { fadeIn } from '@/lib/animations';
 import type { TrackCountMode, TierCounts } from './TrackCountModeSelector';
+import { DEFAULT_TIER_COUNTS } from './TrackCountModeSelector';
 
 interface PlaylistSummaryPreviewProps {
   artists: Artist[];
@@ -10,14 +11,6 @@ interface PlaylistSummaryPreviewProps {
   tierCounts: TierCounts;
   perArtistCounts: Record<string, number>;
 }
-
-const DEFAULT_TIER_COUNTS = {
-  headliner: 10,
-  'sub-headliner': 5,
-  'mid-tier': 3,
-  undercard: 1,
-  default: 3, // For Vision API (no tier)
-};
 
 function calculateEstimatedTracks(
   artists: Artist[],

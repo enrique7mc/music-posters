@@ -19,11 +19,12 @@ interface TrackCountModeSelectorProps {
   disabled?: boolean;
 }
 
-const DEFAULT_TIER_COUNTS: TierCounts = {
+export const DEFAULT_TIER_COUNTS: TierCounts & { default: number } = {
   headliner: 10,
   'sub-headliner': 5,
   'mid-tier': 3,
   undercard: 1,
+  default: 3, // For Vision API (no tier)
 };
 
 /**
@@ -37,7 +38,7 @@ export default function TrackCountModeSelector({
   onTierCountChange,
   disabled = false,
 }: TrackCountModeSelectorProps) {
-  const trackCountOptions = Array.from({ length: 10 }, (_, i) => i + 1);
+  const trackCountOptions = [1, 2, 3, 5, 10];
 
   return (
     <Card variant="glass" className="overflow-hidden">

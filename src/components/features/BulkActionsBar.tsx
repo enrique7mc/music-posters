@@ -27,8 +27,8 @@ export default function BulkActionsBar({
 
   const hasRanking = availableTiers.length > 0;
 
-  // Track count options
-  const trackCountOptions = Array.from({ length: 10 }, (_, i) => i + 1);
+  // Track count options (curated list for better UX)
+  const trackCountOptions = [1, 2, 3, 5, 10];
 
   return (
     <Card variant="glass" className="overflow-hidden">

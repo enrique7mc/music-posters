@@ -114,11 +114,25 @@ export default function ReviewArtists() {
       newSet.delete(artistName);
       return newSet;
     });
+    // Clean up perArtistCounts to prevent stale entries
+    setPerArtistCounts((prev) => {
+      const updated = { ...prev };
+      delete updated[artistName];
+      return updated;
+    });
   };
 
   // Remove selected artists (bulk)
   const handleRemoveSelected = () => {
     setArtists((prev) => prev.filter((a) => !selectedArtists.has(a.name)));
+    // Clean up perArtistCounts for removed artists
+    setPerArtistCounts((prev) => {
+      const updated = { ...prev };
+      selectedArtists.forEach((artistName) => {
+        delete updated[artistName];
+      });
+      return updated;
+    });
     setSelectedArtists(new Set());
   };
 
