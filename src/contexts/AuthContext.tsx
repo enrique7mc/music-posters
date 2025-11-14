@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  ReactNode,
+} from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 
@@ -29,7 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Track ongoing auth request to deduplicate simultaneous calls
   const checkAuthPromise = useRef<Promise<void> | null>(null);
 
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     // If there's already an ongoing auth check, return that promise
     if (checkAuthPromise.current) {
       return checkAuthPromise.current;
@@ -54,9 +62,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     })();
 
     return checkAuthPromise.current;
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await axios.post('/api/auth/logout');
       setUser(null);
@@ -66,15 +74,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Logout failed:', error);
       throw error;
     }
-  };
+  }, [router]);
 
   // Check auth once on mount (only if not already checked)
   useEffect(() => {
     if (!hasChecked.current && !checkAuthPromise.current) {
       checkAuth();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkAuth]);
 
   return (
     <AuthContext.Provider value={{ user, loading, checkAuth, logout }}>
