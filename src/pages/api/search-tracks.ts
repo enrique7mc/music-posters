@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const { artists, trackCountMode, customTrackCount, perArtistCounts } = validatedData;
+  const { artists, trackCountMode, customTrackCount, tierCounts, perArtistCounts } = validatedData;
 
   // Check if mock data mode is enabled
   if (process.env.USE_MOCK_DATA === 'true') {
@@ -91,6 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       {
         mode: trackCountMode || 'tier-based',
         customCount: customTrackCount,
+        tierCounts: tierCounts,
         perArtistCounts: sanitizedPerArtistCounts,
       }
     );

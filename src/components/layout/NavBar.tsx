@@ -4,31 +4,14 @@ import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import Button from '../ui/Button';
-import axios from 'axios';
-
-interface User {
-  display_name: string;
-  id: string;
-}
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function NavBar() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    // Check authentication status
-    const checkAuth = async () => {
-      try {
-        const response = await axios.get('/api/auth/me');
-        setUser(response.data);
-      } catch {
-        setUser(null);
-      }
-    };
-
-    checkAuth();
-
     // Handle scroll for backdrop blur effect
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -40,8 +23,7 @@ export default function NavBar() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('/api/auth/logout');
-      router.push('/');
+      await logout();
     } catch (error) {
       console.error('Logout failed:', error);
     }

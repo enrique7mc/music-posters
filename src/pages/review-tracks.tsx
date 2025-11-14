@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
+import ProgressStepper from '@/components/ui/ProgressStepper';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +39,7 @@ export default function ReviewTracks() {
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
+  const hasLoadedTracks = useRef(false);
 
   // Load view mode from localStorage
   useEffect(() => {
@@ -107,14 +109,25 @@ export default function ReviewTracks() {
   }, [playlistName, posterThumbnail]);
 
   useEffect(() => {
+    // Only run once when router is ready and we haven't loaded tracks yet
+    if (!router.isReady || hasLoadedTracks.current || tracks.length > 0) {
+      console.log('[ReviewTracks] Skipping load - already loaded or loading');
+      return;
+    }
+
+    // Mark as loaded FIRST to prevent any race conditions
+    hasLoadedTracks.current = true;
+    console.log('[ReviewTracks] Loading tracks from storage...');
+
     // Try to get tracks from router state first, fallback to sessionStorage
     let routerTracks: Track[] | null = null;
     if (router.query.tracks) {
       const raw = Array.isArray(router.query.tracks) ? router.query.tracks[0] : router.query.tracks;
       try {
         routerTracks = JSON.parse(raw);
+        console.log('[ReviewTracks] Loaded tracks from router query:', routerTracks.length);
       } catch (parseError) {
-        console.warn('Invalid tracks payload in query parameter', parseError);
+        console.warn('[ReviewTracks] Invalid tracks payload in query parameter', parseError);
       }
     }
 
@@ -123,18 +136,25 @@ export default function ReviewTracks() {
       storedTracks = routerTracks;
     } else if (typeof window !== 'undefined') {
       try {
-        storedTracks = JSON.parse(sessionStorage.getItem('tracks') || '[]');
+        const tracksJson = sessionStorage.getItem('tracks');
+        console.log('[ReviewTracks] sessionStorage tracks:', tracksJson ? 'found' : 'not found');
+        storedTracks = JSON.parse(tracksJson || '[]');
+        console.log('[ReviewTracks] Loaded tracks from sessionStorage:', storedTracks.length);
       } catch (parseError) {
-        console.warn('Invalid tracks in sessionStorage', parseError);
+        console.warn('[ReviewTracks] Invalid tracks in sessionStorage', parseError);
       }
     }
 
     if (storedTracks.length === 0) {
+      console.warn('[ReviewTracks] No tracks found, redirecting to /upload');
+      // Reset the ref since we're redirecting
+      hasLoadedTracks.current = false;
       // No tracks found, redirect back to upload
       router.push('/upload');
       return;
     }
 
+    console.log('[ReviewTracks] Successfully loaded', storedTracks.length, 'tracks');
     setTracks(storedTracks);
     // Select all tracks by default
     setSelectedTracks(new Set(storedTracks.map((t: Track) => t.uri)));
@@ -148,7 +168,9 @@ export default function ReviewTracks() {
     }
 
     setLoading(false);
-  }, [router]);
+    console.log('[ReviewTracks] Page setup complete, rendering UI');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady]); // Only depend on router.isReady, not router itself to prevent loops
 
   const handleToggleTrack = useCallback((uri: string) => {
     setSelectedTracks((prev) => {
@@ -231,6 +253,19 @@ export default function ReviewTracks() {
           initial="hidden"
           animate="visible"
         >
+          {/* Progress Stepper */}
+          <div className="mb-8">
+            <ProgressStepper
+              steps={[
+                { label: 'Upload' },
+                { label: 'Review Artists' },
+                { label: 'Review Tracks' },
+                { label: 'Done' },
+              ]}
+              currentStep={2}
+            />
+          </div>
+
           {/* Header */}
           <motion.div className="mb-8" variants={slideUp}>
             <h1 className="text-4xl lg:text-5xl font-display font-bold tracking-tight text-dark-50 mb-3">

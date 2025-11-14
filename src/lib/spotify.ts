@@ -426,13 +426,19 @@ async function processBatch<T, R>(
 function getTrackCountForTier(
   tier?: string,
   options?: {
-    mode?: 'tier-based' | 'custom';
+    mode?: 'tier-based' | 'custom' | 'custom-per-tier' | 'per-artist';
     customCount?: number;
+    tierCounts?: {
+      headliner: number;
+      'sub-headliner': number;
+      'mid-tier': number;
+      undercard: number;
+    };
     artistName?: string;
     perArtistCounts?: Record<string, number>;
   }
 ): number {
-  // Check for per-artist override first
+  // Check for per-artist override first (highest priority)
   if (options?.perArtistCounts && options.artistName) {
     const override = options.perArtistCounts[options.artistName];
     if (override !== undefined) {
@@ -440,7 +446,16 @@ function getTrackCountForTier(
     }
   }
 
-  // Check for custom mode
+  // Check for custom-per-tier mode
+  if (options?.mode === 'custom-per-tier' && options.tierCounts && tier) {
+    const tierKey = tier as keyof typeof options.tierCounts;
+    const override = options.tierCounts[tierKey];
+    if (override !== undefined) {
+      return Math.max(1, Math.min(10, override)); // Ensure 1-10 range
+    }
+  }
+
+  // Check for custom mode (same count for all artists)
   if (options?.mode === 'custom' && options.customCount !== undefined) {
     return Math.max(1, Math.min(10, options.customCount)); // Ensure 1-10 range
   }
@@ -477,8 +492,14 @@ export async function searchAndGetTopTracks(
   artists: Artist[],
   accessToken: string,
   trackCountOptions?: {
-    mode?: 'tier-based' | 'custom';
+    mode?: 'tier-based' | 'custom' | 'custom-per-tier' | 'per-artist';
     customCount?: number;
+    tierCounts?: {
+      headliner: number;
+      'sub-headliner': number;
+      'mid-tier': number;
+      undercard: number;
+    };
     perArtistCounts?: Record<string, number>;
   }
 ): Promise<{
@@ -542,6 +563,7 @@ export async function searchAndGetTopTracks(
       const trackCount = getTrackCountForTier(pair.originalArtist.tier, {
         mode: trackCountOptions?.mode,
         customCount: trackCountOptions?.customCount,
+        tierCounts: trackCountOptions?.tierCounts,
         artistName: pair.originalArtist.name,
         perArtistCounts: trackCountOptions?.perArtistCounts,
       });

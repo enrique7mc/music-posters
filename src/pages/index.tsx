@@ -1,7 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
@@ -9,40 +8,32 @@ import Card from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
-  const checkAuth = useCallback(async () => {
-    try {
-      const response = await axios.get('/api/auth/me');
-      if (response.status === 200) {
-        // User is authenticated, redirect to upload
-        router.push('/upload');
-      }
-    } catch (err) {
-      // Not authenticated, stay on this page
-      setLoading(false);
+  useEffect(() => {
+    // Redirect if user is already authenticated
+    if (!authLoading && user) {
+      router.push('/upload');
     }
-  }, [router]);
+  }, [authLoading, user, router]);
 
   useEffect(() => {
-    // Check if user is already authenticated
-    checkAuth();
-
     // Handle OAuth errors
     if (router.query.error) {
       setError('Authentication failed. Please try again.');
     }
-  }, [router.query.error, checkAuth]);
+  }, [router.query.error]);
 
   const handleLogin = () => {
     window.location.href = '/api/auth/login';
   };
 
-  if (loading) {
+  if (authLoading) {
     return <LoadingScreen message="Loading..." />;
   }
 
