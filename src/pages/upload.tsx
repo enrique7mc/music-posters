@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
@@ -13,12 +13,13 @@ import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import UploadZone from '@/components/features/UploadZone';
 import ArtistList from '@/components/features/ArtistList';
 import TrackCountSelector, { TrackCountMode } from '@/components/features/TrackCountSelector';
+import ProgressStepper from '@/components/ui/ProgressStepper';
 import { fadeIn } from '@/lib/animations';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Upload() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -34,19 +35,12 @@ export default function Upload() {
   // Track latest analysis request to prevent race conditions
   const latestAnalysisToken = useRef<Symbol | null>(null);
 
-  const checkAuth = useCallback(async () => {
-    try {
-      const response = await axios.get('/api/auth/me');
-      setUser(response.data);
-      setLoading(false);
-    } catch (err) {
+  useEffect(() => {
+    // Redirect to home if not authenticated
+    if (!authLoading && !user) {
       router.push('/');
     }
-  }, [router]);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+  }, [authLoading, user, router]);
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
@@ -138,7 +132,7 @@ export default function Upload() {
     }
   };
 
-  if (loading) {
+  if (authLoading) {
     return <LoadingScreen message="Loading your workspace..." />;
   }
 
@@ -158,6 +152,21 @@ export default function Upload() {
 
       <PageLayout>
         <div className="min-h-[calc(100vh-4rem)] pt-20">
+          {/* Progress Stepper (only show when artists are analyzed) */}
+          {artists.length > 0 && (
+            <div className="container mx-auto px-4 mb-8">
+              <ProgressStepper
+                steps={[
+                  { label: 'Upload' },
+                  { label: 'Review Artists' },
+                  { label: 'Review Tracks' },
+                  { label: 'Done' },
+                ]}
+                currentStep={0}
+              />
+            </div>
+          )}
+
           {/* Error message */}
           {error && (
             <div className="container mx-auto px-4 mb-6">
@@ -216,33 +225,94 @@ export default function Upload() {
                   {/* Artist list */}
                   <ArtistList artists={artists} provider={analysisProvider} />
 
-                  {/* Track count selector */}
-                  <TrackCountSelector
-                    mode={trackCountMode}
-                    customCount={customTrackCount}
-                    onModeChange={setTrackCountMode}
-                    onCustomCountChange={setCustomTrackCount}
-                    disabled={creating}
-                  />
-
-                  {/* Create playlist button */}
+                  {/* Flow choice: Quick Create or Customize */}
                   <Card variant="glass" className="p-6">
                     <h4 className="text-lg font-semibold text-dark-100 mb-4">
-                      Ready to create your playlist?
+                      What would you like to do?
                     </h4>
                     <p className="text-sm text-dark-400 mb-6">
-                      We&apos;ll search Spotify for top tracks from each artist and create a curated
-                      playlist for you. This usually takes 30-60 seconds.
+                      Choose how to proceed with your {artists.length}{' '}
+                      {artists.length === 1 ? 'artist' : 'artists'}
                     </p>
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      onClick={handleCreatePlaylist}
-                      className="w-full"
-                      isLoading={creating}
-                    >
-                      Create Spotify Playlist
-                    </Button>
+
+                    <div className="space-y-3">
+                      {/* Quick Create */}
+                      <button
+                        onClick={handleCreatePlaylist}
+                        disabled={creating}
+                        className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-accent-500/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent-500/30 transition-colors">
+                            <svg
+                              className="w-5 h-5 text-accent-400"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 10V3L4 14h7v7l9-11h-7z"
+                              />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-dark-100 mb-1 group-hover:text-accent-400 transition-colors">
+                              Quick Create Playlist
+                            </div>
+                            <div className="text-sm text-dark-400">
+                              Use recommended tier-based track counts and create your playlist now
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Customize Artists */}
+                      <button
+                        onClick={() => {
+                          // Store artists in sessionStorage for review-artists page
+                          if (typeof window !== 'undefined') {
+                            sessionStorage.setItem('artists', JSON.stringify(artists));
+                            sessionStorage.setItem('analysisProvider', analysisProvider);
+                            if (posterThumbnail) {
+                              sessionStorage.setItem('posterThumbnail', posterThumbnail);
+                            }
+                          }
+                          router.push('/review-artists');
+                        }}
+                        disabled={creating}
+                        className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-accent-500/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent-500/30 transition-colors">
+                            <svg
+                              className="w-5 h-5 text-accent-400"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                              />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-dark-100 mb-1 group-hover:text-accent-400 transition-colors">
+                              Customize Artists
+                            </div>
+                            <div className="text-sm text-dark-400">
+                              Review artists, adjust track counts, and remove unwanted artists
+                              before creating
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
                   </Card>
                 </div>
               }

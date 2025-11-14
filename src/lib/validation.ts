@@ -46,8 +46,16 @@ export const searchTracksSchema = z.object({
     .array(artistSchema)
     .min(1, 'At least one artist must be provided')
     .max(150, 'Maximum 150 artists allowed to prevent excessive API calls'),
-  trackCountMode: z.enum(['tier-based', 'custom']).optional(),
+  trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
   customTrackCount: z.number().int().min(1).max(50).optional(),
+  tierCounts: z
+    .object({
+      headliner: z.number().int().min(1).max(50),
+      'sub-headliner': z.number().int().min(1).max(50),
+      'mid-tier': z.number().int().min(1).max(50),
+      undercard: z.number().int().min(1).max(50),
+    })
+    .optional(),
   perArtistCounts: z
     .record(z.string(), z.number().int().min(1).max(50))
     .optional()
