@@ -96,9 +96,8 @@ export default function EditableArtistList({
             variants={staggerItem}
           >
             <Card
-              hover
               className={cn(
-                'p-4 flex items-center gap-4 transition-all',
+                'p-4 flex items-center gap-4 transition-all hover:bg-accent-500/10',
                 selectedArtists.has(artist.name) && 'ring-2 ring-accent-500/50'
               )}
             >
