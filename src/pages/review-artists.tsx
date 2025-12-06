@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Artist } from '@/types';
+import { Artist, TrackSelectionMode } from '@/types';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -16,6 +16,7 @@ import TrackCountModeSelector, {
   TierCounts,
   DEFAULT_TIER_COUNTS,
 } from '@/components/features/TrackCountModeSelector';
+import TrackSelectionModeSelector from '@/components/features/TrackSelectionModeSelector';
 import BulkActionsBar from '@/components/features/BulkActionsBar';
 import PlaylistSummaryPreview from '@/components/features/PlaylistSummaryPreview';
 import { fadeIn, slideUp } from '@/lib/animations';
@@ -39,6 +40,9 @@ export default function ReviewArtists() {
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
   const [tierCounts, setTierCounts] = useState<TierCounts>(DEFAULT_TIER_COUNTS);
   const [perArtistCounts, setPerArtistCounts] = useState<Record<string, number>>({});
+
+  // Track selection mode
+  const [trackSelectionMode, setTrackSelectionMode] = useState<TrackSelectionMode>('popular');
 
   // Selection state for bulk operations
   const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
@@ -195,6 +199,7 @@ export default function ReviewArtists() {
       const requestBody: any = {
         artists: artists,
         trackCountMode: trackCountMode,
+        trackSelectionMode: trackSelectionMode,
       };
 
       // Add appropriate track count data based on mode
@@ -328,6 +333,13 @@ export default function ReviewArtists() {
               {/* Right column - 1/3 width on desktop, sticky */}
               <div className="lg:col-span-1 space-y-6">
                 <div className="lg:sticky lg:top-24 space-y-6">
+                  {/* Track Selection Mode Selector */}
+                  <TrackSelectionModeSelector
+                    mode={trackSelectionMode}
+                    onModeChange={setTrackSelectionMode}
+                    disabled={searching}
+                  />
+
                   {/* Track Count Mode Selector */}
                   <TrackCountModeSelector
                     mode={trackCountMode}

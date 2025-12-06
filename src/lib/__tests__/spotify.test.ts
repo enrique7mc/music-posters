@@ -212,15 +212,18 @@ describe('spotify.ts', () => {
       const tracks = await getArtistTopTracks('artist_taylor_swift', mockAccessToken);
 
       expect(tracks).toHaveLength(1);
-      expect(tracks[0].name).toBe('Top Track 1');
+      // With default limit of 1, we should get 1 track (could be either track due to randomization)
+      expect(tracks[0].name).toMatch(/Top Track [12]/);
     });
 
     it('should respect custom limit', async () => {
       const tracks = await getArtistTopTracks('artist_taylor_swift', mockAccessToken, 2);
 
       expect(tracks).toHaveLength(2);
-      expect(tracks[0].name).toBe('Top Track 1');
-      expect(tracks[1].name).toBe('Top Track 2');
+      // Tracks are now randomized, so we check they contain the expected tracks (in any order)
+      const trackNames = tracks.map((t) => t.name);
+      expect(trackNames).toContain('Top Track 1');
+      expect(trackNames).toContain('Top Track 2');
     });
 
     it('should enforce maximum limit of 10', async () => {

@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getAccessToken } from '@/lib/auth';
 import { searchAndGetTopTracks } from '@/lib/spotify';
-import { SearchTracksResponse, Artist } from '@/types';
+import { SearchTracksResponse, Artist, TrackSelectionMode } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { searchTracksSchema, validateRequest } from '@/lib/validation';
 
@@ -36,7 +36,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const { artists, trackCountMode, customTrackCount, tierCounts, perArtistCounts } = validatedData;
+  const {
+    artists,
+    trackCountMode,
+    customTrackCount,
+    tierCounts,
+    perArtistCounts,
+    trackSelectionMode = 'popular',
+  } = validatedData;
 
   // Check if mock data mode is enabled
   if (process.env.USE_MOCK_DATA === 'true') {
@@ -93,6 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         customCount: customTrackCount,
         tierCounts: tierCounts,
         perArtistCounts: sanitizedPerArtistCounts,
+        selectionMode: trackSelectionMode,
       }
     );
 

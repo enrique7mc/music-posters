@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { SpotifyTokens, SpotifyUser, Track, Artist } from '@/types';
+import { SpotifyTokens, SpotifyUser, Track, Artist, TrackSelectionMode } from '@/types';
 
 const SPOTIFY_ACCOUNTS_BASE_URL = 'https://accounts.spotify.com';
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
@@ -196,17 +196,68 @@ export async function getArtistTopTrack(
 }
 
 /**
+ * Selects tracks from a pool based on the selection mode.
+ * Randomizes within the filtered pool to provide variety.
+ *
+ * IMPORTANT: Pool size now ensures we can fulfill the requested limit.
+ * - Popular: Uses top 50% of tracks (still favors hits, but enough variety)
+ * - Balanced: Uses all available tracks (maximum variety)
+ * - Deep Cuts: Uses bottom 60% of tracks (avoids very top hits)
+ */
+function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelectionMode): any[] {
+  if (tracks.length === 0) return [];
+
+  // Spotify returns max 10 tracks per artist, so we need to ensure our pool
+  // is large enough to satisfy the requested limit
+  let pool: any[];
+
+  switch (mode) {
+    case 'popular':
+      // Popular: Top 50% of available tracks (ensures enough tracks while favoring hits)
+      // For 10 available tracks: pool = 5 tracks from top
+      // But ensure pool is at least as large as the limit to avoid shortfall
+      const popularPoolSize = Math.max(limit, Math.ceil(tracks.length * 0.5));
+      pool = tracks.slice(0, Math.min(popularPoolSize, tracks.length));
+      break;
+
+    case 'deep-cuts':
+      // Deep Cuts: Skip top 20%, use remaining 80%
+      // For 10 available tracks: skip top 2, use remaining 8
+      // BUT ensure pool is at least as large as limit (use all if needed)
+      const skipCount = Math.floor(tracks.length * 0.2);
+      const deepCutsPool = tracks.slice(skipCount);
+      // If pool is smaller than limit, include more tracks from the top to fill it
+      pool = deepCutsPool.length >= limit ? deepCutsPool : tracks;
+      break;
+
+    case 'balanced':
+    default:
+      // Balanced: Use all available tracks (maximum variety)
+      pool = tracks;
+      break;
+  }
+
+  // Shuffle pool for randomization
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+
+  // Return up to `limit` tracks
+  return shuffled.slice(0, Math.min(limit, shuffled.length));
+}
+
+/**
  * Retrieves multiple top tracks for an artist (market: US) and maps them to Track objects.
  *
  * @param artistId - Spotify artist ID to retrieve top tracks for
  * @param accessToken - OAuth Bearer token with permission to read Spotify data
  * @param limit - Number of top tracks to retrieve (1-10, default: 1)
+ * @param selectionMode - Track selection mode (popular, balanced, deep-cuts, default: popular)
  * @returns An array of `Track` objects representing the artist's top tracks, or an empty array if no tracks are available or an error occurs
  */
 export async function getArtistTopTracks(
   artistId: string,
   accessToken: string,
-  limit: number = 1
+  limit: number = 1,
+  selectionMode: TrackSelectionMode = 'popular'
 ): Promise<Track[]> {
   try {
     const response = await axios.get(`${SPOTIFY_API_BASE_URL}/artists/${artistId}/top-tracks`, {
@@ -221,11 +272,14 @@ export async function getArtistTopTracks(
     const tracks = response.data.tracks;
     if (!tracks || tracks.length === 0) return [];
 
-    // Take only the requested number of tracks (Spotify returns up to 10)
-    const limitedTracks = tracks.slice(0, Math.min(limit, 10));
+    // Get ALL top tracks (max 10 available from Spotify)
+    const allTracks = tracks;
+
+    // Select tracks based on mode
+    const selectedTracks = selectTracksFromPool(allTracks, limit, selectionMode);
 
     // Map to our Track interface
-    return limitedTracks.map((track: any) => ({
+    return selectedTracks.map((track: any) => ({
       name: track.name,
       uri: track.uri,
       artist: track.artists[0]?.name || 'Unknown Artist',
@@ -501,6 +555,7 @@ export async function searchAndGetTopTracks(
       undercard: number;
     };
     perArtistCounts?: Record<string, number>;
+    selectionMode?: TrackSelectionMode;
   }
 ): Promise<{
   tracks: Track[];
@@ -570,7 +625,12 @@ export async function searchAndGetTopTracks(
       console.log(
         `  Fetching ${trackCount} tracks for ${pair.searchResult.name} (tier: ${pair.originalArtist.tier || 'unknown'})`
       );
-      return getArtistTopTracks(pair.searchResult.id, accessToken, trackCount);
+      return getArtistTopTracks(
+        pair.searchResult.id,
+        accessToken,
+        trackCount,
+        trackCountOptions?.selectionMode || 'popular'
+      );
     },
     3,
     1000
