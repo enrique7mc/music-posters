@@ -48,3 +48,5 @@ export interface SearchTracksResponse {
   artistsSearched: number;
   tracksFound: number;
 }
+
+export type TrackSelectionMode = 'popular' | 'balanced' | 'deep-cuts';

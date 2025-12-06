@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
-import { Artist, AnalyzeResponse } from '@/types';
+import { Artist, AnalyzeResponse, TrackSelectionMode } from '@/types';
 
 // Fun loading messages
 const loadingMessages = [
@@ -86,6 +86,9 @@ export default function Upload() {
   const [customTrackCount, setCustomTrackCount] = useState(3);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [perArtistCounts, setPerArtistCounts] = useState<Record<string, number>>({});
+
+  // Track selection mode state
+  const [trackSelectionMode, setTrackSelectionMode] = useState<TrackSelectionMode>('popular');
 
   const checkAuth = useCallback(async () => {
     try {
@@ -217,6 +220,7 @@ export default function Upload() {
         trackCountMode: trackCountMode,
         customTrackCount: trackCountMode === 'custom' ? customTrackCount : undefined,
         perArtistCounts: Object.keys(perArtistCounts).length > 0 ? perArtistCounts : undefined,
+        trackSelectionMode: trackSelectionMode,
       });
 
       // Store tracks and poster thumbnail in sessionStorage for the review page
@@ -556,6 +560,77 @@ export default function Upload() {
                           <span className="text-sm text-gray-600">tracks for all artists</span>
                         </div>
                       </label>
+                    </div>
+
+                    {/* Track Selection Mode */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <h5 className="font-medium text-gray-800 mb-2">Track Selection Style</h5>
+                      <div className="space-y-2">
+                        <label className="flex items-start cursor-pointer">
+                          <input
+                            type="radio"
+                            name="trackSelectionMode"
+                            value="popular"
+                            checked={trackSelectionMode === 'popular'}
+                            onChange={(e) =>
+                              setTrackSelectionMode(e.target.value as TrackSelectionMode)
+                            }
+                            className="mt-1 mr-2"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-800">
+                              🔥 Popular Hits Only{' '}
+                              <span className="text-green-600 text-sm">(Default)</span>
+                            </div>
+                            <div className="text-xs text-gray-500 ml-0 mt-1">
+                              Each artist&apos;s most popular tracks (top 4)
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start cursor-pointer">
+                          <input
+                            type="radio"
+                            name="trackSelectionMode"
+                            value="balanced"
+                            checked={trackSelectionMode === 'balanced'}
+                            onChange={(e) =>
+                              setTrackSelectionMode(e.target.value as TrackSelectionMode)
+                            }
+                            className="mt-1 mr-2"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-800">🎵 Balanced Mix</div>
+                            <div className="text-xs text-gray-500 ml-0 mt-1">
+                              Mix of popular and lesser-known tracks (top 8)
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start cursor-pointer">
+                          <input
+                            type="radio"
+                            name="trackSelectionMode"
+                            value="deep-cuts"
+                            checked={trackSelectionMode === 'deep-cuts'}
+                            onChange={(e) =>
+                              setTrackSelectionMode(e.target.value as TrackSelectionMode)
+                            }
+                            className="mt-1 mr-2"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-800">
+                              💎 Deep Cuts & Hidden Gems
+                            </div>
+                            <div className="text-xs text-gray-500 ml-0 mt-1">
+                              Lesser-known tracks for true fans (tracks 6-10)
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500 italic">
+                        💡 Tip: Try different modes to discover new tracks from the same artists!
+                      </div>
                     </div>
 
                     {/* Advanced customization toggle */}

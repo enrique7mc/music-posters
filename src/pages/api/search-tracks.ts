@@ -36,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const { artists, trackCountMode, customTrackCount, perArtistCounts } = validatedData;
+  const { artists, trackCountMode, customTrackCount, perArtistCounts, trackSelectionMode } =
+    validatedData;
 
   // Check if mock data mode is enabled
   if (process.env.USE_MOCK_DATA === 'true') {
@@ -84,7 +85,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Search for artists and get their top tracks with rate limiting
-    console.log(`Searching tracks for ${artists.length} artists`);
+    console.log(
+      `Searching tracks for ${artists.length} artists (selection mode: ${trackSelectionMode || 'popular'})`
+    );
     const { tracks, foundArtists, artistMatches } = await searchAndGetTopTracks(
       artists,
       accessToken,
@@ -92,6 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         mode: trackCountMode || 'tier-based',
         customCount: customTrackCount,
         perArtistCounts: sanitizedPerArtistCounts,
+        trackSelectionMode: trackSelectionMode || 'popular',
       }
     );
 

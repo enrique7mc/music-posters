@@ -61,6 +61,7 @@ export const searchTracksSchema = z.object({
         message: 'All artist names in perArtistCounts must be non-empty strings',
       }
     ),
+  trackSelectionMode: z.enum(['popular', 'balanced', 'deep-cuts']).optional(),
 });
 
 // ============================================================================
