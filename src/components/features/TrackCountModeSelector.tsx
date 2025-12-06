@@ -287,5 +287,3 @@ export default function TrackCountModeSelector({
     </Card>
   );
 }
-
-export { DEFAULT_TIER_COUNTS };
