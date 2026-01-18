@@ -9,16 +9,34 @@ import {
 } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
+import { MusicPlatform, PlatformUser } from '@/types';
 
-interface User {
-  display_name: string;
-  id: string;
+// Extend Window interface for MusicKit
+declare global {
+  interface Window {
+    MusicKit?: {
+      configure: (config: { developerToken: string; app: { name: string; build: string } }) => void;
+      getInstance: () => {
+        authorize: () => Promise<string>;
+        isAuthorized: boolean;
+        musicUserToken: string;
+      };
+    };
+  }
+}
+
+interface User extends PlatformUser {
+  display_name?: string; // Legacy field for backward compatibility
 }
 
 interface AuthContextType {
   user: User | null;
+  platform: MusicPlatform | null;
   loading: boolean;
+  musicKitReady: boolean;
   checkAuth: () => Promise<void>;
+  loginWithSpotify: () => void;
+  loginWithAppleMusic: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -31,32 +49,91 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [platform, setPlatform] = useState<MusicPlatform | null>(null);
   const [loading, setLoading] = useState(true);
-  // Track if we've already checked auth to prevent duplicate requests
+  const [musicKitReady, setMusicKitReady] = useState(false);
   const hasChecked = useRef(false);
-  // Track ongoing auth request to deduplicate simultaneous calls
   const checkAuthPromise = useRef<Promise<void> | null>(null);
+  const musicKitInitialized = useRef(false);
+
+  // Initialize MusicKit when available
+  useEffect(() => {
+    let checkMusicKitInterval: NodeJS.Timeout | null = null;
+    let cleanupTimeout: NodeJS.Timeout | null = null;
+
+    const initMusicKit = async () => {
+      if (musicKitInitialized.current || !window.MusicKit) return;
+
+      try {
+        // Fetch developer token from our API
+        const response = await axios.get('/api/auth/apple-music/developer-token');
+        const { token } = response.data;
+
+        window.MusicKit.configure({
+          developerToken: token,
+          app: {
+            name: 'Music Posters',
+            build: '1.0.0',
+          },
+        });
+
+        musicKitInitialized.current = true;
+        setMusicKitReady(true);
+        console.log('MusicKit initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize MusicKit:', error);
+        // MusicKit may not be configured, which is fine - user can still use Spotify
+      }
+    };
+
+    // Check if MusicKit is already loaded
+    if (window.MusicKit) {
+      initMusicKit();
+    } else {
+      // Wait for MusicKit to load
+      checkMusicKitInterval = setInterval(() => {
+        if (window.MusicKit) {
+          if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
+          initMusicKit();
+        }
+      }, 100);
+
+      // Stop checking after 10 seconds
+      cleanupTimeout = setTimeout(() => {
+        if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
+      }, 10000);
+    }
+
+    return () => {
+      if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
+      if (cleanupTimeout) clearTimeout(cleanupTimeout);
+    };
+  }, []);
 
   const checkAuth = useCallback(async () => {
-    // If there's already an ongoing auth check, return that promise
     if (checkAuthPromise.current) {
       return checkAuthPromise.current;
     }
 
-    // Create new auth check promise
     checkAuthPromise.current = (async () => {
       try {
         const response = await axios.get('/api/auth/me');
-        setUser(response.data);
+        const userData = response.data;
+        setUser(userData);
+        setPlatform(userData.platform || 'spotify');
         hasChecked.current = true;
-        return response.data;
-      } catch (err) {
+        return userData;
+      } catch (err: any) {
         setUser(null);
+        setPlatform(null);
         hasChecked.current = true;
-        throw err;
+        // 401 is expected for unauthenticated users - don't throw
+        if (err.response?.status !== 401) {
+          console.error('Auth check failed:', err);
+        }
+        return null;
       } finally {
         setLoading(false);
-        // Clear the promise reference after completion
         checkAuthPromise.current = null;
       }
     })();
@@ -64,11 +141,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return checkAuthPromise.current;
   }, []);
 
+  const loginWithSpotify = useCallback(() => {
+    // Redirect to Spotify OAuth login
+    window.location.href = '/api/auth/spotify/login';
+  }, []);
+
+  const loginWithAppleMusic = useCallback(async () => {
+    if (!window.MusicKit) {
+      throw new Error('MusicKit not available. Please try again later.');
+    }
+
+    try {
+      const music = window.MusicKit.getInstance();
+
+      // Open Apple Music authorization popup
+      const musicUserToken = await music.authorize();
+
+      if (!musicUserToken) {
+        throw new Error('Apple Music authorization failed');
+      }
+
+      // Store the token on our server
+      await axios.post('/api/auth/apple-music/store-token', {
+        musicUserToken,
+      });
+
+      // Check auth to update state
+      await checkAuth();
+
+      // Redirect to upload page
+      router.push('/upload');
+    } catch (error: any) {
+      console.error('Apple Music login failed:', error);
+      throw error;
+    }
+  }, [checkAuth, router]);
+
   const logout = useCallback(async () => {
     try {
       await axios.post('/api/auth/logout');
       setUser(null);
-      hasChecked.current = false; // Reset for potential re-login
+      setPlatform(null);
+      hasChecked.current = false;
       router.push('/');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -76,7 +190,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [router]);
 
-  // Check auth once on mount (only if not already checked)
   useEffect(() => {
     if (!hasChecked.current && !checkAuthPromise.current) {
       checkAuth();
@@ -84,7 +197,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [checkAuth]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, checkAuth, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        platform,
+        loading,
+        musicKitReady,
+        checkAuth,
+        loginWithSpotify,
+        loginWithAppleMusic,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
