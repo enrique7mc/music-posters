@@ -1,28 +1,29 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAccessToken } from '@/lib/auth';
-import {
-  getCurrentUser,
-  createPlaylist,
-  addTracksToPlaylist,
-  getPlaylistTracks,
-  uploadPlaylistCover,
-} from '@/lib/spotify';
+import { getAuthenticatedPlatform, getPlatformAccessToken } from '@/lib/auth';
+import { getMusicPlatform } from '@/lib/music-platform';
+import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
+import { SpotifyPlatformService } from '@/lib/music-platform/spotify-platform';
+import { generateDeveloperToken } from '@/lib/apple-music-auth';
+import { getPlaylistTracks, uploadPlaylistCover } from '@/lib/spotify';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 import { generatePlaylistCover } from '@/lib/cover-generator';
+import { MusicPlatform } from '@/types';
 
 /**
- * API route handler that creates a Spotify playlist for the authenticated user from provided track URIs.
+ * API route handler that creates a playlist for the authenticated user from provided tracks.
  *
- * Validates that the request is a POST, that the user is authenticated, and that `trackUris` is a non-empty array.
+ * Supports both Spotify and Apple Music platforms.
+ *
+ * Validates that the request is a POST, that the user is authenticated, and that tracks are provided.
  * Uses an optional `playlistName` or a default name when creating the playlist, adds the provided tracks, and returns
  * a JSON payload containing `playlistUrl`, `playlistId`, and `tracksAdded` on success.
  *
  * Responds with:
  * - 405 if the HTTP method is not POST
- * - 401 if the request is not authenticated or Spotify credentials have expired
- * - 400 if `trackUris` is missing, not an array, or empty
- * - 429 if Spotify rate limits the request
+ * - 401 if the request is not authenticated or credentials have expired
+ * - 400 if tracks are missing or invalid
+ * - 429 if rate limits are exceeded
  * - 500 for other failures
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -35,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
-  const accessToken = getAccessToken(req);
+  const accessToken = getPlatformAccessToken(req);
 
   if (!accessToken) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -53,24 +54,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const { trackUris, playlistName, posterThumbnail } = validatedData;
+  const {
+    trackUris,
+    trackIds,
+    platform: requestedPlatform,
+    playlistName,
+    posterThumbnail,
+  } = validatedData;
+
+  // Determine which platform to use
+  const authenticatedPlatform = getAuthenticatedPlatform(req);
+  const platform: MusicPlatform =
+    (requestedPlatform as MusicPlatform) || authenticatedPlatform || 'spotify';
+
+  // Get the track identifiers (support both trackUris for backward compatibility and trackIds for new API)
+  const tracks = trackIds || trackUris;
+  if (!tracks || tracks.length === 0) {
+    return res.status(400).json({ error: 'No tracks provided' });
+  }
 
   try {
+    // Get the platform service
+    const platformService = getMusicPlatform(platform);
+
+    // For Apple Music, we need to set the developer token
+    if (platform === 'apple-music') {
+      const developerToken = generateDeveloperToken();
+      (platformService as AppleMusicPlatformService).setDeveloperToken(developerToken);
+    }
+
     // Get current user
-    const user = await getCurrentUser(accessToken);
+    const user = await platformService.getCurrentUser(accessToken);
 
     // Create playlist
     const name = playlistName || `Festival Mix - ${new Date().toLocaleDateString()}`;
-    console.log(`Creating playlist for ${user.display_name} with ${trackUris.length} tracks`);
-    const playlist = await createPlaylist(user.id, name, accessToken);
+    console.log(
+      `Creating ${platform} playlist for ${user.displayName} with ${tracks.length} tracks`
+    );
+    const playlist = await platformService.createPlaylist(user.id, name, accessToken);
 
     // Add tracks to playlist
-    await addTracksToPlaylist(playlist.id, trackUris, accessToken);
+    // For Spotify, if we have URIs, use them directly
+    // For Apple Music or with track IDs, extract the ID portion
+    let trackIdsToAdd: string[];
+    if (platform === 'spotify' && trackUris) {
+      // Spotify can use URIs directly
+      trackIdsToAdd = trackUris;
+    } else {
+      // Extract track IDs from URIs if needed, or use trackIds directly
+      trackIdsToAdd = tracks.map((t: string) => {
+        if (t.startsWith('spotify:track:')) {
+          return t.replace('spotify:track:', '');
+        }
+        return t;
+      });
+    }
+
+    await platformService.addTracksToPlaylist(playlist.id, trackIdsToAdd, accessToken);
 
     console.log(`Playlist created successfully: ${playlist.url}`);
 
-    // Generate and upload custom playlist cover (non-blocking)
-    if (posterThumbnail) {
+    // Generate and upload custom playlist cover (Spotify only, non-blocking)
+    if (posterThumbnail && platform === 'spotify' && platformService.uploadPlaylistCover) {
       try {
         console.log('Generating custom playlist cover...');
         const posterBuffer = Buffer.from(posterThumbnail, 'base64');
@@ -78,43 +123,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           playlistName: name,
           posterBuffer,
         });
-        await uploadPlaylistCover(playlist.id, coverBase64, accessToken);
+        await (platformService as SpotifyPlatformService).uploadPlaylistCover(
+          playlist.id,
+          coverBase64,
+          accessToken
+        );
       } catch (coverError) {
         // Non-critical error - log but don't fail the request
         console.error('Failed to upload playlist cover (non-critical):', coverError);
       }
+    } else if (posterThumbnail && platform === 'apple-music') {
+      console.log('Note: Apple Music does not support custom playlist artwork upload via API');
     } else {
       console.log('No poster thumbnail provided, skipping custom cover generation');
     }
 
-    // Fetch and log the actual tracks in the playlist for debugging
-    const playlistTracks = await getPlaylistTracks(playlist.id, accessToken);
-    console.log('\n=== PLAYLIST CONTENTS ===');
-    console.log(`Total tracks in playlist: ${playlistTracks.length}`);
-    console.log('\nTracks:');
-    playlistTracks.forEach((track, index) => {
-      console.log(`${index + 1}. ${track.artists.join(', ')} - ${track.name}`);
-    });
-    console.log('=== END PLAYLIST CONTENTS ===\n');
+    // Fetch and log the actual tracks in the playlist for debugging (Spotify only)
+    if (platform === 'spotify') {
+      try {
+        const playlistTracks = await getPlaylistTracks(playlist.id, accessToken);
+        console.log('\n=== PLAYLIST CONTENTS ===');
+        console.log(`Total tracks in playlist: ${playlistTracks.length}`);
+        console.log('\nTracks:');
+        playlistTracks.forEach((track, index) => {
+          console.log(`${index + 1}. ${track.artists.join(', ')} - ${track.name}`);
+        });
+        console.log('=== END PLAYLIST CONTENTS ===\n');
+      } catch (fetchError) {
+        console.log('Note: Could not fetch playlist contents for logging');
+      }
+    }
 
     res.status(200).json({
       playlistUrl: playlist.url,
       playlistId: playlist.id,
-      tracksAdded: trackUris.length,
+      tracksAdded: tracks.length,
+      platform,
     });
   } catch (error: any) {
     console.error('Error creating playlist:', error);
 
-    // Handle Spotify API errors
+    // Handle API errors
     if (error.response?.status === 401) {
       return res.status(401).json({
-        error: 'Spotify authentication expired. Please log in again.',
+        error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} authentication expired. Please log in again.`,
       });
     }
 
     if (error.response?.status === 429) {
       return res.status(429).json({
-        error: 'Spotify rate limit exceeded. Please wait a moment and try again.',
+        error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} rate limit exceeded. Please wait a moment and try again.`,
       });
     }
 
