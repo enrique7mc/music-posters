@@ -12,6 +12,7 @@ import ErrorMessage from '@/components/ui/ErrorMessage';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Helper function to format duration (ms to mm:ss)
 const formatDuration = (ms: number): string => {
@@ -27,6 +28,11 @@ type ViewMode = 'card' | 'list';
  */
 export default function ReviewTracks() {
   const router = useRouter();
+  const { platform } = useAuth();
+
+  // Helper to get display name for music platform
+  const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
+
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -125,7 +131,7 @@ export default function ReviewTracks() {
       const raw = Array.isArray(router.query.tracks) ? router.query.tracks[0] : router.query.tracks;
       try {
         routerTracks = JSON.parse(raw);
-        console.log('[ReviewTracks] Loaded tracks from router query:', routerTracks.length);
+        console.log('[ReviewTracks] Loaded tracks from router query:', routerTracks?.length ?? 0);
       } catch (parseError) {
         console.warn('[ReviewTracks] Invalid tracks payload in query parameter', parseError);
       }
@@ -157,7 +163,7 @@ export default function ReviewTracks() {
     console.log('[ReviewTracks] Successfully loaded', storedTracks.length, 'tracks');
     setTracks(storedTracks);
     // Select all tracks by default
-    setSelectedTracks(new Set(storedTracks.map((t: Track) => t.uri)));
+    setSelectedTracks(new Set(storedTracks.map((t: Track) => t.id)));
 
     // Load poster thumbnail from sessionStorage (if available)
     if (typeof window !== 'undefined') {
@@ -172,20 +178,20 @@ export default function ReviewTracks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady]); // Only depend on router.isReady, not router itself to prevent loops
 
-  const handleToggleTrack = useCallback((uri: string) => {
+  const handleToggleTrack = useCallback((trackId: string) => {
     setSelectedTracks((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(uri)) {
-        newSet.delete(uri);
+      if (newSet.has(trackId)) {
+        newSet.delete(trackId);
       } else {
-        newSet.add(uri);
+        newSet.add(trackId);
       }
       return newSet;
     });
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    setSelectedTracks(new Set(tracks.map((t) => t.uri)));
+    setSelectedTracks(new Set(tracks.map((t) => t.id)));
   }, [tracks]);
 
   const handleDeselectAll = useCallback(() => {
@@ -207,9 +213,9 @@ export default function ReviewTracks() {
     setError(null);
 
     try {
-      const trackUris = Array.from(selectedTracks);
+      const trackIds = Array.from(selectedTracks);
       const response = await axios.post('/api/create-playlist', {
-        trackUris,
+        trackIds,
         playlistName: playlistName.trim(),
         posterThumbnail: posterThumbnail || undefined,
       });
@@ -400,13 +406,13 @@ export default function ReviewTracks() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8"
               >
                 {tracks.map((track) => {
-                  const isSelected = selectedTracks.has(track.uri);
+                  const isSelected = selectedTracks.has(track.id);
                   return (
-                    <motion.div key={track.uri} variants={staggerItem}>
+                    <motion.div key={track.id} variants={staggerItem}>
                       <Card
                         variant="default"
                         hover
-                        onClick={() => handleToggleTrack(track.uri)}
+                        onClick={() => handleToggleTrack(track.id)}
                         className={cn(
                           'cursor-pointer overflow-hidden transition-all duration-200',
                           isSelected
@@ -494,12 +500,12 @@ export default function ReviewTracks() {
                 <Card variant="default" className="overflow-hidden">
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible">
                     {tracks.map((track, index) => {
-                      const isSelected = selectedTracks.has(track.uri);
+                      const isSelected = selectedTracks.has(track.id);
                       return (
                         <motion.div
-                          key={track.uri}
+                          key={track.id}
                           variants={staggerItem}
-                          onClick={() => handleToggleTrack(track.uri)}
+                          onClick={() => handleToggleTrack(track.id)}
                           className={cn(
                             'flex items-center gap-3 p-4 cursor-pointer transition-all duration-200',
                             index % 2 === 0 ? 'bg-dark-900/30' : 'bg-dark-900/10',
@@ -646,8 +652,8 @@ export default function ReviewTracks() {
                       maxLength={100}
                     />
                     <p className="text-xs text-dark-400 mt-2">
-                      This will be the name of your Spotify playlist ({playlistName.length}/100
-                      characters)
+                      This will be the name of your {platformName} playlist ({playlistName.length}
+                      /100 characters)
                     </p>
                     {posterThumbnail && (
                       <p className="text-xs text-accent-400 mt-2 flex items-center gap-1">
