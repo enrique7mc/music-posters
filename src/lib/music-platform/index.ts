@@ -60,11 +60,8 @@ async function processBatch<T, R>(
  * Maps artist tier to the number of tracks to fetch.
  */
 function getTrackCountForTier(tier?: string, options?: TrackCountOptions): number {
-  // Check for per-artist override first (highest priority)
-  if (options?.perArtistCounts && options.mode === 'per-artist') {
-    // Per-artist mode is handled externally
-    return 3; // Default
-  }
+  // Note: Per-artist overrides are handled by the caller before calling this function.
+  // This function provides the fallback for artists without explicit overrides.
 
   // Check for custom-per-tier mode
   if (options?.mode === 'custom-per-tier' && options.tierCounts && tier) {

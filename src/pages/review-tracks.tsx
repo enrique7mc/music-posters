@@ -28,7 +28,7 @@ type ViewMode = 'card' | 'list';
  */
 export default function ReviewTracks() {
   const router = useRouter();
-  const { platform } = useAuth();
+  const { platform, loading: authLoading, user } = useAuth();
 
   // Helper to get display name for music platform
   const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
@@ -238,6 +238,17 @@ export default function ReviewTracks() {
   const handleBackToEdit = () => {
     router.push('/upload');
   };
+
+  // Wait for auth to complete
+  if (authLoading) {
+    return <LoadingScreen message="Loading..." />;
+  }
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    router.push('/');
+    return null;
+  }
 
   if (loading) {
     return <LoadingScreen message="Loading your tracks..." />;

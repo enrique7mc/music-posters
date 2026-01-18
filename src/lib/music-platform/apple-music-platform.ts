@@ -49,16 +49,18 @@ function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelection
   let pool: any[];
 
   switch (mode) {
-    case 'popular':
+    case 'popular': {
       const popularPoolSize = Math.max(limit, Math.ceil(tracks.length * 0.5));
       pool = tracks.slice(0, Math.min(popularPoolSize, tracks.length));
       break;
+    }
 
-    case 'deep-cuts':
+    case 'deep-cuts': {
       const skipCount = Math.floor(tracks.length * 0.2);
       const deepCutsPool = tracks.slice(skipCount);
       pool = deepCutsPool.length >= limit ? deepCutsPool : tracks;
       break;
+    }
 
     case 'balanced':
     default:
@@ -66,8 +68,12 @@ function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelection
       break;
   }
 
-  // Shuffle pool for randomization
-  const shuffled = pool.sort(() => Math.random() - 0.5);
+  // Fisher-Yates shuffle for unbiased randomization
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
 
   // Return up to `limit` tracks
   return shuffled.slice(0, Math.min(limit, shuffled.length));

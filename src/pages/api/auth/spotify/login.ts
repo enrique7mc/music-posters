@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { serialize } from 'cookie';
 import { generateRandomString } from '@/lib/auth';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 
@@ -21,6 +22,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ].join(' ');
 
   const state = generateRandomString(16);
+
+  // Store state in a short-lived httpOnly cookie to prevent CSRF attacks
+  res.setHeader(
+    'Set-Cookie',
+    serialize('spotify_oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 5 * 60, // 5 minutes
+    })
+  );
 
   const params = new URLSearchParams({
     response_type: 'code',

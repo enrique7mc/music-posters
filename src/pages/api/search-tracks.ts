@@ -54,6 +54,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Determine which platform to use
   const authenticatedPlatform = getAuthenticatedPlatform(req);
+
+  // Reject if requested platform doesn't match authenticated platform
+  if (requestedPlatform && authenticatedPlatform && requestedPlatform !== authenticatedPlatform) {
+    return res.status(401).json({
+      error: `Authenticated with ${authenticatedPlatform}. Please log in to ${requestedPlatform}.`,
+    });
+  }
+
   const platform: MusicPlatform =
     (requestedPlatform as MusicPlatform) || authenticatedPlatform || 'spotify';
 

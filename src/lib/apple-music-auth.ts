@@ -111,34 +111,6 @@ export function getAppleMusicToken(req: NextApiRequest): string | null {
 }
 
 /**
- * Gets the currently authenticated music platform from cookies.
- *
- * @param req - Next.js API request
- * @returns The platform name or null if not authenticated
- */
-export function getAuthenticatedPlatform(req: NextApiRequest): 'spotify' | 'apple-music' | null {
-  const cookies = parse(req.headers.cookie || '');
-
-  // Check platform cookie first
-  if (cookies.music_platform === 'apple-music' && cookies.apple_music_user_token) {
-    return 'apple-music';
-  }
-  if (cookies.music_platform === 'spotify' && cookies.spotify_access_token) {
-    return 'spotify';
-  }
-
-  // Fallback: check for tokens directly
-  if (cookies.apple_music_user_token) {
-    return 'apple-music';
-  }
-  if (cookies.spotify_access_token) {
-    return 'spotify';
-  }
-
-  return null;
-}
-
-/**
  * Clears Apple Music authentication cookies.
  *
  * @param res - Next.js API response

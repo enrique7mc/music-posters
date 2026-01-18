@@ -11,7 +11,7 @@ export default function Document() {
           rel="stylesheet"
         />
         {/* Apple MusicKit JS for Apple Music integration */}
-        <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" async />
+        <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" async></script>
       </Head>
       <body className="antialiased">
         <Main />

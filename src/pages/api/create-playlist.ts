@@ -64,6 +64,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Determine which platform to use
   const authenticatedPlatform = getAuthenticatedPlatform(req);
+
+  // Reject if requested platform doesn't match authenticated platform
+  if (requestedPlatform && authenticatedPlatform && requestedPlatform !== authenticatedPlatform) {
+    return res.status(400).json({
+      error: `Requested platform (${requestedPlatform}) does not match authenticated platform (${authenticatedPlatform})`,
+    });
+  }
+
   const platform: MusicPlatform =
     (requestedPlatform as MusicPlatform) || authenticatedPlatform || 'spotify';
 
@@ -138,8 +146,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('No poster thumbnail provided, skipping custom cover generation');
     }
 
-    // Fetch and log the actual tracks in the playlist for debugging (Spotify only)
-    if (platform === 'spotify') {
+    // Fetch and log the actual tracks in the playlist for debugging (Spotify only, debug mode)
+    if (platform === 'spotify' && process.env.LOG_PLAYLIST_CONTENTS === 'true') {
       try {
         const playlistTracks = await getPlaylistTracks(playlist.id, accessToken);
         console.log('\n=== PLAYLIST CONTENTS ===');

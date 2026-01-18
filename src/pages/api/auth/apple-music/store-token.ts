@@ -24,6 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
+  // CSRF protection: verify origin matches allowed origin
+  const allowedOrigin = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const origin = req.headers.origin;
+  if (allowedOrigin && origin && origin !== allowedOrigin) {
+    return res.status(403).json({ error: 'Invalid origin' });
+  }
+
   const { musicUserToken } = req.body;
 
   // Validate the token

@@ -58,6 +58,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Initialize MusicKit when available
   useEffect(() => {
+    let checkMusicKitInterval: NodeJS.Timeout | null = null;
+    let cleanupTimeout: NodeJS.Timeout | null = null;
+
     const initMusicKit = async () => {
       if (musicKitInitialized.current || !window.MusicKit) return;
 
@@ -88,16 +91,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       initMusicKit();
     } else {
       // Wait for MusicKit to load
-      const checkMusicKit = setInterval(() => {
+      checkMusicKitInterval = setInterval(() => {
         if (window.MusicKit) {
-          clearInterval(checkMusicKit);
+          if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
           initMusicKit();
         }
       }, 100);
 
       // Stop checking after 10 seconds
-      setTimeout(() => clearInterval(checkMusicKit), 10000);
+      cleanupTimeout = setTimeout(() => {
+        if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
+      }, 10000);
     }
+
+    return () => {
+      if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
+      if (cleanupTimeout) clearTimeout(cleanupTimeout);
+    };
   }, []);
 
   const checkAuth = useCallback(async () => {

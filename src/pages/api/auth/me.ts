@@ -74,8 +74,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Include legacy fields for backward compatibility
       display_name: user.displayName,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error fetching user:', err);
-    res.status(401).json({ error: 'Invalid or expired token' });
+    // Differentiate auth failures from server/config errors
+    if (err?.response?.status === 401) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    // Config errors (e.g., missing env vars) or server errors
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
 }

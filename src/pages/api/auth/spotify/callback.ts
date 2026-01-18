@@ -1,7 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { serialize } from 'cookie';
+import { parse, serialize } from 'cookie';
 import { exchangeCodeForTokens } from '@/lib/spotify';
-import { setSpotifyAuthCookies } from '@/lib/auth';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -14,7 +13,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
+
+  // Verify OAuth state to prevent CSRF attacks
+  const cookies = parse(req.headers.cookie || '');
+  const storedState = cookies.spotify_oauth_state;
+
+  if (!state || !storedState || state !== storedState) {
+    return res.redirect('/?error=invalid_state');
+  }
 
   if (error) {
     return res.redirect(`/?error=${error}`);
@@ -27,19 +34,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const tokens = await exchangeCodeForTokens(code);
 
-    setSpotifyAuthCookies(res, tokens.access_token, tokens.refresh_token, tokens.expires_in);
-
-    // Also set the platform cookie to indicate Spotify is authenticated
-    const existingCookies = res.getHeader('Set-Cookie') as string[] | undefined;
-    const platformCookie = serialize('music_platform', 'spotify', {
+    // Build cookie options
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'lax' as const,
       path: '/',
-      maxAge: tokens.expires_in,
-    });
+    };
 
-    res.setHeader('Set-Cookie', [...(existingCookies || []), platformCookie]);
+    // Set all cookies together: auth tokens, platform, and clear state cookie
+    res.setHeader('Set-Cookie', [
+      serialize('spotify_access_token', tokens.access_token, {
+        ...cookieOptions,
+        maxAge: tokens.expires_in,
+      }),
+      serialize('spotify_refresh_token', tokens.refresh_token, {
+        ...cookieOptions,
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+      }),
+      serialize('music_platform', 'spotify', {
+        ...cookieOptions,
+        maxAge: tokens.expires_in,
+      }),
+      // Clear the state cookie
+      serialize('spotify_oauth_state', '', {
+        ...cookieOptions,
+        maxAge: 0,
+      }),
+    ]);
 
     // Redirect to upload page after successful authentication
     res.redirect('/upload');
