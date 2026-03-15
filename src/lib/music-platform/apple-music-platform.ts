@@ -270,7 +270,10 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         }
       );
 
-      const playlist = response.data.data[0];
+      const playlist = response.data.data?.[0];
+      if (!playlist) {
+        throw new Error('Apple Music API returned empty playlist response');
+      }
 
       // Apple Music doesn't return a direct URL in the response
       // We construct it from the playlist ID

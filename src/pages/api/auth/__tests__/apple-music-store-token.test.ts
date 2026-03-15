@@ -11,6 +11,11 @@ vi.mock('@/lib/rate-limit', () => ({
 // Valid token (100+ chars, valid characters)
 const VALID_TOKEN = 'a'.repeat(200);
 
+const expectTokenStored = (res: any) => {
+  const setCookie = res.getHeader('Set-Cookie');
+  expect(setCookie).toBeTruthy();
+};
+
 describe('POST /api/auth/apple-music/store-token', () => {
   beforeEach(() => {
     vi.stubEnv('NEXTAUTH_URL', 'http://127.0.0.1:3000');
@@ -31,6 +36,7 @@ describe('POST /api/auth/apple-music/store-token', () => {
 
     await handler(req as any, res as any);
     expect(res._getStatusCode()).toBe(200);
+    expectTokenStored(res);
   });
 
   it('should accept request from same hostname on same port', async () => {
@@ -42,6 +48,7 @@ describe('POST /api/auth/apple-music/store-token', () => {
 
     await handler(req as any, res as any);
     expect(res._getStatusCode()).toBe(200);
+    expectTokenStored(res);
   });
 
   it('should reject request from different hostname', async () => {
@@ -63,6 +70,7 @@ describe('POST /api/auth/apple-music/store-token', () => {
 
     await handler(req as any, res as any);
     expect(res._getStatusCode()).toBe(200);
+    expectTokenStored(res);
   });
 
   it('should reject missing musicUserToken', async () => {
@@ -98,5 +106,6 @@ describe('POST /api/auth/apple-music/store-token', () => {
 
     await handler(req as any, res as any);
     expect(res._getStatusCode()).toBe(200);
+    expectTokenStored(res);
   });
 });
