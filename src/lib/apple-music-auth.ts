@@ -147,7 +147,7 @@ export function isValidAppleMusicToken(token: string): boolean {
     return false;
   }
 
-  // Should be base64-like characters
-  const base64Pattern = /^[A-Za-z0-9+/=]+$/;
-  return base64Pattern.test(token);
+  // Apple Music user tokens can contain base64 chars plus dots, hyphens, and underscores
+  const tokenPattern = /^[A-Za-z0-9+/=._-]+$/;
+  return tokenPattern.test(token);
 }
