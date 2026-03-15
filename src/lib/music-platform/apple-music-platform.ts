@@ -208,7 +208,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         `${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/artists/${artistId}/view/top-songs`,
         {
           params: {
-            limit: 10, // Get up to 10 songs to select from
+            limit: 25, // Get up to 25 songs to select from (API max for view endpoints)
           },
           headers: this.getCatalogHeaders(),
         }
