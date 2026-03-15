@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Success() {
   const router = useRouter();
-  const { platform } = useAuth();
+  const { platform, loading: authLoading, user } = useAuth();
 
   // Helper to get display name for music platform
   const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
@@ -19,6 +19,13 @@ export default function Success() {
   const [copied, setCopied] = useState(false);
   const [buttonsEnabled, setButtonsEnabled] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Redirect to home if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/');
+    }
+  }, [authLoading, user, router]);
 
   // Clear sessionStorage and set up component
   useEffect(() => {
@@ -90,6 +97,11 @@ export default function Success() {
   const handleCreateAnother = () => {
     router.push('/upload');
   };
+
+  // Wait for auth check before rendering
+  if (authLoading || !user) {
+    return null;
+  }
 
   return (
     <>

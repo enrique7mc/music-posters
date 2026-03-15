@@ -63,6 +63,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const initMusicKit = async () => {
       if (musicKitInitialized.current || !window.MusicKit) return;
+      // Mark as initialized immediately to prevent concurrent calls
+      musicKitInitialized.current = true;
 
       try {
         // Fetch developer token from our API
@@ -77,10 +79,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           },
         });
 
-        musicKitInitialized.current = true;
         setMusicKitReady(true);
         console.log('MusicKit initialized successfully');
       } catch (error) {
+        // Reset on failure so it can be retried
+        musicKitInitialized.current = false;
         console.error('Failed to initialize MusicKit:', error);
         // MusicKit may not be configured, which is fine - user can still use Spotify
       }

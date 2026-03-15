@@ -115,9 +115,8 @@ export default function ReviewTracks() {
   }, [playlistName, posterThumbnail]);
 
   useEffect(() => {
-    // Only run once when router is ready and we haven't loaded tracks yet
-    if (!router.isReady || hasLoadedTracks.current || tracks.length > 0) {
-      console.log('[ReviewTracks] Skipping load - already loaded or loading');
+    // Only run once when router is ready, auth is resolved, and we haven't loaded tracks yet
+    if (!router.isReady || authLoading || !user || hasLoadedTracks.current || tracks.length > 0) {
       return;
     }
 
@@ -176,7 +175,7 @@ export default function ReviewTracks() {
     setLoading(false);
     console.log('[ReviewTracks] Page setup complete, rendering UI');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.isReady]); // Only depend on router.isReady, not router itself to prevent loops
+  }, [router.isReady, authLoading, user]); // Wait for auth before loading tracks
 
   const handleToggleTrack = useCallback((trackId: string) => {
     setSelectedTracks((prev) => {

@@ -32,7 +32,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    // In development, derive redirect URI from request host to match login
+    const redirectUri =
+      process.env.NODE_ENV !== 'production'
+        ? `http://${req.headers.host}/api/auth/callback`
+        : undefined;
+
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
 
     // Build cookie options
     const cookieOptions = {
