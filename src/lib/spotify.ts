@@ -4,13 +4,16 @@ import { SpotifyTokens, SpotifyUser, Track, Artist, TrackSelectionMode } from '@
 const SPOTIFY_ACCOUNTS_BASE_URL = 'https://accounts.spotify.com';
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
 
-export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokens> {
+export async function exchangeCodeForTokens(
+  code: string,
+  redirectUri?: string
+): Promise<SpotifyTokens> {
   const response = await axios.post(
     `${SPOTIFY_ACCOUNTS_BASE_URL}/api/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
+      redirect_uri: redirectUri || process.env.SPOTIFY_REDIRECT_URI!,
       client_id: process.env.SPOTIFY_CLIENT_ID!,
       client_secret: process.env.SPOTIFY_CLIENT_SECRET!,
     }),
@@ -180,6 +183,7 @@ export async function getArtistTopTrack(
     // Extract full track details
     return {
       name: topTrack.name,
+      id: topTrack.id,
       uri: topTrack.uri,
       artist: topTrack.artists[0]?.name || 'Unknown Artist',
       artistId: topTrack.artists[0]?.id || artistId,
@@ -187,7 +191,8 @@ export async function getArtistTopTrack(
       albumArtwork: topTrack.album?.images?.[0]?.url || null,
       duration: topTrack.duration_ms || 0,
       previewUrl: topTrack.preview_url || null,
-      spotifyUrl: topTrack.external_urls?.spotify || '',
+      platformUrl: topTrack.external_urls?.spotify || '',
+      platform: 'spotify' as const,
     };
   } catch (error) {
     console.error(`Error getting top track for artist ${artistId}:`, error);
@@ -281,6 +286,7 @@ export async function getArtistTopTracks(
     // Map to our Track interface
     return selectedTracks.map((track: any) => ({
       name: track.name,
+      id: track.id,
       uri: track.uri,
       artist: track.artists[0]?.name || 'Unknown Artist',
       artistId: track.artists[0]?.id || artistId,
@@ -288,7 +294,8 @@ export async function getArtistTopTracks(
       albumArtwork: track.album?.images?.[0]?.url || null,
       duration: track.duration_ms || 0,
       previewUrl: track.preview_url || null,
-      spotifyUrl: track.external_urls?.spotify || '',
+      platformUrl: track.external_urls?.spotify || '',
+      platform: 'spotify' as const,
     }));
   } catch (error) {
     console.error(`Error getting top tracks for artist ${artistId}:`, error);

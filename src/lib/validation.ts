@@ -40,12 +40,14 @@ export const artistSchema = z.object({
 /**
  * Schema for validating search tracks request body.
  * Limits artists to 150 to prevent excessive API calls and rate limiting.
+ * Supports both Spotify and Apple Music platforms.
  */
 export const searchTracksSchema = z.object({
   artists: z
     .array(artistSchema)
     .min(1, 'At least one artist must be provided')
     .max(150, 'Maximum 150 artists allowed to prevent excessive API calls'),
+  platform: z.enum(['spotify', 'apple-music']).optional(), // Optional for backward compatibility
   trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
   customTrackCount: z.number().int().min(1).max(50).optional(),
   tierCounts: z
@@ -73,6 +75,15 @@ export const searchTracksSchema = z.object({
 });
 
 // ============================================================================
+// Platform Validation
+// ============================================================================
+
+/**
+ * Schema for validating music platform.
+ */
+export const musicPlatformSchema = z.enum(['spotify', 'apple-music']);
+
+// ============================================================================
 // Create Playlist Validation (/api/create-playlist)
 // ============================================================================
 
@@ -85,38 +96,71 @@ const spotifyTrackUriSchema = z
   .regex(/^spotify:track:[a-zA-Z0-9]{22}$/, 'Invalid Spotify track URI format');
 
 /**
+ * Schema for validating Apple Music track ID format.
+ * Apple Music track IDs are numeric strings.
+ */
+const appleMusicTrackIdSchema = z.string().regex(/^\d+$/, 'Invalid Apple Music track ID format');
+
+/**
+ * Schema for validating track IDs that can be either Spotify URIs or Apple Music IDs.
+ */
+const trackIdSchema = z.string().refine(
+  (id) => {
+    // Spotify URI format
+    if (/^spotify:track:[a-zA-Z0-9]{22}$/.test(id)) return true;
+    // Apple Music numeric ID format
+    if (/^\d+$/.test(id)) return true;
+    return false;
+  },
+  { message: 'Invalid track ID format. Must be a Spotify URI or Apple Music track ID.' }
+);
+
+/**
  * Schema for validating create playlist request body.
  * Playlist names are sanitized to prevent injection attacks.
  * Optionally accepts a base64-encoded poster thumbnail for custom cover art.
+ * Supports both Spotify and Apple Music platforms.
  */
-export const createPlaylistSchema = z.object({
-  trackUris: z
-    .array(spotifyTrackUriSchema)
-    .min(1, 'At least one track URI must be provided')
-    .max(10000, 'Maximum 10,000 tracks allowed per playlist'),
-  playlistName: z
-    .string()
-    .min(1, 'Playlist name must not be empty')
-    .max(100, 'Playlist name must not exceed 100 characters')
-    .trim()
-    .optional()
-    .refine(
-      (name) => {
-        if (!name) return true;
-        // Ensure no HTML tags or special characters that could cause issues
-        const sanitized = name.replace(/<[^>]*>/g, '');
-        return sanitized === name;
-      },
-      {
-        message: 'Playlist name must not contain HTML tags',
-      }
-    ),
-  posterThumbnail: z
-    .string()
-    .max(500000, 'Poster thumbnail too large (max 500KB base64)')
-    .regex(/^[A-Za-z0-9+/=]+$/, 'Invalid base64 format')
-    .optional(),
-});
+export const createPlaylistSchema = z
+  .object({
+    // Platform-agnostic: accepts either trackUris (Spotify) or trackIds (both platforms)
+    trackUris: z
+      .array(spotifyTrackUriSchema)
+      .min(1, 'At least one track URI must be provided')
+      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .optional(),
+    trackIds: z
+      .array(trackIdSchema)
+      .min(1, 'At least one track ID must be provided')
+      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .optional(),
+    platform: musicPlatformSchema.optional(),
+    playlistName: z
+      .string()
+      .min(1, 'Playlist name must not be empty')
+      .max(100, 'Playlist name must not exceed 100 characters')
+      .trim()
+      .optional()
+      .refine(
+        (name) => {
+          if (!name) return true;
+          // Ensure no HTML tags or special characters that could cause issues
+          const sanitized = name.replace(/<[^>]*>/g, '');
+          return sanitized === name;
+        },
+        {
+          message: 'Playlist name must not contain HTML tags',
+        }
+      ),
+    posterThumbnail: z
+      .string()
+      .max(500000, 'Poster thumbnail too large (max 500KB base64)')
+      .regex(/^[A-Za-z0-9+/=]+$/, 'Invalid base64 format')
+      .optional(),
+  })
+  .refine((data) => data.trackUris || data.trackIds, {
+    message: 'Either trackUris or trackIds must be provided',
+  });
 
 // ============================================================================
 // File Upload Validation (/api/analyze)

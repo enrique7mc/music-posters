@@ -19,7 +19,10 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Upload() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, platform } = useAuth();
+
+  // Helper to get display name for music platform
+  const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -141,7 +144,9 @@ export default function Upload() {
   }
 
   if (creating) {
-    return <LoadingScreen message="Finding tracks on Spotify... This may take a minute." />;
+    return (
+      <LoadingScreen message={`Finding tracks on ${platformName}... This may take a minute.`} />
+    );
   }
 
   return (

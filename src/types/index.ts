@@ -1,3 +1,20 @@
+// ============================================================================
+// Music Platform Types
+// ============================================================================
+
+export type MusicPlatform = 'spotify' | 'apple-music';
+
+export interface PlatformUser {
+  id: string;
+  displayName: string;
+  email?: string;
+  platform: MusicPlatform;
+}
+
+// ============================================================================
+// Artist Types
+// ============================================================================
+
 export interface Artist {
   name: string;
   weight?: number; // 1-10 prominence score (populated by Gemini, undefined for Vision)
@@ -33,14 +50,16 @@ export interface SpotifyUser {
 
 export interface Track {
   name: string;
-  uri: string;
+  id: string; // Platform-specific track ID
+  uri?: string; // Spotify URI (e.g., spotify:track:xxx) - optional for Apple Music
   artist: string;
   artistId: string;
   album: string;
   albumArtwork: string | null; // URL to album image
   duration: number; // Duration in milliseconds
   previewUrl: string | null; // 30-second preview URL (may be null)
-  spotifyUrl: string; // Direct Spotify link
+  platformUrl: string; // Direct link to track on the platform
+  platform: MusicPlatform; // Which platform this track is from
 }
 
 export interface SearchTracksResponse {

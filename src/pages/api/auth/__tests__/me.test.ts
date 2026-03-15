@@ -50,9 +50,10 @@ describe('/api/auth/me', () => {
     const data = JSON.parse(res._getData());
     expect(data).toEqual({
       id: 'mock_user_id',
-      display_name: 'Mock User',
+      displayName: 'Mock User',
+      display_name: 'Mock User', // legacy field
       email: 'mock@example.com',
-      images: [{ url: 'https://example.com/avatar.jpg' }],
+      platform: 'spotify',
     });
   });
 

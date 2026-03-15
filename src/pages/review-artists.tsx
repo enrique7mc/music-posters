@@ -24,7 +24,10 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function ReviewArtists() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, platform } = useAuth();
+
+  // Helper to get display name for music platform
+  const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +259,9 @@ export default function ReviewArtists() {
   }
 
   if (searching) {
-    return <LoadingScreen message="Finding tracks on Spotify... This may take a minute." />;
+    return (
+      <LoadingScreen message={`Finding tracks on ${platformName}... This may take a minute.`} />
+    );
   }
 
   return (
@@ -363,7 +368,7 @@ export default function ReviewArtists() {
                       Ready to find tracks?
                     </h4>
                     <p className="text-sm text-dark-400 mb-6">
-                      We&apos;ll search Spotify for tracks from {artists.length}{' '}
+                      We&apos;ll search {platformName} for tracks from {artists.length}{' '}
                       {artists.length === 1 ? 'artist' : 'artists'} and let you review them before
                       creating your playlist.
                     </p>

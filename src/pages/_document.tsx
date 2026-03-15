@@ -10,6 +10,8 @@ export default function Document() {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
+        {/* Apple MusicKit JS for Apple Music integration */}
+        <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" async></script>
       </Head>
       <body className="antialiased">
         <Main />

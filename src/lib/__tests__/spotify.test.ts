@@ -147,6 +147,7 @@ describe('spotify.ts', () => {
 
       expect(track).toEqual({
         name: 'Top Track 1',
+        id: 'track_1_artist_taylor_swift',
         uri: 'spotify:track:artist_taylor_swift_1',
         artist: 'Artist Name',
         artistId: 'artist_taylor_swift',
@@ -154,7 +155,8 @@ describe('spotify.ts', () => {
         albumArtwork: 'https://example.com/album.jpg',
         duration: 180000,
         previewUrl: 'https://example.com/preview1.mp3',
-        spotifyUrl: 'https://open.spotify.com/track/artist_taylor_swift_1',
+        platformUrl: 'https://open.spotify.com/track/artist_taylor_swift_1',
+        platform: 'spotify',
       });
     });
 
