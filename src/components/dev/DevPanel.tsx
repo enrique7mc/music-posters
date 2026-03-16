@@ -55,33 +55,19 @@ export default function DevPanel() {
       if (!res.ok) return;
       const data = await res.json();
 
-      // Store in sessionStorage based on page
+      // Store in sessionStorage using the keys each page actually reads
       if (page === 'review-artists') {
-        sessionStorage.setItem(
-          'analysisResult',
-          JSON.stringify({
-            artists: data.artists,
-            provider: data.analysisProvider,
-            posterThumbnail: data.posterThumbnail,
-          })
-        );
+        sessionStorage.setItem('artists', JSON.stringify(data.artists));
+        sessionStorage.setItem('analysisProvider', data.analysisProvider || 'hybrid');
+        if (data.posterThumbnail) {
+          sessionStorage.setItem('posterThumbnail', data.posterThumbnail);
+        }
         router.push('/review-artists');
       } else if (page === 'review-tracks') {
-        sessionStorage.setItem(
-          'searchTracksResult',
-          JSON.stringify({
-            tracks: data.tracks,
-          })
-        );
+        sessionStorage.setItem('tracks', JSON.stringify(data.tracks));
         router.push('/review-tracks');
       } else if (page === 'success') {
-        sessionStorage.setItem(
-          'playlistResult',
-          JSON.stringify({
-            playlistUrl: data.playlistUrl,
-          })
-        );
-        router.push('/success');
+        router.push({ pathname: '/success', query: { playlistUrl: data.playlistUrl } });
       }
     } catch {
       // Silently fail

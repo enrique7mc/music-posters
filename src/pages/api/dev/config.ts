@@ -2,12 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { isDevModeAvailable, getDevConfig, updateDevConfig } from '@/lib/dev-mode';
 
 function isLocalhost(req: NextApiRequest): boolean {
-  const forwarded = req.headers['x-forwarded-for'];
-  const ip = forwarded
-    ? typeof forwarded === 'string'
-      ? forwarded
-      : forwarded[0]
-    : req.socket?.remoteAddress;
+  const ip = req.socket?.remoteAddress;
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 

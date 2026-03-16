@@ -20,8 +20,12 @@ const DEFAULT_CONFIG: DevConfig = {
   fakePlatform: 'spotify',
 };
 
-let config: DevConfig = { ...DEFAULT_CONFIG };
-let initialized = false;
+// Use globalThis to survive Next.js HMR module re-evaluation in dev mode
+const GLOBAL_KEY = '__MUSIC_POSTERS_DEV_CONFIG__';
+const GLOBAL_INIT_KEY = '__MUSIC_POSTERS_DEV_INIT__';
+
+let config: DevConfig = (globalThis as any)[GLOBAL_KEY] || { ...DEFAULT_CONFIG };
+let initialized: boolean = (globalThis as any)[GLOBAL_INIT_KEY] || false;
 
 /**
  * Returns true if dev mode is available (DEV_MODE=true AND not production).
@@ -30,12 +34,18 @@ export function isDevModeAvailable(): boolean {
   return process.env.DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
 }
 
+function syncToGlobal() {
+  (globalThis as any)[GLOBAL_KEY] = config;
+  (globalThis as any)[GLOBAL_INIT_KEY] = initialized;
+}
+
 function initConfig() {
   if (initialized) return;
   initialized = true;
 
   if (!isDevModeAvailable()) {
     config = { ...DEFAULT_CONFIG };
+    syncToGlobal();
     return;
   }
 
@@ -52,6 +62,8 @@ function initConfig() {
   if (!isNaN(delayMs) && delayMs >= 0 && delayMs <= 5000) {
     config.mockDelayMs = delayMs;
   }
+
+  syncToGlobal();
 }
 
 /**
@@ -120,6 +132,7 @@ export function updateDevConfig(partial: Partial<DevConfig>): DevConfig {
     config.mockTrackSearch = true;
   }
 
+  syncToGlobal();
   return { ...config };
 }
 
@@ -129,4 +142,5 @@ export function updateDevConfig(partial: Partial<DevConfig>): DevConfig {
 export function resetDevConfig() {
   config = { ...DEFAULT_CONFIG };
   initialized = false;
+  syncToGlobal();
 }
