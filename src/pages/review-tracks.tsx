@@ -413,7 +413,7 @@ export default function ReviewTracks() {
                 initial="hidden"
                 animate="visible"
                 exit={{ opacity: 0 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8"
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8"
               >
                 {tracks.map((track) => {
                   const isSelected = selectedTracks.has(track.id);
