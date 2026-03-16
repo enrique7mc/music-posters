@@ -424,7 +424,7 @@ export default function ReviewTracks() {
                         hover
                         onClick={() => handleToggleTrack(track.id)}
                         className={cn(
-                          'cursor-pointer overflow-hidden transition-all duration-200',
+                          'cursor-pointer overflow-hidden transition-opacity duration-100',
                           isSelected
                             ? 'ring-2 ring-accent-500 shadow-glow'
                             : 'opacity-60 hover:opacity-100'
@@ -452,7 +452,7 @@ export default function ReviewTracks() {
                           >
                             <div
                               className={cn(
-                                'w-7 h-7 rounded-lg flex items-center justify-center shadow-md transition-all duration-200',
+                                'w-7 h-7 rounded-lg flex items-center justify-center shadow-md transition-colors duration-100',
                                 isSelected
                                   ? 'bg-accent-500 shadow-glow'
                                   : 'bg-dark-800/80 backdrop-blur-sm'

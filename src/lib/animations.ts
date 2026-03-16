@@ -82,11 +82,15 @@ export const pageTransition: Variants = {
 
 // Hover lift (for cards, buttons)
 export const hoverLift: Variants = {
-  rest: { scale: 1, y: 0 },
+  rest: {
+    scale: 1,
+    y: 0,
+    transition: { duration: 0.15, ease: 'easeOut' as const },
+  },
   hover: {
     scale: 1.02,
     y: -2,
-    transition: { duration: 0.2, ease: 'easeOut' as const },
+    transition: { duration: 0.15, ease: 'easeOut' as const },
   },
 };
 
