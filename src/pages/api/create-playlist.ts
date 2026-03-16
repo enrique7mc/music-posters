@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAuthenticatedPlatform, getPlatformAccessToken } from '@/lib/auth';
+import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
+import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { SpotifyPlatformService } from '@/lib/music-platform/spotify-platform';
@@ -36,7 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
-  const accessToken = getPlatformAccessToken(req);
+  const devConfig = isDevModeAvailable() ? getDevConfig() : null;
+  const accessToken = getPlatformAccessTokenOrDev(req);
 
   if (!accessToken) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -63,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } = validatedData;
 
   // Determine which platform to use
-  const authenticatedPlatform = getAuthenticatedPlatform(req);
+  const authenticatedPlatform = getAuthenticatedPlatformOrDev(req);
 
   // Reject if requested platform doesn't match authenticated platform
   if (requestedPlatform && authenticatedPlatform && requestedPlatform !== authenticatedPlatform) {
@@ -79,6 +81,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tracks = trackIds || trackUris;
   if (!tracks || tracks.length === 0) {
     return res.status(400).json({ error: 'No tracks provided' });
+  }
+
+  // Dev mode: dry-run returns fake response without hitting any APIs
+  if (devConfig?.dryRunPlaylist) {
+    const ts = Date.now();
+    const dryRunPlatform = platform;
+    const fakeUrl =
+      dryRunPlatform === 'apple-music'
+        ? `https://music.apple.com/library/playlist/dev-dry-run-${ts}`
+        : `https://open.spotify.com/playlist/dev-dry-run-${ts}`;
+
+    console.log(
+      `[DEV MODE] Dry-run playlist creation: ${tracks.length} tracks, platform: ${dryRunPlatform}`
+    );
+
+    return res.status(200).json({
+      playlistUrl: fakeUrl,
+      playlistId: `dev-dry-run-${ts}`,
+      tracksAdded: tracks.length,
+      platform: dryRunPlatform,
+      dryRun: true,
+    });
   }
 
   try {

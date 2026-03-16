@@ -4,7 +4,8 @@ import fs from 'fs';
 import { analyzeImage } from '@/lib/ocr';
 import { analyzeImageWithGeminiRetry } from '@/lib/gemini';
 import { analyzeImageHybrid } from '@/lib/hybrid-analyzer';
-import { isAuthenticated } from '@/lib/auth';
+import { isAuthenticatedOrDev } from '@/lib/auth';
+import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { mockVisionArtists, mockGeminiArtists } from '@/lib/mock-data';
 import { AnalyzeResponse } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
@@ -27,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Check authentication
-  if (!isAuthenticated(req)) {
+  if (!isAuthenticatedOrDev(req)) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
@@ -67,15 +68,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`[Analyze API] File validation passed. Detected type: ${validation.detectedType}`);
 
-    // Check if we should use mock data (for dev/UI iteration)
-    const useMockData = process.env.USE_MOCK_DATA === 'true';
+    // Check if we should use mock data (dev config takes precedence, then env var)
+    const devConfig = isDevModeAvailable() ? getDevConfig() : null;
+    const useMockData = devConfig?.mockAnalysis ?? false;
+    const mockDelayMs = devConfig?.mockDelayMs ?? 0;
 
     // Determine which analysis provider to use
     const provider = process.env.IMAGE_ANALYSIS_PROVIDER || 'vision';
 
     console.log(`[Analyze API] Using provider: ${provider}`);
     if (useMockData) {
-      console.log('[Analyze API] 🎭 MOCK MODE ENABLED - Returning mock data');
+      console.log('[DEV MODE] Mock analysis enabled - returning mock data');
     }
 
     let result: { artists: any[]; rawText: string };
@@ -84,11 +87,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Return mock data instead of calling real APIs
       const mockArtists =
         provider === 'gemini' || provider === 'hybrid' ? mockGeminiArtists : mockVisionArtists;
+
+      // Apply configurable delay
+      if (mockDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, mockDelayMs));
+      }
+
       result = {
         artists: mockArtists,
         rawText: mockArtists.map((a) => a.name).join('\n'),
       };
-      console.log(`[Analyze API] Returning ${mockArtists.length} mock artists (${provider} style)`);
+      console.log(`[DEV MODE] Returning ${mockArtists.length} mock artists (${provider} style)`);
     } else if (provider === 'hybrid') {
       // Use Hybrid Mode: Vision OCR + Gemini AI
       console.log('[Analyze API] Analyzing with Hybrid Mode (Vision + Gemini)...');

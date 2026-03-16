@@ -7,7 +7,11 @@ import {
   clearAuthCookies,
   generateRandomString,
   isAuthenticated,
+  isAuthenticatedOrDev,
+  getPlatformAccessTokenOrDev,
+  getAuthenticatedPlatformOrDev,
 } from '../auth';
+import { resetDevConfig, updateDevConfig } from '../dev-mode';
 
 describe('auth.ts', () => {
   describe('setAuthCookies', () => {
@@ -207,6 +211,82 @@ describe('auth.ts', () => {
       const str = generateRandomString(1000);
 
       expect(str).toHaveLength(1000);
+    });
+  });
+
+  describe('dev mode wrappers', () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+      resetDevConfig();
+    });
+
+    it('isAuthenticatedOrDev delegates to real function when dev mode off', () => {
+      delete process.env.DEV_MODE;
+      resetDevConfig();
+
+      const mockReq = {
+        headers: { cookie: 'other_cookie=value' },
+      } as NextApiRequest;
+
+      expect(isAuthenticatedOrDev(mockReq)).toBe(false);
+    });
+
+    it('isAuthenticatedOrDev returns true when skipAuth enabled', () => {
+      process.env.DEV_MODE = 'true';
+      process.env.NODE_ENV = 'development';
+      resetDevConfig();
+
+      updateDevConfig({ skipAuth: true });
+
+      const mockReq = {
+        headers: {},
+      } as NextApiRequest;
+
+      expect(isAuthenticatedOrDev(mockReq)).toBe(true);
+    });
+
+    it('getPlatformAccessTokenOrDev returns fake token when skipAuth enabled', () => {
+      process.env.DEV_MODE = 'true';
+      process.env.NODE_ENV = 'development';
+      resetDevConfig();
+
+      updateDevConfig({ skipAuth: true });
+
+      const mockReq = {
+        headers: {},
+      } as NextApiRequest;
+
+      expect(getPlatformAccessTokenOrDev(mockReq)).toBe('dev-mode-fake-token');
+    });
+
+    it('getAuthenticatedPlatformOrDev returns fakePlatform when skipAuth enabled', () => {
+      process.env.DEV_MODE = 'true';
+      process.env.NODE_ENV = 'development';
+      resetDevConfig();
+
+      updateDevConfig({ skipAuth: true, fakePlatform: 'apple-music' });
+
+      const mockReq = {
+        headers: {},
+      } as NextApiRequest;
+
+      expect(getAuthenticatedPlatformOrDev(mockReq)).toBe('apple-music');
+    });
+
+    it('wrappers delegate to real functions when dev mode on but skipAuth off', () => {
+      process.env.DEV_MODE = 'true';
+      process.env.NODE_ENV = 'development';
+      resetDevConfig();
+
+      const mockReq = {
+        headers: { cookie: 'other_cookie=value' },
+      } as NextApiRequest;
+
+      expect(isAuthenticatedOrDev(mockReq)).toBe(false);
+      expect(getPlatformAccessTokenOrDev(mockReq)).toBeNull();
+      expect(getAuthenticatedPlatformOrDev(mockReq)).toBeNull();
     });
   });
 

@@ -57,6 +57,9 @@ describe('/api/auth/me', () => {
     });
   });
 
+  // Dev mode test for /api/auth/me is in src/lib/__tests__/api-dev/me-dev.test.ts
+  // (kept outside pages/ to avoid Next.js process.env.NODE_ENV replacement)
+
   it('should return 401 when access token is invalid', async () => {
     server.use(
       http.get('https://api.spotify.com/v1/me', () => {

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAuthenticatedPlatform, getPlatformAccessToken } from '@/lib/auth';
+import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
+import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform, searchAndGetTopTracks } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
@@ -25,6 +26,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Determine which platform to use
+  const devConfig = isDevModeAvailable() ? getDevConfig() : null;
+  const authenticatedPlatform = getAuthenticatedPlatformOrDev(req);
+
+  // Check authentication (dev mode may bypass this)
+  const useMockData = devConfig?.mockTrackSearch ?? false;
+  if (!authenticatedPlatform && !useMockData) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
   // Apply rate limiting (10 requests per minute for track searches)
   if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
     return; // Rate limit exceeded, response already sent
@@ -38,7 +49,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[Search Tracks API] Validation error:', error.message);
     return res.status(400).json({
       error: 'Invalid request data',
-      details: error.message,
     });
   }
 
@@ -52,9 +62,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     trackSelectionMode = 'popular',
   } = validatedData;
 
-  // Determine which platform to use
-  const authenticatedPlatform = getAuthenticatedPlatform(req);
-
   // Reject if requested platform doesn't match authenticated platform
   if (requestedPlatform && authenticatedPlatform && requestedPlatform !== authenticatedPlatform) {
     return res.status(401).json({
@@ -65,14 +72,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const platform: MusicPlatform =
     (requestedPlatform as MusicPlatform) || authenticatedPlatform || 'spotify';
 
-  // Check if mock data mode is enabled
-  if (process.env.USE_MOCK_DATA === 'true') {
-    console.log('⚠️  Using mock data (USE_MOCK_DATA=true)');
+  if (useMockData) {
+    console.log('[DEV MODE] Mock track search enabled');
     const { mockTracks, getMockTracksForPlatform } = await import('@/lib/mock-data');
 
-    // Simulate API delay for realistic testing (1-2 seconds)
-    const delay = 1000 + Math.random() * 1000;
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    const delay = devConfig?.mockDelayMs ?? 0;
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
 
     // Get platform-specific mock tracks
     const platformTracks = getMockTracksForPlatform
@@ -86,12 +93,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     console.log(
-      `✅ Returned ${platformTracks.length} mock tracks for ${platform} (simulated ${(delay / 1000).toFixed(1)}s delay)`
+      `[DEV MODE] Returned ${platformTracks.length} mock tracks for ${platform} (delay: ${typeof delay === 'number' ? delay : '?'}ms)`
     );
     return res.status(200).json(response);
   }
 
-  const accessToken = getPlatformAccessToken(req);
+  const accessToken = getPlatformAccessTokenOrDev(req);
 
   if (!accessToken) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -189,7 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.status(500).json({
-      error: error.message || 'Failed to search tracks',
+      error: 'Failed to search tracks',
     });
   }
 }
