@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { generatePlaylistCover } from '@/lib/cover-generator';
+import { isAuthenticatedOrDev } from '@/lib/auth';
+import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 
 /**
  * API endpoint to generate a playlist cover preview.
@@ -15,6 +17,16 @@ import { generatePlaylistCover } from '@/lib/cover-generator';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Apply rate limiting (10 requests per minute for cover generation)
+  if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
+    return;
+  }
+
+  // Check authentication
+  if (!isAuthenticatedOrDev(req)) {
+    return res.status(401).json({ error: 'Not authenticated' });
   }
 
   const { playlistName, posterThumbnail } = req.body;

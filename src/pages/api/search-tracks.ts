@@ -36,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  // Apply rate limiting (10 requests per minute for track searches)
+  // Apply rate limiting after auth check so unauthenticated requests
+  // don't consume rate limit slots for legitimate users
   if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
     return; // Rate limit exceeded, response already sent
   }
