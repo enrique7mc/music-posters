@@ -144,7 +144,9 @@ export default function DevPanel() {
               max={5000}
               step={250}
               value={config.mockDelayMs}
-              onChange={(e) => updateConfig({ mockDelayMs: parseInt(e.target.value) })}
+              onChange={(e) =>
+                updateConfig({ mockDelayMs: parseInt(e.target.value) }, { debounce: 300 })
+              }
               disabled={isLoading}
               className="w-full h-1.5 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-accent-500 mt-1"
             />

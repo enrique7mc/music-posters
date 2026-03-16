@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface DevConfig {
   enabled: boolean;
@@ -59,25 +59,44 @@ export function useDevMode(): UseDevModeReturn {
     };
   }, []);
 
-  const updateConfig = useCallback(async (partial: Partial<DevConfig>) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/dev/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial),
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateConfig = useCallback(
+    async (partial: Partial<DevConfig>, { debounce = 0 }: { debounce?: number } = {}) => {
+      // Optimistic update — apply immediately to local state
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, ...partial };
+        cachedConfig = next;
+        return next;
       });
-      if (res.ok) {
-        const data = await res.json();
-        cachedConfig = data;
-        setConfig(data);
+
+      const doFetch = async () => {
+        try {
+          const res = await fetch('/api/dev/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(partial),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            cachedConfig = data;
+            setConfig(data);
+          }
+        } catch {
+          // Silently fail — optimistic state stays
+        }
+      };
+
+      if (debounce > 0) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(doFetch, debounce);
+      } else {
+        await doFetch();
       }
-    } catch {
-      // Silently fail — config unchanged
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   return {
     config,
