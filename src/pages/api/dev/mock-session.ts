@@ -1,11 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { isDevModeAvailable } from '@/lib/dev-mode';
+import { isDevModeAvailable, isLocalhost } from '@/lib/dev-mode';
 import { mockGeminiArtists, mockTracks } from '@/lib/mock-data';
-
-function isLocalhost(req: NextApiRequest): boolean {
-  const ip = req.socket?.remoteAddress;
-  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-}
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {

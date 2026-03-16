@@ -12,7 +12,7 @@ interface DevConfig {
 
 interface UseDevModeReturn {
   config: DevConfig | null;
-  updateConfig: (partial: Partial<DevConfig>) => Promise<void>;
+  updateConfig: (partial: Partial<DevConfig>, options?: { debounce?: number }) => Promise<void>;
   isDevMode: boolean;
   isLoading: boolean;
 }
@@ -78,13 +78,18 @@ export function useDevMode(): UseDevModeReturn {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(partial),
           });
-          if (res.ok) {
-            const data = await res.json();
-            cachedConfig = data;
-            setConfig(data);
+          if (!res.ok) {
+            const payload = await res
+              .json()
+              .catch(() => ({ error: 'Failed to update dev config' }));
+            console.error('[DEV MODE] Config update failed:', payload.error);
+            return;
           }
-        } catch {
-          // Silently fail — optimistic state stays
+          const data = await res.json();
+          cachedConfig = data;
+          setConfig(data);
+        } catch (err) {
+          console.error('[DEV MODE] Config update error:', err);
         }
       };
 

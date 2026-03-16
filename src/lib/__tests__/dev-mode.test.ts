@@ -108,6 +108,7 @@ describe('dev-mode.ts', () => {
 
       expect(config.skipAuth).toBe(true);
       expect(config.dryRunPlaylist).toBe(true);
+      expect(config.mockTrackSearch).toBe(true);
     });
 
     it('allows dryRunPlaylist=true without skipAuth', () => {

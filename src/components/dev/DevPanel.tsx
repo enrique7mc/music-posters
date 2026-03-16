@@ -61,10 +61,17 @@ export default function DevPanel() {
         sessionStorage.setItem('analysisProvider', data.analysisProvider || 'hybrid');
         if (data.posterThumbnail) {
           sessionStorage.setItem('posterThumbnail', data.posterThumbnail);
+        } else {
+          sessionStorage.removeItem('posterThumbnail');
         }
         router.push('/review-artists');
       } else if (page === 'review-tracks') {
         sessionStorage.setItem('tracks', JSON.stringify(data.tracks));
+        if (data.posterThumbnail) {
+          sessionStorage.setItem('posterThumbnail', data.posterThumbnail);
+        } else {
+          sessionStorage.removeItem('posterThumbnail');
+        }
         router.push('/review-tracks');
       } else if (page === 'success') {
         router.push({ pathname: '/success', query: { playlistUrl: data.playlistUrl } });

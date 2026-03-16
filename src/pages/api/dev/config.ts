@@ -1,12 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { isDevModeAvailable, getDevConfig, updateDevConfig } from '@/lib/dev-mode';
-
-function isLocalhost(req: NextApiRequest): boolean {
-  const ip = req.socket?.remoteAddress;
-  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-}
+import { isDevModeAvailable, getDevConfig, updateDevConfig, isLocalhost } from '@/lib/dev-mode';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET' && req.method !== 'PATCH') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   if (!isDevModeAvailable()) {
     return res.status(403).json({ error: 'Dev mode is not available' });
   }
@@ -28,6 +27,4 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: error.message });
     }
   }
-
-  return res.status(405).json({ error: 'Method not allowed' });
 }

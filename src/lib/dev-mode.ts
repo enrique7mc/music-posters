@@ -1,3 +1,4 @@
+import { NextApiRequest } from 'next';
 import { MusicPlatform } from '@/types';
 
 export interface DevConfig {
@@ -134,6 +135,14 @@ export function updateDevConfig(partial: Partial<DevConfig>): DevConfig {
 
   syncToGlobal();
   return { ...config };
+}
+
+/**
+ * Returns true if the request originates from localhost.
+ */
+export function isLocalhost(req: NextApiRequest): boolean {
+  const ip = req.socket?.remoteAddress;
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
 /**
