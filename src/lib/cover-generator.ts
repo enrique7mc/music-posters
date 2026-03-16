@@ -1,17 +1,11 @@
 import sharp from 'sharp';
-import fs from 'fs';
 import path from 'path';
 
-// Load and base64-encode the bundled font once at module level
-// This ensures text renders correctly in serverless environments (e.g., Vercel) where system fonts aren't available
-const fontPath = path.join(process.cwd(), 'src/assets/fonts/inter-bold.woff');
-let fontBase64: string;
-try {
-  fontBase64 = fs.readFileSync(fontPath).toString('base64');
-} catch {
-  console.warn('[Cover Generator] Could not load bundled font, SVG text may not render correctly');
-  fontBase64 = '';
-}
+// Point fontconfig at our bundled font directory so librsvg (used by sharp) can find "Inter"
+// librsvg does NOT support @font-face data URIs — fonts must be registered via fontconfig
+// The fonts directory contains fonts.conf (with <dir>.</dir>) + inter-bold.woff
+const fontsDir = path.join(process.cwd(), 'src', 'assets', 'fonts');
+process.env.FONTCONFIG_PATH = fontsDir;
 
 interface CoverOptions {
   playlistName: string;
@@ -114,15 +108,7 @@ function generateTextOverlay(playlistName: string, width: number, height: number
   const maxWidth = width * 0.85; // 85% of image width for padding
   const maxTitleHeight = height * 0.6; // Reserve 60% for title area
 
-  const fontFaceRule = fontBase64
-    ? `@font-face {
-        font-family: 'Inter';
-        font-weight: 700;
-        src: url('data:font/woff;base64,${fontBase64}') format('woff');
-      }`
-    : '';
-
-  const fontFamily = fontBase64 ? 'Inter' : 'Arial, Helvetica, sans-serif';
+  const fontFamily = 'Inter, Arial, Helvetica, sans-serif';
 
   // Calculate optimal font size and wrapped text
   const { fontSize, lines } = calculateTextLayout(playlistName, maxWidth, maxTitleHeight);
@@ -153,7 +139,6 @@ function generateTextOverlay(playlistName: string, width: number, height: number
 
   return `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <style>${fontFaceRule}</style>
       <!-- Dark overlay for text readability -->
       <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.4)"/>
 
