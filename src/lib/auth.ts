@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { parse, serialize } from 'cookie';
 import { MusicPlatform } from '@/types';
+import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -207,4 +208,50 @@ export function isSpotifyAuthenticated(req: NextApiRequest): boolean {
 export function isAppleMusicAuthenticated(req: NextApiRequest): boolean {
   const cookies = parse(req.headers.cookie || '');
   return !!cookies.apple_music_user_token;
+}
+
+// ============================================================================
+// Dev Mode Wrappers
+// ============================================================================
+
+/**
+ * Returns true if authenticated OR if dev mode skipAuth is enabled.
+ */
+export function isAuthenticatedOrDev(req: NextApiRequest): boolean {
+  if (isDevModeAvailable()) {
+    const devConfig = getDevConfig();
+    if (devConfig.skipAuth) {
+      console.log('[DEV MODE] Auth bypassed (skipAuth=true)');
+      return true;
+    }
+  }
+  return isAuthenticated(req);
+}
+
+/**
+ * Returns a fake token if dev mode skipAuth is enabled, else delegates to getPlatformAccessToken.
+ */
+export function getPlatformAccessTokenOrDev(req: NextApiRequest): string | null {
+  if (isDevModeAvailable()) {
+    const devConfig = getDevConfig();
+    if (devConfig.skipAuth) {
+      console.log('[DEV MODE] Returning fake access token (skipAuth=true)');
+      return 'dev-mode-fake-token';
+    }
+  }
+  return getPlatformAccessToken(req);
+}
+
+/**
+ * Returns the fakePlatform if dev mode skipAuth is enabled, else delegates to getAuthenticatedPlatform.
+ */
+export function getAuthenticatedPlatformOrDev(req: NextApiRequest): MusicPlatform | null {
+  if (isDevModeAvailable()) {
+    const devConfig = getDevConfig();
+    if (devConfig.skipAuth) {
+      console.log(`[DEV MODE] Returning fake platform: ${devConfig.fakePlatform} (skipAuth=true)`);
+      return devConfig.fakePlatform;
+    }
+  }
+  return getAuthenticatedPlatform(req);
 }

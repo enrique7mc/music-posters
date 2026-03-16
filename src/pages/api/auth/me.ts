@@ -4,6 +4,7 @@ import {
   getSpotifyAccessToken,
   getPlatformAccessToken,
 } from '@/lib/auth';
+import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getCurrentUser as getSpotifyUser } from '@/lib/spotify';
 import { getMusicPlatform } from '@/lib/music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
@@ -32,6 +33,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Apply rate limiting (20 requests per minute for auth endpoints)
   if (applyRateLimit(req, res, RateLimitPresets.relaxed())) {
     return; // Rate limit exceeded, response already sent
+  }
+
+  // Dev mode: return fake user when skipAuth is enabled
+  if (isDevModeAvailable()) {
+    const devConfig = getDevConfig();
+    if (devConfig.skipAuth) {
+      console.log('[DEV MODE] Returning fake user (skipAuth=true)');
+      return res.status(200).json({
+        id: 'dev-user',
+        displayName: 'Dev Mode User',
+        display_name: 'Dev Mode User',
+        platform: devConfig.fakePlatform,
+      });
+    }
   }
 
   const platform = getAuthenticatedPlatform(req);
