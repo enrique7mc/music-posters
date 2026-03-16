@@ -19,14 +19,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Check authentication first so unauthenticated requests
+  // don't consume rate limit slots for legitimate users
+  if (!isAuthenticatedOrDev(req)) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
   // Apply rate limiting (10 requests per minute for cover generation)
   if (applyRateLimit(req, res, RateLimitPresets.moderate())) {
     return;
-  }
-
-  // Check authentication
-  if (!isAuthenticatedOrDev(req)) {
-    return res.status(401).json({ error: 'Not authenticated' });
   }
 
   const { playlistName, posterThumbnail } = req.body;
