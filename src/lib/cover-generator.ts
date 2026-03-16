@@ -145,7 +145,7 @@ function generateTextOverlay(playlistName: string, width: number, height: number
       <!-- Playlist name (multi-line if needed) -->
       ${textElements}
 
-      <!-- "By Music Posters" badge -->
+      <!-- "By Playlistd" badge -->
       <text
         x="${width / 2}"
         y="${height - 30}"
@@ -153,7 +153,7 @@ function generateTextOverlay(playlistName: string, width: number, height: number
         font-size="11"
         fill="#cccccc"
         text-anchor="middle"
-      >By Music Posters</text>
+      >By Playlistd</text>
     </svg>
   `;
 }

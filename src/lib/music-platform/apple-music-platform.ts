@@ -262,7 +262,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         {
           attributes: {
             name,
-            description: description || 'Generated from festival poster by Music Posters',
+            description: description || 'Generated from festival poster by Playlistd',
           },
         },
         {

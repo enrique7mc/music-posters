@@ -63,7 +63,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Music Posters - Turn Festival Posters into Playlists</title>
+        <title>Playlistd - Turn Festival Posters into Playlists</title>
         <meta
           name="description"
           content="Transform festival and concert posters into curated playlists instantly using AI-powered image analysis. Supports Spotify and Apple Music."
@@ -324,7 +324,7 @@ export default function Home() {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <h2 className="text-4xl font-bold text-dark-50 mb-4">Why Music Posters?</h2>
+              <h2 className="text-4xl font-bold text-dark-50 mb-4">Why Playlistd?</h2>
               <p className="text-dark-400 max-w-2xl mx-auto">
                 The fastest way to discover and enjoy music from any festival or concert.
               </p>

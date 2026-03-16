@@ -152,7 +152,7 @@ export default function Upload() {
   return (
     <>
       <Head>
-        <title>Upload Poster - Music Posters</title>
+        <title>Upload Poster - Playlistd</title>
       </Head>
 
       <PageLayout>

@@ -196,7 +196,7 @@ export class SpotifyPlatformService implements MusicPlatformService {
       `${SPOTIFY_API_BASE_URL}/users/${userId}/playlists`,
       {
         name,
-        description: description || 'Generated from festival poster by Music Posters',
+        description: description || 'Generated from festival poster by Playlistd',
         public: false,
       },
       {

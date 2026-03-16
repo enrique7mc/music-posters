@@ -44,7 +44,7 @@ export default function NavBar() {
           {/* Logo */}
           <Link href={user ? '/upload' : '/'} className="group">
             <motion.div className="text-xl font-bold tracking-tight" whileHover={{ scale: 1.05 }}>
-              <span className="text-gradient">Music Posters</span>
+              <span className="text-gradient">Playlistd</span>
             </motion.div>
           </Link>
 

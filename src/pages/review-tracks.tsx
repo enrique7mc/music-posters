@@ -259,7 +259,7 @@ export default function ReviewTracks() {
   return (
     <PageLayout showNav>
       <Head>
-        <title>Review Tracks - Music Posters</title>
+        <title>Review Tracks - Playlistd</title>
       </Head>
 
       <div className="container mx-auto px-4 py-8 lg:py-12">

@@ -312,7 +312,7 @@ export async function createPlaylist(
     `${SPOTIFY_API_BASE_URL}/users/${userId}/playlists`,
     {
       name: playlistName,
-      description: 'Generated from festival poster by Music Posters',
+      description: 'Generated from festival poster by Playlistd',
       public: false,
     },
     {

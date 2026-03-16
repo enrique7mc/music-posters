@@ -106,7 +106,7 @@ export default function Success() {
   return (
     <>
       <Head>
-        <title>Playlist Created! - Music Posters</title>
+        <title>Playlist Created! - Playlistd</title>
       </Head>
 
       <PageLayout showNav={false}>

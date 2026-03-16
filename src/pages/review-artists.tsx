@@ -267,7 +267,7 @@ export default function ReviewArtists() {
   return (
     <>
       <Head>
-        <title>Review Artists - Music Posters</title>
+        <title>Review Artists - Playlistd</title>
       </Head>
 
       <PageLayout showNav>

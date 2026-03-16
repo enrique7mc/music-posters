@@ -74,7 +74,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         window.MusicKit.configure({
           developerToken: token,
           app: {
-            name: 'Music Posters',
+            name: 'Playlistd',
             build: '1.0.0',
           },
         });
