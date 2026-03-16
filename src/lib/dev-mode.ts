@@ -52,13 +52,7 @@ function initConfig() {
 
   config.enabled = true;
 
-  // Backward compat: read USE_MOCK_DATA
-  if (process.env.USE_MOCK_DATA === 'true') {
-    config.mockAnalysis = true;
-    config.mockTrackSearch = true;
-  }
-
-  // Read MOCK_DATA_DELAY_MS (previously defined but unused)
+  // Read MOCK_DATA_DELAY_MS for initial delay value
   const delayMs = parseInt(process.env.MOCK_DATA_DELAY_MS || '0', 10);
   if (!isNaN(delayMs) && delayMs >= 0 && delayMs <= 5000) {
     config.mockDelayMs = delayMs;

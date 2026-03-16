@@ -8,7 +8,7 @@ import { Track, Artist, MusicPlatform } from '@/types';
  * - Edge cases: long names, missing artwork, no preview URL
  * - Realistic Spotify URIs and URLs (platform-agnostic format)
  *
- * Use by setting USE_MOCK_DATA=true in .env
+ * Use by enabling DEV_MODE=true and toggling mock options in the dev panel
  */
 export const mockTracks: Track[] = [
   // HEADLINERS (10 tracks each in real usage)
@@ -309,7 +309,7 @@ export function getMockTracks(count?: number): Track[] {
 /**
  * Mock artist data for Vision API style (no weights/tiers)
  *
- * Used by /api/analyze when USE_MOCK_DATA=true and IMAGE_ANALYSIS_PROVIDER=vision
+ * Used by /api/analyze when mock analysis is enabled (vision provider)
  */
 export const mockVisionArtists: Artist[] = [
   { name: 'Tame Impala' },
@@ -337,7 +337,7 @@ export const mockVisionArtists: Artist[] = [
 /**
  * Mock artist data for Gemini API style (with weights and tiers)
  *
- * Used by /api/analyze when USE_MOCK_DATA=true and IMAGE_ANALYSIS_PROVIDER=gemini
+ * Used by /api/analyze when mock analysis is enabled (gemini/hybrid provider)
  */
 export const mockGeminiArtists: Artist[] = [
   {

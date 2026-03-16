@@ -57,16 +57,15 @@ describe('dev-mode.ts', () => {
       expect(config.skipAuth).toBe(false);
     });
 
-    it('defaults mockAnalysis and mockTrackSearch from USE_MOCK_DATA=true', () => {
+    it('defaults mockAnalysis and mockTrackSearch to false', () => {
       process.env.DEV_MODE = 'true';
       process.env.NODE_ENV = 'development';
-      process.env.USE_MOCK_DATA = 'true';
 
       const config = getDevConfig();
 
       expect(config.enabled).toBe(true);
-      expect(config.mockAnalysis).toBe(true);
-      expect(config.mockTrackSearch).toBe(true);
+      expect(config.mockAnalysis).toBe(false);
+      expect(config.mockTrackSearch).toBe(false);
     });
 
     it('reads MOCK_DATA_DELAY_MS for initial delay value', () => {

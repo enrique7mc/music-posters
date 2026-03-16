@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check if we should use mock data (dev config takes precedence, then env var)
     const devConfig = isDevModeAvailable() ? getDevConfig() : null;
-    const useMockData = devConfig?.mockAnalysis ?? process.env.USE_MOCK_DATA === 'true';
+    const useMockData = devConfig?.mockAnalysis ?? false;
     const mockDelayMs = devConfig?.mockDelayMs ?? 0;
 
     // Determine which analysis provider to use

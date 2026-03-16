@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const authenticatedPlatform = getAuthenticatedPlatformOrDev(req);
 
   // Check authentication (dev mode may bypass this)
-  const useMockData = devConfig?.mockTrackSearch ?? process.env.USE_MOCK_DATA === 'true';
+  const useMockData = devConfig?.mockTrackSearch ?? false;
   if (!authenticatedPlatform && !useMockData) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
@@ -76,8 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[DEV MODE] Mock track search enabled');
     const { mockTracks, getMockTracksForPlatform } = await import('@/lib/mock-data');
 
-    // Dev panel slider controls delay; env-var-only fallback uses 1-2s
-    const delay = devConfig?.mockTrackSearch ? devConfig.mockDelayMs : 1000 + Math.random() * 1000;
+    const delay = devConfig?.mockDelayMs ?? 0;
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
