@@ -45,8 +45,8 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback  # MUST use 127.0.0
 # Image Analysis Provider (choose one: 'vision', 'gemini', or 'hybrid')
 IMAGE_ANALYSIS_PROVIDER=vision
 
-# Development: Use mock data instead of real API calls (optional, for development/testing)
-USE_MOCK_DATA=false
+# Dev Mode: Enable dev panel with runtime toggles (NEVER set in production)
+DEV_MODE=false
 
 # Google Cloud Vision API (used when IMAGE_ANALYSIS_PROVIDER=vision)
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
@@ -68,13 +68,14 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 
 **Development Features**:
 
-- Set `USE_MOCK_DATA=true` to bypass Spotify API calls and use mock track data instead. This enables:
-  - **Faster development**: No waiting for API calls during UI development
-  - **No rate limiting**: Test without hitting Spotify's 180 requests/minute limit
-  - **Offline development**: Work without internet connection or valid Spotify credentials
-  - **Consistent test data**: Predictable data for testing edge cases (long names, missing artwork, etc.)
-  - Mock data includes tracks representing all artist tiers with edge cases (see `src/lib/mock-data.ts`)
-  - Simulates realistic API delay (1-2 seconds) for accurate testing experience
+- Set `DEV_MODE=true` to enable a floating dev panel with runtime toggles (only works in non-production). Controls:
+  - **mockAnalysis**: Bypass image analysis API calls
+  - **mockTrackSearch**: Bypass Spotify/Apple Music track search with mock data
+  - **dryRunPlaylist**: Skip actual playlist creation
+  - **skipAuth**: Bypass authentication (auto-enables dryRunPlaylist + mockTrackSearch)
+  - **mockDelayMs**: Configurable delay for mock responses (0-5000ms)
+  - **fakePlatform**: Switch between spotify/apple-music without real auth
+  - See `src/lib/dev-mode.ts` for implementation details
 
 ## Architecture Overview
 
@@ -573,32 +574,30 @@ console.error(`Error searching for artist "${artistName}":`, error);
   - Vision API: OCR extracted non-artist text (dates, sponsors, etc.)
   - Gemini: Poster had no recognizable artists or very low quality image
 
-### Using Mock Data for Development
+### Using Dev Mode for Development
 
-To avoid Spotify API calls during development or testing:
+To bypass real API calls during development or testing:
 
-1. Set `USE_MOCK_DATA=true` in `.env`
+1. Set `DEV_MODE=true` in `.env`
 2. Restart your development server (environment variables are loaded at startup)
-3. Navigate to `/review-tracks` page (after uploading and analyzing an image)
-4. The `/api/search-tracks` endpoint will return mock data instead of calling Spotify API
+3. Use the floating dev panel to toggle individual features (mock analysis, mock track search, skip auth, etc.)
 
-**What you'll see**:
+**Key behaviors**:
 
-- Console logs: `⚠️  Using mock data (USE_MOCK_DATA=true)`
-- Mock tracks include all artist tiers (headliner, sub-headliner, mid-tier, undercard)
-- Edge cases: long names, missing artwork, no preview URLs
-- Simulated 1-2 second API delay for realistic testing
-- 30+ mock tracks available in `src/lib/mock-data.ts`
+- Dev mode is only available when `DEV_MODE=true` AND `NODE_ENV !== 'production'`
+- `skipAuth` automatically enables `dryRunPlaylist` and `mockTrackSearch` (fake tokens never reach real APIs)
+- `mockDelayMs` controls simulated API delay (0-5000ms)
+- Runtime toggles persist across HMR via globalThis
+- See `src/lib/dev-mode.ts` and `src/pages/api/dev/mock-session.ts` for implementation
 
 **When to use**:
 
-- UI development on review-tracks page
+- UI development without real Spotify/Apple Music credentials
 - Testing edge cases without finding real posters
 - Offline development
 - Avoiding rate limits during rapid testing
-- CI/CD environments without Spotify credentials
 
-**Note**: Remember to set `USE_MOCK_DATA=false` (or remove it) when testing real Spotify integration.
+**Note**: Dev mode is blocked in production (`NODE_ENV=production`), so it's safe to leave `DEV_MODE=true` in local `.env`.
 
 ## Deployment (Vercel)
 
