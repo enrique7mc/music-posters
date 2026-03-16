@@ -113,9 +113,11 @@ export function updateDevConfig(partial: Partial<DevConfig>): DevConfig {
   // Merge update
   Object.assign(config, partial);
 
-  // Enforce coupling: skipAuth → dryRunPlaylist must be true
+  // Enforce coupling: skipAuth → dryRunPlaylist and mockTrackSearch must be true
+  // (a fake token should never reach real APIs)
   if (config.skipAuth) {
     config.dryRunPlaylist = true;
+    config.mockTrackSearch = true;
   }
 
   return { ...config };

@@ -1,10 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import {
-  getAuthenticatedPlatform,
-  getPlatformAccessToken,
-  getAuthenticatedPlatformOrDev,
-  getPlatformAccessTokenOrDev,
-} from '@/lib/auth';
+import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
