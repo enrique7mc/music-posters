@@ -308,6 +308,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         type: 'songs',
       }));
 
+      console.log(
+        `[Apple Music] Adding tracks batch ${i + 1}/${chunks.length} (${chunk.length} tracks)`
+      );
       await axios.post(
         `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks`,
         {
@@ -317,6 +320,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
           headers: this.getHeaders(token),
         }
       );
+      console.log(`[Apple Music] Batch ${i + 1}/${chunks.length} completed`);
 
       // Add delay between batches to respect rate limits
       if (i < chunks.length - 1) {

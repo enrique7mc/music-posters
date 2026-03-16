@@ -11,6 +11,11 @@ import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 import { generatePlaylistCover } from '@/lib/cover-generator';
 import { MusicPlatform } from '@/types';
 
+// Increase timeout for large playlists that require multiple batch API calls
+export const config = {
+  maxDuration: 30,
+};
+
 /**
  * API route handler that creates a playlist for the authenticated user from provided tracks.
  *

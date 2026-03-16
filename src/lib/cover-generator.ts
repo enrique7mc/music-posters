@@ -1,4 +1,17 @@
 import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+
+// Load and base64-encode the bundled font once at module level
+// This ensures text renders correctly in serverless environments (e.g., Vercel) where system fonts aren't available
+const fontPath = path.join(process.cwd(), 'src/assets/fonts/inter-bold.woff');
+let fontBase64: string;
+try {
+  fontBase64 = fs.readFileSync(fontPath).toString('base64');
+} catch {
+  console.warn('[Cover Generator] Could not load bundled font, SVG text may not render correctly');
+  fontBase64 = '';
+}
 
 interface CoverOptions {
   playlistName: string;
@@ -101,6 +114,16 @@ function generateTextOverlay(playlistName: string, width: number, height: number
   const maxWidth = width * 0.85; // 85% of image width for padding
   const maxTitleHeight = height * 0.6; // Reserve 60% for title area
 
+  const fontFaceRule = fontBase64
+    ? `@font-face {
+        font-family: 'Inter';
+        font-weight: 700;
+        src: url('data:font/woff;base64,${fontBase64}') format('woff');
+      }`
+    : '';
+
+  const fontFamily = fontBase64 ? 'Inter' : 'Arial, Helvetica, sans-serif';
+
   // Calculate optimal font size and wrapped text
   const { fontSize, lines } = calculateTextLayout(playlistName, maxWidth, maxTitleHeight);
 
@@ -117,7 +140,7 @@ function generateTextOverlay(playlistName: string, width: number, height: number
       <text
         x="${width / 2}"
         y="${y}"
-        font-family="Arial, Helvetica, sans-serif"
+        font-family="${fontFamily}"
         font-size="${fontSize}"
         font-weight="bold"
         fill="white"
@@ -129,7 +152,8 @@ function generateTextOverlay(playlistName: string, width: number, height: number
     .join('');
 
   return `
-    <svg width="${width}" height="${height}">
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <style>${fontFaceRule}</style>
       <!-- Dark overlay for text readability -->
       <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.4)"/>
 
@@ -140,9 +164,8 @@ function generateTextOverlay(playlistName: string, width: number, height: number
       <text
         x="${width / 2}"
         y="${height - 30}"
-        font-family="Arial, Helvetica, sans-serif"
+        font-family="${fontFamily}"
         font-size="11"
-        font-weight="normal"
         fill="#cccccc"
         text-anchor="middle"
       >By Music Posters</text>

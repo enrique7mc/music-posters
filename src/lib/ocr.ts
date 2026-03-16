@@ -1,9 +1,11 @@
 import vision from '@google-cloud/vision';
 import { Artist } from '@/types';
 
-const client = new vision.ImageAnnotatorClient({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+const client = new vision.ImageAnnotatorClient(
+  process.env.GOOGLE_CREDENTIALS_JSON
+    ? { credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON) }
+    : { keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS }
+);
 
 export async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
   try {
