@@ -1,35 +1,29 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { INTER_BOLD_WOFF_BASE64 } from '@/assets/fonts/inter-bold-data';
 
 // Runtime font setup for librsvg (used by sharp for SVG rendering).
 // librsvg does NOT support @font-face data URIs — fonts must be registered via fontconfig.
-// On Vercel, we copy fonts to /tmp with a fonts.conf that uses absolute paths,
-// because fontconfig's <dir>.</dir> resolves to CWD (/var/task), not the config file's directory.
+// The font is embedded as base64 in the bundle (not relying on file tracing) and written
+// to /tmp at runtime with a fonts.conf that uses absolute paths.
 const RUNTIME_FONTS_DIR = '/tmp/playlistd-fonts';
 let fontsReady = false;
 
 function ensureFontsReady(): void {
   if (fontsReady) return;
 
-  const fontFileName = 'inter-bold.woff';
-  const runtimeFontPath = path.join(RUNTIME_FONTS_DIR, fontFileName);
+  const runtimeFontPath = path.join(RUNTIME_FONTS_DIR, 'inter-bold.woff');
 
-  // Skip copy if already set up (warm Lambda invocation)
+  // Skip if already set up (warm Lambda invocation)
   if (!fs.existsSync(runtimeFontPath)) {
     fs.mkdirSync(RUNTIME_FONTS_DIR, { recursive: true });
 
-    // Copy font from bundled source (traced via outputFileTracingIncludes)
-    const srcFontPath = path.join(process.cwd(), 'src', 'assets', 'fonts', fontFileName);
+    // Decode embedded font data and write to /tmp
+    fs.writeFileSync(runtimeFontPath, Buffer.from(INTER_BOLD_WOFF_BASE64, 'base64'));
+    console.log(`Wrote embedded font to ${runtimeFontPath}`);
 
-    if (fs.existsSync(srcFontPath)) {
-      fs.copyFileSync(srcFontPath, runtimeFontPath);
-      console.log(`Copied font to ${runtimeFontPath}`);
-    } else {
-      console.error(`Font file not found at ${srcFontPath} — text will render as tofu`);
-    }
-
-    // Generate fonts.conf with absolute path (not relative <dir>.</dir>)
+    // Generate fonts.conf with absolute path
     const fontsConf = `<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
