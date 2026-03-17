@@ -51,6 +51,11 @@ export default function Upload() {
     setError(null);
     setArtists([]);
 
+    // Clear stale eventName immediately when a new upload starts
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('eventName');
+    }
+
     // Create a token for this analysis request to prevent race conditions
     const requestToken = Symbol('analysis');
     latestAnalysisToken.current = requestToken;
@@ -74,6 +79,11 @@ export default function Upload() {
       setArtists(response.data.artists);
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
+
+      // Store event name for playlist naming
+      if (typeof window !== 'undefined' && response.data.eventName?.trim()) {
+        sessionStorage.setItem('eventName', response.data.eventName.trim());
+      }
 
       if (response.data.artists.length === 0) {
         setError('No artists found in the image. Try a different poster.');

@@ -81,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('[DEV MODE] Mock analysis enabled - returning mock data');
     }
 
-    let result: { artists: any[]; rawText: string };
+    let result: { artists: any[]; rawText: string; eventName?: string };
 
     if (useMockData) {
       // Return mock data instead of calling real APIs
@@ -96,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result = {
         artists: mockArtists,
         rawText: mockArtists.map((a) => a.name).join('\n'),
+        eventName: 'Summer Fest 2025',
       };
       console.log(`[DEV MODE] Returning ${mockArtists.length} mock artists (${provider} style)`);
     } else if (provider === 'hybrid') {
@@ -131,12 +132,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Non-critical error, continue without thumbnail
     }
 
+    // Validate and pass through event name
+    const eventName =
+      typeof result.eventName === 'string' && result.eventName.trim().length > 0
+        ? result.eventName.trim()
+        : undefined;
+    console.log('[Analyze API] Extracted event name:', eventName || '(none)');
+
     // Return result with provider information
     const response: AnalyzeResponse = {
       artists: result.artists,
       rawText: result.rawText,
       provider: provider as 'vision' | 'gemini' | 'hybrid',
       posterThumbnail, // Optional: base64 thumbnail for playlist cover
+      eventName,
     };
 
     // Log extracted artists for debugging
