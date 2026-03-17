@@ -1,11 +1,48 @@
 import sharp from 'sharp';
+import fs from 'fs';
 import path from 'path';
 
-// Point fontconfig at our bundled font directory so librsvg (used by sharp) can find "Inter"
-// librsvg does NOT support @font-face data URIs — fonts must be registered via fontconfig
-// The fonts directory contains fonts.conf (with <dir>.</dir>) + inter-bold.woff
-const fontsDir = path.join(process.cwd(), 'src', 'assets', 'fonts');
-process.env.FONTCONFIG_PATH = fontsDir;
+// Runtime font setup for librsvg (used by sharp for SVG rendering).
+// librsvg does NOT support @font-face data URIs — fonts must be registered via fontconfig.
+// On Vercel, we copy fonts to /tmp with a fonts.conf that uses absolute paths,
+// because fontconfig's <dir>.</dir> resolves to CWD (/var/task), not the config file's directory.
+const RUNTIME_FONTS_DIR = '/tmp/playlistd-fonts';
+let fontsReady = false;
+
+function ensureFontsReady(): void {
+  if (fontsReady) return;
+
+  const fontFileName = 'inter-bold.woff';
+  const runtimeFontPath = path.join(RUNTIME_FONTS_DIR, fontFileName);
+
+  // Skip copy if already set up (warm Lambda invocation)
+  if (!fs.existsSync(runtimeFontPath)) {
+    fs.mkdirSync(RUNTIME_FONTS_DIR, { recursive: true });
+
+    // Copy font from bundled source (traced via outputFileTracingIncludes)
+    const srcFontPath = path.join(process.cwd(), 'src', 'assets', 'fonts', fontFileName);
+
+    if (fs.existsSync(srcFontPath)) {
+      fs.copyFileSync(srcFontPath, runtimeFontPath);
+      console.log(`Copied font to ${runtimeFontPath}`);
+    } else {
+      console.error(`Font file not found at ${srcFontPath} — text will render as tofu`);
+    }
+
+    // Generate fonts.conf with absolute path (not relative <dir>.</dir>)
+    const fontsConf = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${RUNTIME_FONTS_DIR}</dir>
+  <cachedir>/tmp/fontconfig-cache</cachedir>
+</fontconfig>`;
+
+    fs.writeFileSync(path.join(RUNTIME_FONTS_DIR, 'fonts.conf'), fontsConf);
+  }
+
+  process.env.FONTCONFIG_PATH = RUNTIME_FONTS_DIR;
+  fontsReady = true;
+}
 
 interface CoverOptions {
   playlistName: string;
@@ -23,6 +60,8 @@ interface CoverOptions {
  * @returns Base64 encoded JPEG string (without data URI prefix)
  */
 export async function generatePlaylistCover(options: CoverOptions): Promise<string> {
+  ensureFontsReady();
+
   const { playlistName, posterBuffer } = options;
   const width = 300;
   const height = 300;

@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Include bundled font file in serverless function output
-  outputFileTracingIncludes: {
-    '/api/preview-cover': ['./src/assets/fonts/**/*'],
-    '/api/create-playlist': ['./src/assets/fonts/**/*'],
+  experimental: {
+    // Include bundled font file in serverless function output
+    outputFileTracingIncludes: {
+      '/api/preview-cover': ['./src/assets/fonts/**/*'],
+      '/api/create-playlist': ['./src/assets/fonts/**/*'],
+    },
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
