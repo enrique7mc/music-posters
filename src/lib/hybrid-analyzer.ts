@@ -1,6 +1,7 @@
 import { Artist } from '@/types';
 import { extractTextFromImage } from './ocr';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { parseGeminiResponse } from './gemini-parser';
 
 /**
  * Hybrid image analysis: Combines Vision API OCR with Gemini AI
@@ -96,17 +97,24 @@ HANDLING EDGE CASES:
 - If dates are part of artist names (e.g., "88rising"), keep them
 - Sort output by weight descending (highest weight first)
 
-Return ONLY a valid JSON array with this exact format:
-[
-  {
-    "name": "Exact Artist Name",
-    "weight": 8,
-    "tier": "headliner",
-    "reasoning": "Brief explanation of weight"
-  }
-]
+Also extract the event or festival name from the poster (e.g., "Coachella 2025", "Lollapalooza 2024"). Include the year if visible.
 
-Be precise with artist spellings. No additional text, only the JSON array.`;
+Return ONLY a valid JSON object with this exact format:
+{
+  "eventName": "Festival Name 2025",
+  "artists": [
+    {
+      "name": "Exact Artist Name",
+      "weight": 8,
+      "tier": "headliner",
+      "reasoning": "Brief explanation of weight"
+    }
+  ]
+}
+
+If no event name is visible, set "eventName" to "".
+
+Be precise with artist spellings. No additional text, only the JSON object.`;
 }
 
 /**
@@ -116,7 +124,7 @@ async function analyzeWithGeminiAndOCR(
   imageBuffer: Buffer,
   ocrText: string,
   mimeType: string = 'image/jpeg'
-): Promise<Artist[]> {
+): Promise<{ artists: Artist[]; eventName?: string }> {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -151,61 +159,13 @@ async function analyzeWithGeminiAndOCR(
   console.log('[Hybrid/Gemini] Raw response:', responseText);
 
   // Parse JSON from response
-  const artists = parseGeminiResponse(responseText);
+  const parsed = parseGeminiResponse(responseText);
 
-  console.log(`[Hybrid/Gemini] Extracted ${artists.length} artists`);
-  console.log('[Hybrid/Gemini] Artists:', artists);
+  console.log(`[Hybrid/Gemini] Extracted ${parsed.artists.length} artists`);
+  console.log('[Hybrid/Gemini] Artists:', parsed.artists);
+  console.log('[Hybrid/Gemini] Event name:', parsed.eventName || '(none)');
 
-  return artists;
-}
-
-/**
- * Parses Gemini's response to extract JSON array of artists
- * (Same parsing logic as gemini.ts)
- */
-function parseGeminiResponse(responseText: string): Artist[] {
-  try {
-    // Try to extract JSON from markdown code blocks first
-    const jsonBlockMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-
-    if (jsonBlockMatch) {
-      const jsonStr = jsonBlockMatch[1].trim();
-      return JSON.parse(jsonStr);
-    }
-
-    // Try to find raw JSON array
-    const jsonArrayMatch = responseText.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-
-    if (jsonArrayMatch) {
-      return JSON.parse(jsonArrayMatch[0]);
-    }
-
-    // Fallback: Try parsing entire response as JSON
-    return JSON.parse(responseText);
-  } catch (error) {
-    console.error('[Hybrid/Gemini] Failed to parse response:', responseText);
-    console.error('[Hybrid/Gemini] Parse error:', error);
-
-    // Last resort: Try to extract artist names from any JSON-like structure
-    const artistNameMatches = responseText.matchAll(/"name":\s*"([^"]+)"/g);
-    const fallbackArtists: Artist[] = [];
-
-    for (const match of artistNameMatches) {
-      fallbackArtists.push({
-        name: match[1],
-        weight: 5, // Default weight if parsing fails
-        tier: 'mid-tier',
-        reasoning: 'Fallback parse - weight may be inaccurate',
-      });
-    }
-
-    if (fallbackArtists.length > 0) {
-      console.log('[Hybrid/Gemini] Used fallback parsing, extracted:', fallbackArtists);
-      return fallbackArtists;
-    }
-
-    throw new Error('Could not parse Gemini response as JSON');
-  }
+  return parsed;
 }
 
 /**
@@ -223,6 +183,7 @@ export async function analyzeImageHybrid(
 ): Promise<{
   artists: Artist[];
   rawText: string;
+  eventName?: string;
 }> {
   console.log('\n=== HYBRID MODE: Vision OCR + Gemini AI ===');
 
@@ -242,13 +203,16 @@ export async function analyzeImageHybrid(
 
   // Step 2: Analyze with Gemini using OCR context (with retry logic)
   let artists: Artist[] = [];
+  let eventName: string | undefined;
   let geminiFailed = false;
   let lastGeminiError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[Hybrid/Gemini] Step 2: Gemini analysis attempt ${attempt}/${maxRetries}`);
-      artists = await analyzeWithGeminiAndOCR(imageBuffer, ocrText, mimeType);
+      const geminiResult = await analyzeWithGeminiAndOCR(imageBuffer, ocrText, mimeType);
+      artists = geminiResult.artists;
+      eventName = geminiResult.eventName;
 
       // Validate result
       if (!artists || artists.length === 0) {
@@ -286,6 +250,7 @@ export async function analyzeImageHybrid(
     return {
       artists,
       rawText: artists.map((a) => a.name).join('\n'), // Fallback: use artist names as rawText
+      eventName,
     };
   }
 
@@ -314,5 +279,6 @@ export async function analyzeImageHybrid(
   return {
     artists,
     rawText: ocrText,
+    eventName,
   };
 }

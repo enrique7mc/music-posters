@@ -28,6 +28,7 @@ export interface AnalyzeResponse {
   rawText: string;
   provider: 'vision' | 'gemini' | 'hybrid'; // Which analysis method was used
   posterThumbnail?: string; // Optional: base64 encoded 300x300 JPEG thumbnail for playlist cover
+  eventName?: string; // Extracted festival/event name from poster (Gemini/Hybrid only)
 }
 
 export interface CreatePlaylistResponse {

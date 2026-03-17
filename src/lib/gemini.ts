@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Artist } from '@/types';
+import { parseGeminiResponse } from './gemini-parser';
 
 /**
  * Gemini-based image analysis for festival posters
@@ -70,17 +71,24 @@ HANDLING EDGE CASES:
 - If dates are part of artist names (e.g., "88rising"), keep them
 - Sort output by weight descending (highest weight first)
 
-Return ONLY a valid JSON array with this exact format:
-[
-  {
-    "name": "Exact Artist Name",
-    "weight": 8,
-    "tier": "headliner",
-    "reasoning": "Brief explanation of weight"
-  }
-]
+Also extract the event or festival name from the poster (e.g., "Coachella 2025", "Lollapalooza 2024"). Include the year if visible.
 
-Be precise with artist spellings. No additional text, only the JSON array.`;
+Return ONLY a valid JSON object with this exact format:
+{
+  "eventName": "Festival Name 2025",
+  "artists": [
+    {
+      "name": "Exact Artist Name",
+      "weight": 8,
+      "tier": "headliner",
+      "reasoning": "Brief explanation of weight"
+    }
+  ]
+}
+
+If no event name is visible, set "eventName" to "".
+
+Be precise with artist spellings. No additional text, only the JSON object.`;
 
 /**
  * Analyzes a festival poster image using Gemini 2.0 Flash
@@ -94,6 +102,7 @@ export async function analyzeImageWithGemini(
 ): Promise<{
   artists: Artist[];
   rawText: string;
+  eventName?: string;
 }> {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -127,69 +136,22 @@ export async function analyzeImageWithGemini(
     console.log('[Gemini] Raw response:', responseText);
 
     // Parse JSON from response
-    const artists = parseGeminiResponse(responseText);
+    const parsed = parseGeminiResponse(responseText);
 
-    console.log(`[Gemini] Extracted ${artists.length} artists`);
-    console.log('[Gemini] Artists:', artists);
+    console.log(`[Gemini] Extracted ${parsed.artists.length} artists`);
+    console.log('[Gemini] Artists:', parsed.artists);
+    console.log('[Gemini] Event name:', parsed.eventName || '(none)');
 
     return {
-      artists,
+      artists: parsed.artists,
       rawText: responseText,
+      eventName: parsed.eventName,
     };
   } catch (error) {
     console.error('[Gemini] Error analyzing image:', error);
     throw new Error(
       `Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
-  }
-}
-
-/**
- * Parses Gemini's response to extract JSON array of artists
- * Handles markdown code blocks and malformed JSON
- */
-function parseGeminiResponse(responseText: string): Artist[] {
-  try {
-    // Try to extract JSON from markdown code blocks first
-    const jsonBlockMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-
-    if (jsonBlockMatch) {
-      const jsonStr = jsonBlockMatch[1].trim();
-      return JSON.parse(jsonStr);
-    }
-
-    // Try to find raw JSON array
-    const jsonArrayMatch = responseText.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-
-    if (jsonArrayMatch) {
-      return JSON.parse(jsonArrayMatch[0]);
-    }
-
-    // Fallback: Try parsing entire response as JSON
-    return JSON.parse(responseText);
-  } catch (error) {
-    console.error('[Gemini] Failed to parse response:', responseText);
-    console.error('[Gemini] Parse error:', error);
-
-    // Last resort: Try to extract artist names from any JSON-like structure
-    const artistNameMatches = responseText.matchAll(/"name":\s*"([^"]+)"/g);
-    const fallbackArtists: Artist[] = [];
-
-    for (const match of artistNameMatches) {
-      fallbackArtists.push({
-        name: match[1],
-        weight: 5, // Default weight if parsing fails
-        tier: 'mid-tier',
-        reasoning: 'Fallback parse - weight may be inaccurate',
-      });
-    }
-
-    if (fallbackArtists.length > 0) {
-      console.log('[Gemini] Used fallback parsing, extracted:', fallbackArtists);
-      return fallbackArtists;
-    }
-
-    throw new Error('Could not parse Gemini response as JSON');
   }
 }
 
@@ -241,7 +203,7 @@ export async function analyzeImageWithGeminiRetry(
   imageBuffer: Buffer,
   mimeType: string = 'image/jpeg',
   maxRetries: number = 3
-): Promise<{ artists: Artist[]; rawText: string }> {
+): Promise<{ artists: Artist[]; rawText: string; eventName?: string }> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

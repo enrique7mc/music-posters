@@ -75,6 +75,11 @@ export default function Upload() {
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
 
+      // Store event name for playlist naming
+      if (typeof window !== 'undefined' && response.data.eventName) {
+        sessionStorage.setItem('eventName', response.data.eventName);
+      }
+
       if (response.data.artists.length === 0) {
         setError('No artists found in the image. Try a different poster.');
       }

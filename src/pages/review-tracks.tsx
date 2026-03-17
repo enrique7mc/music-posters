@@ -164,11 +164,16 @@ export default function ReviewTracks() {
     // Select all tracks by default
     setSelectedTracks(new Set(storedTracks.map((t: Track) => t.id)));
 
-    // Load poster thumbnail from sessionStorage (if available)
+    // Load poster thumbnail and event name from sessionStorage (if available)
     if (typeof window !== 'undefined') {
       const storedThumbnail = sessionStorage.getItem('posterThumbnail');
       if (storedThumbnail) {
         setPosterThumbnail(storedThumbnail);
+      }
+
+      const storedEventName = sessionStorage.getItem('eventName');
+      if (storedEventName) {
+        setPlaylistName(storedEventName);
       }
     }
 
