@@ -173,7 +173,10 @@ export default function ReviewTracks() {
 
       const storedEventName = sessionStorage.getItem('eventName');
       if (storedEventName) {
-        setPlaylistName(storedEventName);
+        const normalizedEventName = storedEventName.trim().slice(0, 100);
+        if (normalizedEventName) {
+          setPlaylistName(normalizedEventName);
+        }
       }
     }
 

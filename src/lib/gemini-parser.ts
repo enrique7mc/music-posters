@@ -4,6 +4,28 @@ import { Artist } from '@/types';
  * Shared parser for Gemini responses.
  * Handles both new object format { eventName, artists } and legacy array format [...].
  */
+function normalizeArtists(input: unknown): Artist[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as { name?: unknown }).name === 'string' &&
+        (item as { name: string }).name.trim().length > 0
+    )
+    .map((item) => {
+      const validTiers = ['headliner', 'sub-headliner', 'mid-tier', 'undercard'] as const;
+      const tier = validTiers.find((t) => t === item.tier);
+      return {
+        name: (item.name as string).trim(),
+        weight: typeof item.weight === 'number' ? item.weight : undefined,
+        tier,
+        reasoning: typeof item.reasoning === 'string' ? item.reasoning : undefined,
+      };
+    });
+}
+
 export function parseGeminiResponse(responseText: string): {
   artists: Artist[];
   eventName?: string;
@@ -23,7 +45,7 @@ export function parseGeminiResponse(responseText: string): {
     // New object format: { eventName, artists }
     if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.artists)) {
       return {
-        artists: parsed.artists,
+        artists: normalizeArtists(parsed.artists),
         eventName:
           typeof parsed.eventName === 'string' && parsed.eventName.trim()
             ? parsed.eventName.trim()
@@ -33,11 +55,11 @@ export function parseGeminiResponse(responseText: string): {
 
     // Legacy array format: [...]
     if (Array.isArray(parsed)) {
-      return { artists: parsed };
+      return { artists: normalizeArtists(parsed) };
     }
 
     // Single object — shouldn't happen, but handle gracefully
-    return { artists: [parsed] };
+    return { artists: normalizeArtists([parsed]) };
   } catch (error) {
     console.error('[GeminiParser] Failed to parse response:', responseText);
     console.error('[GeminiParser] Parse error:', error);
