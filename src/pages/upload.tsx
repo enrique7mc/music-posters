@@ -75,9 +75,12 @@ export default function Upload() {
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
 
-      // Store event name for playlist naming
-      if (typeof window !== 'undefined' && response.data.eventName) {
-        sessionStorage.setItem('eventName', response.data.eventName);
+      // Store event name for playlist naming (clear first to avoid stale data)
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('eventName');
+        if (response.data.eventName) {
+          sessionStorage.setItem('eventName', response.data.eventName);
+        }
       }
 
       if (response.data.artists.length === 0) {

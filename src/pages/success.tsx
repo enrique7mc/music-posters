@@ -33,6 +33,7 @@ export default function Success() {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('tracks');
       sessionStorage.removeItem('posterThumbnail');
+      sessionStorage.removeItem('eventName');
     }
   }, []);
 
