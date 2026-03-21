@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { artistSchema, searchTracksSchema } from '../validation';
+import { artistSchema, searchTracksSchema, MAX_ARTISTS_PER_SEARCH } from '../validation';
 
 describe('validation.ts', () => {
+  describe('MAX_ARTISTS_PER_SEARCH', () => {
+    it('should be exported and equal 150', () => {
+      expect(MAX_ARTISTS_PER_SEARCH).toBe(150);
+    });
+  });
+
   describe('artistSchema', () => {
     it('should validate valid artist object', () => {
       const validArtist = {

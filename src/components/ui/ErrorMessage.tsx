@@ -4,11 +4,19 @@ import { slideDown } from '@/lib/animations';
 
 interface ErrorMessageProps {
   message: string;
+  title?: string;
+  action?: { label: string; onClick: () => void };
   onDismiss?: () => void;
   className?: string;
 }
 
-export default function ErrorMessage({ message, onDismiss, className }: ErrorMessageProps) {
+export default function ErrorMessage({
+  message,
+  title,
+  action,
+  onDismiss,
+  className,
+}: ErrorMessageProps) {
   return (
     <motion.div
       className={cn(
@@ -35,7 +43,16 @@ export default function ErrorMessage({ message, onDismiss, className }: ErrorMes
           />
         </svg>
         <div className="flex-1">
+          {title && <p className="font-semibold text-ember-100 mb-1">{title}</p>}
           <p className="text-sm text-ember-200">{message}</p>
+          {action && (
+            <button
+              onClick={action.onClick}
+              className="text-sm text-ember-300 hover:text-ember-200 underline mt-2"
+            >
+              {action.label}
+            </button>
+          )}
         </div>
         {onDismiss && (
           <button

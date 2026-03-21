@@ -4,6 +4,8 @@ import Head from 'next/head';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Track } from '@/types';
+import { apiClient } from '@/lib/api-client';
+import { AppError, parseApiError } from '@/lib/error-utils';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -37,7 +39,8 @@ export default function ReviewTracks() {
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [playlistName, setPlaylistName] = useState(
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
@@ -171,6 +174,16 @@ export default function ReviewTracks() {
         setPosterThumbnail(storedThumbnail);
       }
 
+      const storedWarnings = sessionStorage.getItem('trackWarnings');
+      if (storedWarnings) {
+        try {
+          setWarnings(JSON.parse(storedWarnings));
+        } catch {
+          /* ignore */
+        }
+        sessionStorage.removeItem('trackWarnings');
+      }
+
       const storedEventName = sessionStorage.getItem('eventName');
       if (storedEventName) {
         const normalizedEventName = storedEventName.trim().slice(0, 100);
@@ -207,12 +220,12 @@ export default function ReviewTracks() {
 
   const handleCreatePlaylist = async () => {
     if (selectedTracks.size === 0) {
-      setError('Please select at least one track');
+      setError({ type: 'validation', message: 'Please select at least one track' });
       return;
     }
 
     if (!playlistName.trim()) {
-      setError('Please enter a playlist name');
+      setError({ type: 'validation', message: 'Please enter a playlist name' });
       return;
     }
 
@@ -221,7 +234,7 @@ export default function ReviewTracks() {
 
     try {
       const trackIds = Array.from(selectedTracks);
-      const response = await axios.post('/api/create-playlist', {
+      const response = await apiClient.post('/api/create-playlist', {
         trackIds,
         playlistName: playlistName.trim(),
         posterThumbnail: posterThumbnail || undefined,
@@ -235,9 +248,11 @@ export default function ReviewTracks() {
       router.push(`/success?playlistUrl=${encodeURIComponent(response.data.playlistUrl)}`);
     } catch (err: any) {
       console.error('Error creating playlist:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to create playlist';
-      const errorDetails = err.response?.data?.details;
-      setError(errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage);
+      const appError = parseApiError(err, 'create playlist');
+      if (appError.type === 'server') {
+        appError.action = { label: 'Try again', onClick: handleCreatePlaylist };
+      }
+      setError(appError);
       setCreating(false);
     }
   };
@@ -298,6 +313,64 @@ export default function ReviewTracks() {
             <p className="text-lg text-dark-300">Select the tracks you want in your playlist</p>
           </motion.div>
 
+          {/* Warnings Banner */}
+          <AnimatePresence>
+            {warnings.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-6"
+              >
+                <div className="rounded-lg border border-amber-600/50 bg-amber-950/50 p-4 backdrop-blur-sm">
+                  <div className="flex items-start gap-3">
+                    <svg
+                      className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                      />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-200 mb-1">Some artists had issues</p>
+                      <ul className="text-sm text-amber-300/80 space-y-0.5">
+                        {warnings.slice(0, 10).map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                        {warnings.length > 10 && <li>...and {warnings.length - 10} more</li>}
+                      </ul>
+                    </div>
+                    <button
+                      onClick={() => setWarnings([])}
+                      className="text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
+                      aria-label="Dismiss warnings"
+                    >
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Error Message */}
           <AnimatePresence>
             {error && (
@@ -307,7 +380,12 @@ export default function ReviewTracks() {
                 exit={{ opacity: 0, y: -10 }}
                 className="mb-6"
               >
-                <ErrorMessage message={error} onDismiss={() => setError(null)} />
+                <ErrorMessage
+                  message={error.message}
+                  title={error.title}
+                  action={error.action}
+                  onDismiss={() => setError(null)}
+                />
               </motion.div>
             )}
           </AnimatePresence>

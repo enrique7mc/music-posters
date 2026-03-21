@@ -4,6 +4,9 @@ import Head from 'next/head';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Artist, AnalyzeResponse } from '@/types';
+import { apiClient } from '@/lib/api-client';
+import { AppError, parseApiError } from '@/lib/error-utils';
+import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
 import PageLayout from '@/components/layout/PageLayout';
 import { AsymmetricSection } from '@/components/layout/Section';
 import Button from '@/components/ui/Button';
@@ -32,7 +35,7 @@ export default function Upload() {
     'vision'
   );
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
   const [customTrackCount, setCustomTrackCount] = useState<number>(3);
   // Track latest analysis request to prevent race conditions
@@ -42,6 +45,23 @@ export default function Upload() {
     // Redirect to home if not authenticated
     if (!authLoading && !user) {
       router.push('/');
+      return;
+    }
+
+    // After fresh Spotify auth callback, check for return URL
+    if (!authLoading && user && typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('returnAfterAuth');
+        if (stored) {
+          const { url, timestamp } = JSON.parse(stored);
+          sessionStorage.removeItem('returnAfterAuth');
+          if (Date.now() - timestamp < 5 * 60 * 1000 && url.startsWith('/') && url !== '/upload') {
+            router.push(url);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
     }
   }, [authLoading, user, router]);
 
@@ -86,7 +106,10 @@ export default function Upload() {
       }
 
       if (response.data.artists.length === 0) {
-        setError('No artists found in the image. Try a different poster.');
+        setError({
+          type: 'validation',
+          message: 'No artists found in the image. Try a different poster.',
+        });
       }
     } catch (err: any) {
       // Only show error if this is still the latest request
@@ -95,8 +118,8 @@ export default function Upload() {
       }
 
       console.error('Error analyzing image:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to analyze image';
-      setError(errorMessage);
+      const appError = parseApiError(err, 'analyze image');
+      setError(appError);
       // Clear upload state on error for better recovery
       setSelectedFile(null);
       setPreviewUrl(null);
@@ -112,6 +135,15 @@ export default function Upload() {
   const handleCreatePlaylist = async () => {
     if (artists.length === 0) return;
 
+    if (artists.length > MAX_ARTISTS_PER_SEARCH) {
+      setError({
+        type: 'validation',
+        title: 'Too many artists',
+        message: `You have ${artists.length} artists but the maximum is ${MAX_ARTISTS_PER_SEARCH}. Please use "Customize Artists" to remove some before continuing.`,
+      });
+      return;
+    }
+
     setCreating(true);
     setError(null);
 
@@ -126,11 +158,14 @@ export default function Upload() {
         requestBody.customTrackCount = customTrackCount;
       }
 
-      const response = await axios.post('/api/search-tracks', requestBody);
+      const response = await apiClient.post('/api/search-tracks', requestBody);
 
       // Store tracks and poster thumbnail for review page
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('tracks', JSON.stringify(response.data.tracks));
+        if (response.data.warnings?.length) {
+          sessionStorage.setItem('trackWarnings', JSON.stringify(response.data.warnings));
+        }
         if (posterThumbnail) {
           sessionStorage.setItem('posterThumbnail', posterThumbnail);
         }
@@ -139,8 +174,11 @@ export default function Upload() {
       router.push('/review-tracks');
     } catch (err: any) {
       console.error('Error searching tracks:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to search tracks';
-      setError(errorMessage);
+      const appError = parseApiError(err, 'search tracks');
+      if (appError.type === 'rate_limit' || appError.type === 'server') {
+        appError.action = { label: 'Try again', onClick: handleCreatePlaylist };
+      }
+      setError(appError);
       setCreating(false);
     }
   };
@@ -185,7 +223,12 @@ export default function Upload() {
           {/* Error message */}
           {error && (
             <div className="container mx-auto px-4 mb-6">
-              <ErrorMessage message={error} onDismiss={() => setError(null)} />
+              <ErrorMessage
+                message={error.message}
+                title={error.title}
+                action={error.action}
+                onDismiss={() => setError(null)}
+              />
             </div>
           )}
 

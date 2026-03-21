@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FileTypeResult, fromBuffer } from 'file-type';
+import { MAX_ARTISTS_PER_SEARCH } from './constants';
 
 /**
  * Validation schemas for API endpoints using Zod.
@@ -37,16 +38,22 @@ export const artistSchema = z.object({
 // Search Tracks Validation (/api/search-tracks)
 // ============================================================================
 
+// Re-export from constants for backward compatibility
+export { MAX_ARTISTS_PER_SEARCH } from './constants';
+
 /**
  * Schema for validating search tracks request body.
- * Limits artists to 150 to prevent excessive API calls and rate limiting.
+ * Limits artists to MAX_ARTISTS_PER_SEARCH to prevent excessive API calls and rate limiting.
  * Supports both Spotify and Apple Music platforms.
  */
 export const searchTracksSchema = z.object({
   artists: z
     .array(artistSchema)
     .min(1, 'At least one artist must be provided')
-    .max(150, 'Maximum 150 artists allowed to prevent excessive API calls'),
+    .max(
+      MAX_ARTISTS_PER_SEARCH,
+      `Maximum ${MAX_ARTISTS_PER_SEARCH} artists allowed to prevent excessive API calls`
+    ),
   platform: z.enum(['spotify', 'apple-music']).optional(), // Optional for backward compatibility
   trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
   customTrackCount: z.number().int().min(1).max(50).optional(),
