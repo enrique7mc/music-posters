@@ -43,6 +43,30 @@ describe('parseApiError', () => {
     expect(result.title).toBe('Something went wrong');
   });
 
+  it('should not prefix with undefined when serverMsg is missing but details exists', () => {
+    const err = {
+      response: {
+        status: 400,
+        data: { details: 'artists: Maximum 150 artists allowed' },
+      },
+    };
+    const result = parseApiError(err, 'search tracks');
+    expect(result.type).toBe('validation');
+    expect(result.message).toBe('artists: Maximum 150 artists allowed');
+    expect(result.message).not.toContain('undefined');
+  });
+
+  it('should return details only when serverMsg is empty string', () => {
+    const err = {
+      response: {
+        status: 500,
+        data: { error: '', details: 'Something specific' },
+      },
+    };
+    const result = parseApiError(err, 'do something');
+    expect(result.message).toBe('Something specific');
+  });
+
   it('should return server type with fallback message for network error', () => {
     const err = { message: 'Network Error' };
     const result = parseApiError(err, 'search tracks');

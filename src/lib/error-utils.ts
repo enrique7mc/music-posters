@@ -9,7 +9,7 @@ export function parseApiError(err: any, context: string): AppError {
   const status = err.response?.status;
   const serverMsg = err.response?.data?.error;
   const details = err.response?.data?.details;
-  const fullMsg = details ? `${serverMsg}: ${details}` : serverMsg;
+  const fullMsg = [serverMsg, details].filter(Boolean).join(': ');
 
   if (status === 401) {
     return { type: 'auth', title: 'Session expired', message: fullMsg || 'Please log in again.' };

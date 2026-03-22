@@ -67,7 +67,12 @@ describe('api-client', () => {
 
   it('should store return URL in sessionStorage on 401 for non-auth routes', async () => {
     // Mock window.location
-    const mockLocation = { pathname: '/review-tracks', href: '' };
+    const mockLocation = {
+      pathname: '/review-tracks',
+      search: '?page=2',
+      hash: '#section',
+      href: '',
+    };
     vi.stubGlobal('window', {
       location: mockLocation,
       sessionStorage: globalThis.sessionStorage,
@@ -82,7 +87,7 @@ describe('api-client', () => {
     const stored = sessionStorage.getItem('returnAfterAuth');
     expect(stored).toBeTruthy();
     const parsed = JSON.parse(stored!);
-    expect(parsed.url).toBe('/review-tracks');
+    expect(parsed.url).toBe('/review-tracks?page=2#section');
     expect(parsed.timestamp).toBeGreaterThan(0);
   });
 

@@ -55,7 +55,12 @@ export default function Upload() {
         if (stored) {
           const { url, timestamp } = JSON.parse(stored);
           sessionStorage.removeItem('returnAfterAuth');
-          if (Date.now() - timestamp < 5 * 60 * 1000 && url.startsWith('/') && url !== '/upload') {
+          if (
+            Date.now() - timestamp < 5 * 60 * 1000 &&
+            url.startsWith('/') &&
+            !url.startsWith('//') &&
+            url !== '/upload'
+          ) {
             router.push(url);
           }
         }

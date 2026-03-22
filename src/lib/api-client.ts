@@ -14,6 +14,7 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 }
 
 function isRetryableError(error: AxiosError): boolean {
+  if (error.code === 'ERR_CANCELED') return false;
   if (!error.response) return true; // Network error
   const status = error.response.status;
   return status === 429 || status === 502 || status === 503 || status === 504;
@@ -54,7 +55,10 @@ apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
       try {
         sessionStorage.setItem(
           'returnAfterAuth',
-          JSON.stringify({ url: window.location.pathname, timestamp: Date.now() })
+          JSON.stringify({
+            url: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+            timestamp: Date.now(),
+          })
         );
       } catch {
         // sessionStorage quota exceeded — proceed without return URL
