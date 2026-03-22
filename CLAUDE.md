@@ -619,6 +619,17 @@ To bypass real API calls during development or testing:
 
 **Recommendation**: Start with `IMAGE_ANALYSIS_PROVIDER=hybrid` for best results (requires both Vision and Gemini credentials).
 
+**Production URL**: `https://playlistd.xemc.dev`
+
+**Viewing Production Logs**:
+
+- **Vercel Dashboard** (recommended): vercel.com → playlistd → Logs tab. Supports historical logs, filtering by host/route/status, and expanding individual requests to see all console output. Filter by host `playlistd.xemc.dev` for production traffic.
+- **Vercel CLI** (`npx vercel logs <deployment-url>`): Only streams **new** logs in real-time — it does NOT fetch historical logs. You must have the stream running _before_ triggering the request. To use it:
+  1. Get the latest production deployment URL: `npx vercel ls` (look for the Production row)
+  2. Start streaming: `npx vercel logs <deployment-url>`
+  3. Trigger the action in the browser while streaming
+- **CLI limitation**: The CLI does not accept the custom domain (`playlistd.xemc.dev`) — you must use the deployment-specific URL from `npx vercel ls`.
+
 ## Testing Checklist
 
 1. **Auth Flow**: Login → Callback → Redirect to /upload
