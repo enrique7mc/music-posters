@@ -325,7 +325,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 - **Purpose**: Create Spotify playlist
 - **Input**: `{ artists: string[], playlistName?: string }`
-- **Max Artists**: 100 (enforced to prevent excessive API calls)
+- **Max Artists**: 150 (enforced to prevent excessive API calls)
 - **Process**: Search artists → Get top tracks → Create playlist → Add tracks
 - **Duration**: 20-70 seconds depending on artist count
 - **Returns**: `{ playlistUrl, playlistId, tracksAdded, artistsFound, limitApplied }`

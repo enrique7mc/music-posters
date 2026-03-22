@@ -144,6 +144,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return checkAuthPromise.current;
   }, []);
 
+  const handlePostAuthRedirect = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = sessionStorage.getItem('returnAfterAuth');
+      if (stored) {
+        const { url, timestamp } = JSON.parse(stored);
+        sessionStorage.removeItem('returnAfterAuth');
+        // Only consume if < 5 minutes old and is a valid internal path
+        if (Date.now() - timestamp < 5 * 60 * 1000 && url.startsWith('/')) {
+          router.push(url);
+          return true;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }, [router]);
+
   const loginWithSpotify = useCallback(() => {
     // Redirect to Spotify OAuth login
     window.location.href = '/api/auth/spotify/login';
@@ -172,8 +191,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Check auth to update state
       await checkAuth();
 
-      // Redirect to upload page
-      router.push('/upload');
+      // Redirect to return URL if available, otherwise upload page
+      if (!handlePostAuthRedirect()) {
+        router.push('/upload');
+      }
     } catch (error: any) {
       console.error('Apple Music login failed:', error);
       throw error;
@@ -186,6 +207,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setPlatform(null);
       hasChecked.current = false;
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem('returnAfterAuth');
+        } catch {
+          /* ignore */
+        }
+      }
       router.push('/');
     } catch (error) {
       console.error('Logout failed:', error);

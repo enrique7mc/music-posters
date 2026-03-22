@@ -67,6 +67,7 @@ export interface SearchTracksResponse {
   tracks: Track[];
   artistsSearched: number;
   tracksFound: number;
+  warnings?: string[];
 }
 
 export type TrackSelectionMode = 'popular' | 'balanced' | 'deep-cuts';

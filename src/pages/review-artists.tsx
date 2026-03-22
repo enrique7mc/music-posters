@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Artist, TrackSelectionMode } from '@/types';
+import { apiClient } from '@/lib/api-client';
+import { AppError, parseApiError } from '@/lib/error-utils';
+import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -30,7 +32,7 @@ export default function ReviewArtists() {
   const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   // Data from upload page
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -188,11 +190,20 @@ export default function ReviewArtists() {
     }));
   };
 
+  const overLimit = artists.length > MAX_ARTISTS_PER_SEARCH;
+
   // Continue to search tracks
   const handleContinue = async () => {
     if (artists.length === 0) {
-      setError('No artists to search. Please upload a new poster.');
+      setError({
+        type: 'validation',
+        message: 'No artists to search. Please upload a new poster.',
+      });
       return;
+    }
+
+    if (overLimit) {
+      return; // Button should be disabled, but guard anyway
     }
 
     setSearching(true);
@@ -212,7 +223,7 @@ export default function ReviewArtists() {
         requestBody.perArtistCounts = perArtistCounts;
       }
 
-      const response = await axios.post('/api/search-tracks', requestBody);
+      const response = await apiClient.post('/api/search-tracks', requestBody);
 
       console.log('[ReviewArtists] Received tracks from API:', response.data.tracks.length);
 
@@ -226,6 +237,10 @@ export default function ReviewArtists() {
           'tracks'
         );
 
+        if (response.data.warnings?.length) {
+          sessionStorage.setItem('trackWarnings', JSON.stringify(response.data.warnings));
+        }
+
         if (posterThumbnail) {
           sessionStorage.setItem('posterThumbnail', posterThumbnail);
           console.log('[ReviewArtists] Stored poster thumbnail');
@@ -237,19 +252,17 @@ export default function ReviewArtists() {
           '[ReviewArtists] Verification - tracks in storage:',
           verification ? 'YES' : 'NO'
         );
-
-        // DON'T clean up artists here - keep them until we successfully navigate
-        // The review-tracks page or success page will clean up when appropriate
-        // sessionStorage.removeItem('artists');
-        // sessionStorage.removeItem('analysisProvider');
       }
 
       console.log('[ReviewArtists] Navigating to /review-tracks...');
       router.push('/review-tracks');
     } catch (err: any) {
       console.error('Error searching tracks:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to search tracks';
-      setError(errorMessage);
+      const appError = parseApiError(err, 'search tracks');
+      if (appError.type === 'rate_limit' || appError.type === 'server') {
+        appError.action = { label: 'Try again', onClick: handleContinue };
+      }
+      setError(appError);
       setSearching(false);
     }
   };
@@ -304,7 +317,12 @@ export default function ReviewArtists() {
             {/* Error message */}
             {error && (
               <div className="mb-6">
-                <ErrorMessage message={error} onDismiss={() => setError(null)} />
+                <ErrorMessage
+                  message={error.message}
+                  title={error.title}
+                  action={error.action}
+                  onDismiss={() => setError(null)}
+                />
               </div>
             )}
 
@@ -372,6 +390,15 @@ export default function ReviewArtists() {
                       {artists.length === 1 ? 'artist' : 'artists'} and let you review them before
                       creating your playlist.
                     </p>
+                    {overLimit && (
+                      <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/50 p-3">
+                        <p className="text-sm text-amber-200">
+                          Too many artists ({artists.length}/{MAX_ARTISTS_PER_SEARCH}). Please
+                          remove {artists.length - MAX_ARTISTS_PER_SEARCH} artist
+                          {artists.length - MAX_ARTISTS_PER_SEARCH !== 1 ? 's' : ''} to continue.
+                        </p>
+                      </div>
+                    )}
                     <div className="flex flex-col gap-3">
                       <Button
                         variant="primary"
@@ -379,7 +406,7 @@ export default function ReviewArtists() {
                         onClick={handleContinue}
                         className="w-full"
                         isLoading={searching}
-                        disabled={artists.length === 0}
+                        disabled={artists.length === 0 || overLimit}
                       >
                         Search Tracks & Continue
                       </Button>

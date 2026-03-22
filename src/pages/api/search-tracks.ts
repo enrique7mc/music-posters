@@ -50,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[Search Tracks API] Validation error:', error.message);
     return res.status(400).json({
       error: 'Invalid request data',
+      details: error.message,
     });
   }
 
@@ -173,10 +174,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Successfully found ${tracks.length} tracks on ${platform}`);
 
+    const platformDisplayName = platform === 'spotify' ? 'Spotify' : 'Apple Music';
+    const warnings: string[] = [];
+    noMatches.forEach((m) =>
+      warnings.push(`"${m.requested}" was not found on ${platformDisplayName}`)
+    );
+    poorMatches.forEach((m) =>
+      warnings.push(
+        `"${m.requested}" matched as "${m.found}" (${(m.similarity * 100).toFixed(0)}% match)`
+      )
+    );
+
     const response: SearchTracksResponse = {
       tracks,
       artistsSearched: artists.length,
       tracksFound: tracks.length,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
 
     res.status(200).json(response);
@@ -197,7 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.status(500).json({
-      error: 'Failed to search tracks',
+      error: 'Failed to search tracks. Please try again.',
     });
   }
 }
