@@ -113,13 +113,18 @@ const appleMusicTrackIdSchema = z.string().regex(/^\d+$/, 'Invalid Apple Music t
  */
 const trackIdSchema = z.string().refine(
   (id) => {
-    // Spotify URI format
+    // Spotify URI format (e.g. spotify:track:0VjIjW4GlUZAMYd2vXMi3b)
     if (/^spotify:track:[a-zA-Z0-9]{22}$/.test(id)) return true;
+    // Raw Spotify track ID (22-char alphanumeric, sent by frontend)
+    if (/^[a-zA-Z0-9]{22}$/.test(id)) return true;
     // Apple Music numeric ID format
     if (/^\d+$/.test(id)) return true;
     return false;
   },
-  { message: 'Invalid track ID format. Must be a Spotify URI or Apple Music track ID.' }
+  {
+    message:
+      'Invalid track ID format. Must be a Spotify URI, Spotify track ID, or Apple Music track ID.',
+  }
 );
 
 /**
