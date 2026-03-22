@@ -1,10 +1,10 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import { INTER_BOLD_WOFF_BASE64 } from '@/assets/fonts/inter-bold-data';
+import { INTER_BOLD_TTF_BASE64 } from '@/assets/fonts/inter-bold-data';
 
 // Runtime font setup for librsvg (used by sharp for SVG rendering).
-// librsvg does NOT support @font-face data URIs — fonts must be registered via fontconfig.
+// librsvg does NOT support WOFF — fonts must be TTF/OTF registered via fontconfig.
 // The font is embedded as base64 in the bundle (not relying on file tracing) and written
 // to /tmp at runtime with a fonts.conf that uses absolute paths.
 const RUNTIME_FONTS_DIR = '/tmp/playlistd-fonts';
@@ -13,15 +13,31 @@ let fontsReady = false;
 function ensureFontsReady(): void {
   if (fontsReady) return;
 
-  const runtimeFontPath = path.join(RUNTIME_FONTS_DIR, 'inter-bold.woff');
+  const runtimeFontPath = path.join(RUNTIME_FONTS_DIR, 'inter-bold.ttf');
 
   // Skip if already set up (warm Lambda invocation)
   if (!fs.existsSync(runtimeFontPath)) {
     fs.mkdirSync(RUNTIME_FONTS_DIR, { recursive: true });
 
+    // Clean up old WOFF file from previous deployments (librsvg can't read WOFF)
+    const oldWoffPath = path.join(RUNTIME_FONTS_DIR, 'inter-bold.woff');
+    if (fs.existsSync(oldWoffPath)) {
+      fs.unlinkSync(oldWoffPath);
+      console.log('Removed old WOFF font (unsupported by librsvg)');
+    }
+
     // Decode embedded font data and write to /tmp
-    fs.writeFileSync(runtimeFontPath, Buffer.from(INTER_BOLD_WOFF_BASE64, 'base64'));
-    console.log(`Wrote embedded font to ${runtimeFontPath}`);
+    fs.writeFileSync(runtimeFontPath, Buffer.from(INTER_BOLD_TTF_BASE64, 'base64'));
+    console.log(
+      `Wrote embedded TTF font to ${runtimeFontPath} (${fs.statSync(runtimeFontPath).size} bytes)`
+    );
+
+    // Clear fontconfig cache to pick up new font
+    const cacheDir = '/tmp/fontconfig-cache';
+    if (fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true });
+      console.log('Cleared fontconfig cache');
+    }
 
     // Generate fonts.conf with absolute path
     const fontsConf = `<?xml version="1.0"?>
