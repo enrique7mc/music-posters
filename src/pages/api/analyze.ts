@@ -104,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('[Analyze API] Analyzing with Hybrid Mode (Vision + Gemini)...');
       result = await analyzeImageHybrid(imageBuffer, imageFile.mimetype ?? 'image/jpeg');
     } else if (provider === 'gemini') {
-      // Use Gemini 2.0 Flash with vision-first approach
+      // Use Gemini 3.5 Flash with vision-first approach
       console.log('[Analyze API] Analyzing with Gemini...');
       result = await analyzeImageWithGeminiRetry(imageBuffer, imageFile.mimetype ?? 'image/jpeg');
     } else {

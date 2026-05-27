@@ -91,7 +91,7 @@ If no event name is visible, set "eventName" to "".
 Be precise with artist spellings. No additional text, only the JSON object.`;
 
 /**
- * Analyzes a festival poster image using Gemini 2.0 Flash
+ * Analyzes a festival poster image using Gemini 3.5 Flash
  * @param imageBuffer - Buffer containing the image data
  * @param mimeType - MIME type of the image (e.g., 'image/jpeg', 'image/png', 'image/webp')
  * @returns Object with artists array and raw Gemini response
@@ -112,7 +112,7 @@ export async function analyzeImageWithGemini(
 
   // Initialize Gemini client
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
   try {
     console.log('[Gemini] Analyzing poster image...');
