@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: ['./src/test/polyfills.ts', './src/test/setup.ts'],
     exclude: ['node_modules/', '.next/', 'dist/'],
     coverage: {
       provider: 'v8',
