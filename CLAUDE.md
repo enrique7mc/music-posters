@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Music Posters is a Next.js application that converts festival poster images into Spotify playlists using AI. It's a stateless MVP built for speed, supporting three image analysis providers:
 
 - **Google Cloud Vision API** (OCR-based): Traditional text extraction with heuristic filtering
-- **Gemini 2.0 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
+- **Gemini 3.5 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
 - **Hybrid Mode** (Best of both): Combines Vision OCR for comprehensive text extraction with Gemini AI for intelligent filtering and ranking
 
 All providers integrate with Spotify Web API for playlist creation. Switch providers via environment variable.
@@ -86,7 +86,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 - **Auth**: OAuth 2.0 with httpOnly cookies (no database)
 - **Image Analysis**:
   - Google Cloud Vision API (OCR + filtering)
-  - Gemini 2.0 Flash (vision-first AI with ranking)
+  - Gemini 3.5 Flash (vision-first AI with ranking)
   - Hybrid Mode (Vision OCR + Gemini AI)
 - **External Services**: Spotify Web API
 
@@ -110,7 +110,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
    │  └─ Returns Artist[] (weight: undefined)
    │
    ├─ IF provider='gemini':
-   │  ├─ Gemini 2.0 Flash analyzes image with vision
+   │  ├─ Gemini 3.5 Flash analyzes image with vision
    │  ├─ Few-shot prompt guides artist extraction
    │  ├─ Returns Artist[] with weight scores (1-10)
    │  └─ Artists ranked by font size/position
@@ -213,7 +213,7 @@ Vision-first AI analysis with intelligent ranking. Uses few-shot prompting with 
 
 **Analysis Process**:
 
-1. Image sent directly to Gemini 2.0 Flash (no OCR step)
+1. Image sent directly to Gemini 3.5 Flash (no OCR step)
 2. AI analyzes visual hierarchy: font size, position, styling
 3. Returns Artist[] with:
    - `weight`: 1-10 prominence score (10=headliner, 1=undercard)
@@ -422,7 +422,7 @@ const detections = result.textAnnotations;
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 ```
 
 **Getting API Key**:
