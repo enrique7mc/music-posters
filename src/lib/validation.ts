@@ -46,9 +46,20 @@ export { MAX_ARTISTS_PER_SEARCH } from './constants';
  * Limits artists to MAX_ARTISTS_PER_SEARCH to prevent excessive API calls and rate limiting.
  * Supports both Spotify and Apple Music platforms.
  */
+/**
+ * Artist schema for search-tracks. Unlike the base artistSchema (used by
+ * /api/personalize, which must STRIP client affinity), search-tracks accepts the
+ * `affinity` tag because it derives per-artist track selection from it
+ * (loved→deep-cuts, gem→popular, untagged→the user's global mode). Only the tag
+ * is needed here; the other affinity_* display fields are ignored/stripped.
+ */
+export const searchArtistSchema = artistSchema.extend({
+  affinity: z.enum(['loved', 'gem']).optional(),
+});
+
 export const searchTracksSchema = z.object({
   artists: z
-    .array(artistSchema)
+    .array(searchArtistSchema)
     .min(1, 'At least one artist must be provided')
     .max(
       MAX_ARTISTS_PER_SEARCH,

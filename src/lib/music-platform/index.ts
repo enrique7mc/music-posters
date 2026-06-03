@@ -95,6 +95,26 @@ function getTrackCountForTier(tier?: string, options?: TrackCountOptions): numbe
 }
 
 /**
+ * Derive the track selection mode for a single artist from its affinity tag:
+ *  - loved → 'deep-cuts': the user already knows the hits, so reach for deeper tracks.
+ *  - gem   → 'popular':   a new discovery deserves its gateway hit.
+ *  - untagged → the user's global mode (unchanged — preserves non-personalized runs).
+ */
+export function getSelectionModeForArtist(
+  artist: Artist,
+  globalMode: TrackSelectionMode
+): TrackSelectionMode {
+  switch (artist.affinity) {
+    case 'loved':
+      return 'deep-cuts';
+    case 'gem':
+      return 'popular';
+    default:
+      return globalMode;
+  }
+}
+
+/**
  * Platform-agnostic function to search for artists and get their top tracks.
  * Uses the specified platform service with rate limiting.
  *
@@ -191,15 +211,17 @@ export async function searchAndGetTopTracks(
         trackCount = getTrackCountForTier(pair.originalArtist.tier, trackCountOptions);
       }
 
+      // Per-artist selection mode derived from affinity; untagged artists fall
+      // back to the user's global mode (default 'popular' as before).
+      const globalMode = trackCountOptions?.selectionMode || 'popular';
+      const selectionMode = getSelectionModeForArtist(pair.originalArtist, globalMode);
+
       console.log(
-        `  Fetching ${trackCount} tracks for ${pair.searchResult.name} (tier: ${pair.originalArtist.tier || 'unknown'})`
+        `  Fetching ${trackCount} tracks for ${pair.searchResult.name} ` +
+          `(tier: ${pair.originalArtist.tier || 'unknown'}, ` +
+          `affinity: ${pair.originalArtist.affinity || 'none'} → ${selectionMode})`
       );
-      return platform.getArtistTopTracks(
-        pair.searchResult.id,
-        token,
-        trackCount,
-        trackCountOptions?.selectionMode || 'popular'
-      );
+      return platform.getArtistTopTracks(pair.searchResult.id, token, trackCount, selectionMode);
     },
     batchSize,
     batchDelay
