@@ -4,7 +4,16 @@ import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './type
 import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
+// Origin only (no `/v1`). Apple's pagination `next` is an absolute path like
+// `/v1/me/library/artists?offset=100`, so we prepend the origin to it — prepending
+// the base URL would produce a broken `/v1/v1` path (observed in the spike).
+const APPLE_MUSIC_API_ORIGIN = 'https://api.music.apple.com';
 const DEFAULT_STOREFRONT = 'us'; // US storefront for search
+
+// Library scan tuning (getLibraryArtists)
+const LIBRARY_PAGE_LIMIT = 100; // Apple's max page size for library endpoints
+const MAX_LIBRARY_PAGES = 50; // hard ceiling (~5000 artists) to protect the 30s route budget
+const LIBRARY_PAGE_THROTTLE_MS = 50; // inter-page delay to stay under rate limits
 
 /**
  * Selects tracks from a pool based on the selection mode.
@@ -215,6 +224,57 @@ export class AppleMusicPlatformService implements MusicPlatformService {
       console.error(`[Apple Music] Error getting top tracks for artist ${artistId}:`, error);
       return [];
     }
+  }
+
+  /**
+   * Scan the authenticated user's full library of artists (the "loved" set used
+   * by personalization). Paginated, throttled, and capped:
+   *  - 100 artists/page (Apple's max for library endpoints)
+   *  - 50ms inter-page throttle to stay under rate limits
+   *  - MAX_LIBRARY_PAGES ceiling so a huge library can't blow the route budget
+   *  - origin-prepend on `next` (never `/v1/v1`)
+   *  - partial-success: on any page error, return what was collected so far
+   *    rather than throwing (caller falls back to a plain, unpersonalized list).
+   *
+   * Requires the Music User Token (library data is user-scoped).
+   */
+  async getLibraryArtists(token: string): Promise<string[]> {
+    const names: string[] = [];
+    let url: string | null =
+      `${APPLE_MUSIC_API_BASE_URL}/me/library/artists?limit=${LIBRARY_PAGE_LIMIT}`;
+    let pages = 0;
+
+    while (url && pages < MAX_LIBRARY_PAGES) {
+      // Apple's `next` is an absolute path (`/v1/me/...`). Prepend the ORIGIN
+      // only — prepending the base URL (which ends in `/v1`) yields `/v1/v1`.
+      const requestUrl = url.startsWith('http') ? url : `${APPLE_MUSIC_API_ORIGIN}${url}`;
+
+      let data: any;
+      try {
+        const response = await axios.get(requestUrl, { headers: this.getHeaders(token) });
+        data = response.data;
+      } catch (error) {
+        console.error(`[Apple Music] Error scanning library artists (page ${pages + 1}):`, error);
+        break; // partial-success: keep whatever we already gathered
+      }
+
+      pages++;
+      for (const artist of data?.data || []) {
+        const name = artist?.attributes?.name;
+        if (name) names.push(name);
+      }
+
+      url = typeof data?.next === 'string' ? data.next : null;
+      if (url && pages < MAX_LIBRARY_PAGES) await delay(LIBRARY_PAGE_THROTTLE_MS);
+    }
+
+    if (url && pages >= MAX_LIBRARY_PAGES) {
+      console.warn(
+        `[Apple Music] Library scan hit the ${MAX_LIBRARY_PAGES}-page ceiling; loved set may be truncated.`
+      );
+    }
+    console.log(`[Apple Music] Library scan: ${names.length} artists across ${pages} pages`);
+    return names;
   }
 
   async createPlaylist(
