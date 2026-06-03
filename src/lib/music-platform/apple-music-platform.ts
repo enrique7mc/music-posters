@@ -1,43 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
 import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
+import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
 const DEFAULT_STOREFRONT = 'us'; // US storefront for search
-
-/**
- * Helper function to calculate string similarity (Levenshtein distance-based)
- */
-function similarity(s1: string, s2: string): number {
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-
-  if (longer.length === 0) return 1.0;
-
-  const editDistance = levenshteinDistance(longer.toLowerCase(), shorter.toLowerCase());
-  return (longer.length - editDistance) / longer.length;
-}
-
-function levenshteinDistance(s1: string, s2: string): number {
-  const costs = [];
-  for (let i = 0; i <= s1.length; i++) {
-    let lastValue = i;
-    for (let j = 0; j <= s2.length; j++) {
-      if (i === 0) {
-        costs[j] = j;
-      } else if (j > 0) {
-        let newValue = costs[j - 1];
-        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-        }
-        costs[j - 1] = lastValue;
-        lastValue = newValue;
-      }
-    }
-    if (i > 0) costs[s2.length] = lastValue;
-  }
-  return costs[s2.length];
-}
 
 /**
  * Selects tracks from a pool based on the selection mode.
@@ -168,9 +135,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         }
       }
 
-      // Require at least 60% similarity to avoid completely wrong matches
-      const SIMILARITY_THRESHOLD = 0.6;
-      const matched = bestSimilarity >= SIMILARITY_THRESHOLD;
+      // Require at least 60% similarity to avoid completely wrong matches.
+      // Catalog search is recall-oriented; loved-overlap uses a stricter bar.
+      const matched = bestSimilarity >= CATALOG_MATCH_THRESHOLD;
 
       if (!matched) {
         console.warn(
