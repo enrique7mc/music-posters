@@ -51,6 +51,13 @@ export interface CreatePlaylistResponse {
   tracksAdded: number;
 }
 
+export interface PersonalizeResponse {
+  artists: Artist[]; // Lineup with affinity fields merged in (loved/gem tags)
+  lovedCount: number;
+  gemCount: number;
+  degraded: boolean; // True if a sub-step failed; client should hide the loved/gems UI
+}
+
 export interface SpotifyTokens {
   access_token: string;
   refresh_token: string;

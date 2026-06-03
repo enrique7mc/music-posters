@@ -82,6 +82,26 @@ export const searchTracksSchema = z.object({
 });
 
 // ============================================================================
+// Personalize Validation (/api/personalize)
+// ============================================================================
+
+/**
+ * Schema for validating the personalize request body.
+ * Reuses artistSchema, which caps name length (100) and — because Zod strips
+ * unrecognized keys by default — drops any client-supplied affinity metadata
+ * (affinity/affinityConfidence/affinityReason/affinityLinkedTo). The server is
+ * the sole authority on affinity, so we never trust it from the request.
+ * Artist count is capped at MAX_ARTISTS_PER_SEARCH.
+ */
+export const personalizeSchema = z.object({
+  artists: z
+    .array(artistSchema)
+    .min(1, 'At least one artist must be provided')
+    .max(MAX_ARTISTS_PER_SEARCH, `Maximum ${MAX_ARTISTS_PER_SEARCH} artists allowed`),
+  platform: z.enum(['spotify', 'apple-music']).optional(),
+});
+
+// ============================================================================
 // Platform Validation
 // ============================================================================
 
