@@ -158,7 +158,18 @@ export function selectGems(
     // already bounded; reason was the one unbounded field).
     const reason =
       typeof raw.reason === 'string' && raw.reason.trim()
-        ? raw.reason.trim().slice(0, GEM_REASON_MAX_LEN)
+        ? raw.reason
+            // Untrusted model text reaches the DOM. Normalize whitespace to single
+            // spaces first, then strip control + zero-width / bidi-override chars
+            // (which can mangle the card layout or spoof text direction), then cap.
+            .replace(/\s+/g, ' ')
+            // eslint-disable-next-line no-control-regex
+            .replace(
+              /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g,
+              ''
+            )
+            .trim()
+            .slice(0, GEM_REASON_MAX_LEN)
         : undefined;
     const existing = byLineupName.get(bestName);
     if (!existing || confidence > existing.confidence) {
@@ -233,7 +244,17 @@ export async function personalizeLineup(
   userToken: string
 ): Promise<PersonalizeResult> {
   const annotated: Artist[] = lineup.map((a) => ({ ...a }));
-  const byName = new Map<string, Artist>(annotated.map((a) => [a.name, a]));
+  // Index by name → ALL artists with that name. A festival lineup can repeat a
+  // name (a B2B billing, the same act on two stages, OCR emitting "TBA" twice),
+  // and every duplicate must get the same affinity — otherwise the server tags
+  // one instance while the client's by-name merge applies it to all, so counts
+  // and chips disagree. A single-value map would silently tag only the last one.
+  const byName = new Map<string, Artist[]>();
+  for (const a of annotated) {
+    const bucket = byName.get(a.name);
+    if (bucket) bucket.push(a);
+    else byName.set(a.name, [a]);
+  }
 
   // 1. Library scan → loved set. No library support (e.g. Spotify) → plain lineup.
   if (!platform.getLibraryArtists) {
@@ -263,8 +284,7 @@ export async function personalizeLineup(
   const { loved, unknown } = matchLineup(lineupNames, lovedNames, LOVED_MATCH_THRESHOLD);
 
   for (const match of loved) {
-    const artist = byName.get(match.poster);
-    if (artist) {
+    for (const artist of byName.get(match.poster) ?? []) {
       artist.affinity = 'loved';
       artist.affinityConfidence = match.similarity;
       artist.affinityReason = 'Already in your library';
@@ -287,8 +307,7 @@ export async function personalizeLineup(
 
   const gems = selectGems(rawGems, unknown);
   for (const gem of gems) {
-    const artist = byName.get(gem.lineupName);
-    if (artist) {
+    for (const artist of byName.get(gem.lineupName) ?? []) {
       artist.affinity = 'gem';
       artist.affinityConfidence = gem.confidence;
       artist.affinityReason = gem.reason;
@@ -296,5 +315,10 @@ export async function personalizeLineup(
     }
   }
 
-  return { artists: annotated, lovedCount: loved.length, gemCount: gems.length, degraded };
+  // Count the actually-tagged artists, not the match-list lengths: selectGems
+  // dedupes gems by name, but every duplicate gets tagged, so the response counts
+  // must come from `annotated` to stay in lockstep with the rendered chips.
+  const lovedCount = annotated.filter((a) => a.affinity === 'loved').length;
+  const gemCount = annotated.filter((a) => a.affinity === 'gem').length;
+  return { artists: annotated, lovedCount, gemCount, degraded };
 }

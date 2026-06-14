@@ -97,6 +97,32 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
     expect(artists).toHaveLength(50);
     expect(complete).toBe(false); // truncated by the ceiling
   });
+
+  it('refuses to follow a non-Apple pagination `next` URL (token-exfil guard)', async () => {
+    let evilHit = false;
+    let leakedAuth: string | null = null;
+    server.use(
+      // A hostile/compromised upstream tries to redirect the authed scan off-Apple.
+      http.get(LIBRARY_URL, () =>
+        HttpResponse.json({
+          data: [{ attributes: { name: 'Phoenix' } }],
+          next: 'https://evil.example.com/v1/me/library/artists?offset=1',
+        })
+      ),
+      http.get('https://evil.example.com/v1/me/library/artists', ({ request }) => {
+        evilHit = true;
+        leakedAuth = request.headers.get('authorization');
+        return HttpResponse.json({ data: [{ attributes: { name: 'Pwned' } }] });
+      })
+    );
+
+    const { artists, complete } = await service.getLibraryArtists('user-token');
+
+    expect(evilHit).toBe(false); // the guard stopped the request before it left for the attacker
+    expect(leakedAuth).toBeNull(); // bearer + Music-User-Token never sent off-Apple
+    expect(artists).toEqual(['Phoenix']); // only the real Apple page survives
+    expect(complete).toBe(false); // scan marked incomplete (treated like a failed page)
+  });
 });
 
 describe('AppleMusicPlatformService.searchArtist', () => {

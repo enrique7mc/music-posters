@@ -124,6 +124,15 @@ describe('selectGems', () => {
     );
     expect(gems[0]).toEqual({ lineupName: 'Anz', confidence: 0.9, reason: 'r' });
   });
+
+  it('sanitizes control + bidi-override chars in the reason (untrusted DOM text)', () => {
+    // BEL, an RLO bidi override mid-word, a zero-width space, and a newline run.
+    const gems = selectGems(
+      [{ name: 'Anz', confidence: 0.9, reason: 'great\u0007 te\u202echno\u200b set\n\nnow' }],
+      unknown
+    );
+    expect(gems[0].reason).toBe('great techno set now');
+  });
 });
 
 describe('personalizeLineup', () => {
@@ -173,6 +182,18 @@ describe('personalizeLineup', () => {
     expect(result.lovedCount).toBe(1);
     expect(result.gemCount).toBe(0); // no Gemini key → loved-only
     expect(result.artists.find((a) => a.name === 'Anz')?.affinity).toBeUndefined();
+  });
+
+  it('tags every artist sharing a duplicated loved name (counts stay consistent)', async () => {
+    // "Phoenix" appears twice (e.g. on two stages). Both must be tagged loved,
+    // and lovedCount must equal the number of tagged artists — not a deduped
+    // count and not just the last instance (the server/client by-name bug).
+    const dupLineup: Artist[] = [{ name: 'Phoenix' }, { name: 'Anz' }, { name: 'Phoenix' }];
+    const result = await personalizeLineup(dupLineup, stubPlatform(['Phoenix']), 'token');
+    const phoenixes = result.artists.filter((a) => a.name === 'Phoenix');
+    expect(phoenixes).toHaveLength(2);
+    expect(phoenixes.every((a) => a.affinity === 'loved')).toBe(true);
+    expect(result.lovedCount).toBe(2);
   });
 
   it('skips gems entirely when there is no loved overlap', async () => {

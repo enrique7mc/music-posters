@@ -496,7 +496,11 @@ export default function ReviewArtists() {
                         onClick={handleContinue}
                         className="w-full"
                         isLoading={searching}
-                        disabled={artists.length === 0 || overLimit}
+                        // Block Continue while personalization is in flight: posting
+                        // early would send untagged artists to search-tracks, so loved
+                        // artists silently lose deep-cuts and gems lose popular tracks.
+                        // The PersonalizationHeader above shows the "Personalizing…" state.
+                        disabled={artists.length === 0 || overLimit || personalizing}
                       >
                         Search Tracks & Continue
                       </Button>

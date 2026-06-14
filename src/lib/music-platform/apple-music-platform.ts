@@ -267,6 +267,24 @@ export class AppleMusicPlatformService implements MusicPlatformService {
       // only — prepending the base URL (which ends in `/v1`) yields `/v1/v1`.
       const requestUrl = url.startsWith('http') ? url : `${APPLE_MUSIC_API_ORIGIN}${url}`;
 
+      // `next` is attacker-influenceable (it comes from the upstream response
+      // body). We attach the developer bearer token + Music-User-Token to this
+      // request, so it must ONLY ever go to Apple — otherwise a malformed or
+      // compromised `next` URL exfiltrates both tokens. Refuse anything else.
+      let requestOrigin = '';
+      try {
+        requestOrigin = new URL(requestUrl).origin;
+      } catch {
+        requestOrigin = '';
+      }
+      if (requestOrigin !== APPLE_MUSIC_API_ORIGIN) {
+        console.error(
+          `[Apple Music] Refusing to follow non-Apple pagination URL (page ${pages + 1}); stopping scan.`
+        );
+        complete = false; // partial scan — treat like a failed page
+        break;
+      }
+
       let data: any;
       try {
         const response = await axios.get(requestUrl, {
