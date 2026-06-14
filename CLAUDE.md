@@ -10,7 +10,44 @@ Music Posters is a Next.js application that converts festival poster images into
 - **Gemini 3.5 Flash** (Vision-first AI): Direct image analysis with intelligent artist ranking by visual prominence
 - **Hybrid Mode** (Best of both): Combines Vision OCR for comprehensive text extraction with Gemini AI for intelligent filtering and ranking
 
-All providers integrate with Spotify Web API for playlist creation. Switch providers via environment variable.
+All providers integrate with Spotify and Apple Music Web APIs for playlist creation. Switch image-analysis providers via environment variable.
+
+## Known Limitations
+
+**⚠️ The Spotify path is broken by Spotify's February 2026 Web API changes.** There are
+two independent causes, both confirmed against Spotify's official migration guide and
+changelog (effective March 9, 2026 for existing apps):
+
+1. **Premium now required for Development Mode apps.** Spotify: _"All Development Mode
+   apps require the app owner to have an active Spotify Premium subscription. If the
+   owner's Premium subscription lapses, the app will stop working."_ The maintainer no
+   longer has Premium, so the app is gated here first.
+2. **Removed/renamed endpoints the code still calls** — so the Spotify path would remain
+   broken even after reconnecting Premium, until the code is migrated:
+   - `GET /artists/{id}/top-tracks` → **removed entirely** (no direct replacement). This
+     is the core of the search→top-track flow in `src/lib/spotify.ts` and
+     `src/lib/music-platform/spotify-platform.ts`.
+   - `POST /users/{userId}/playlists` → **removed**; migrate to `POST /me/playlists`.
+   - `POST /playlists/{id}/tracks` → **renamed** to `POST /playlists/{id}/items`.
+   - `GET /search` max `limit` reduced 50→10 (we use 5, so unaffected).
+
+References:
+
+- https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide
+- https://developer.spotify.com/documentation/web-api/references/changes/february-2026
+- https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security
+
+**Scope & current state:**
+
+- This is a personal app shared with a handful of testers, so this is an accepted
+  limitation, not a production incident.
+- **Apple Music** was added as a second platform (`src/lib/music-platform/`,
+  `src/lib/apple-music-auth.ts`) and is unaffected by the Spotify changes — it is the
+  working path. The landing-page platform selector (`src/pages/index.tsx`) lets users
+  choose Spotify or Apple Music; Apple Music is gated behind MusicKit readiness
+  (`isAppleMusicAvailable`).
+- **TODO (deferred):** hide/disable the Spotify option in the UI until both Premium is
+  reconnected _and_ the removed endpoints are migrated. Not done yet — documenting first.
 
 ## Development Commands
 

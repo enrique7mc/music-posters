@@ -4,6 +4,31 @@ This document outlines code quality improvements for the Music Posters project, 
 
 ---
 
+## Reconciliation Status (as of 2026-05-26)
+
+The original checklists below were written before any of this work landed. The table
+reflects what is **actually in the codebase today** — verified against `src/`. Where a
+section was implemented differently than originally proposed, the deviation is noted.
+
+| #   | Section                     | Status         | Notes                                                                                                                                                                                                                       |
+| --- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Input Validation & Security | ✅ Done        | `zod` + `src/lib/validation.ts`; magic-byte file check via `file-type`; applied to `analyze`, `search-tracks`, `create-playlist`; covered by `validation.test.ts` + regression test                                         |
+| 2   | Testing Infrastructure      | 🟡 Mostly done | vitest + MSW + CI (`.github/workflows/test.yml`) + coverage all in place. **Gaps:** no `ocr.ts` tests, no `gemini.ts` tests, no component tests (upload/review-tracks)                                                      |
+| 3   | Type Safety Cleanup         | 🟡 Partial     | `strict: true` on. Types consolidated in `src/types/index.ts` (not split into `spotify.ts`/`errors.ts`). **~41 `any` remain** across lib/pages — mostly Spotify/Apple track-mapping callbacks and `catch (err: any)` blocks |
+| 4   | Rate Limiting               | ✅ Done        | `src/lib/rate-limit.ts` applied to analyze, search-tracks, create-playlist, preview-cover, and auth routes                                                                                                                  |
+| 5   | Component Extraction        | ✅ Done        | Implemented with a different structure: `components/{features,layout,ui}`. Shared `ErrorMessage`, `LoadingSpinner`, `Badge` exist                                                                                           |
+| 6   | Error Handling System       | 🟡 Partial     | `ui/ErrorMessage.tsx` + `lib/error-utils.ts` (`AppError`, `parseApiError`) done. **Gaps:** no `ErrorBoundary`, no `useRetry` hook, no typed error-code enum, `_app.tsx` not wrapped                                         |
+| 7   | Constants File              | 🟡 Minimal     | `src/lib/constants.ts` holds only `MAX_ARTISTS_PER_SEARCH`. Other constants live in `validation.ts` (file size/types) or remain inline                                                                                      |
+| 8   | Performance Optimizations   | ❌ Not started | No image compression, no response cache, no `next/image` (still `<img>`), no `lz-string`                                                                                                                                    |
+| 9   | Error Tracking (Sentry)     | ❌ Not started | No Sentry config or dependency. Production logging is via Vercel (see CLAUDE.md)                                                                                                                                            |
+| 10  | File Validation             | ✅ Done        | Folded into `src/lib/validation.ts` (`validateImageFile`, `validateFileSize`) rather than a separate `file-validation.ts`                                                                                                   |
+
+> **Out-of-scope work that also shipped:** Apple Music support (`src/lib/music-platform/`,
+> `src/lib/apple-music-auth.ts`) was added after this doc was written. See CLAUDE.md
+> "Known Limitations" for the current Spotify Premium constraint.
+
+---
+
 ## Priority 1: Critical (Production Blockers)
 
 ### 1. Input Validation & Security
@@ -63,13 +88,13 @@ try {
 
 #### Implementation Checklist
 
-- [ ] Install Zod: `npm install zod`
-- [ ] Create `src/lib/validation.ts` with all schemas
-- [ ] Add file type validation using magic bytes (install `file-type`)
-- [ ] Validate file size before processing
-- [ ] Add validation to all POST endpoints
-- [ ] Add validation error messages to frontend
-- [ ] Test with malicious inputs
+- [x] Install Zod: `npm install zod` _(zod ^4.1.12)_
+- [x] Create `src/lib/validation.ts` with all schemas
+- [x] Add file type validation using magic bytes (install `file-type`) _(`validateImageFile` uses `file-type`)_
+- [x] Validate file size before processing _(`validateFileSize`, `MAX_FILE_SIZE`)_
+- [x] Add validation to all POST endpoints _(analyze, search-tracks, create-playlist)_
+- [x] Add validation error messages to frontend
+- [x] Test with malicious inputs _(`validation.test.ts`, `validation.regression-1.test.ts`)_
 
 ---
 
@@ -147,17 +172,17 @@ describe('Upload Page', () => {
 
 #### Implementation Checklist
 
-- [ ] Install testing dependencies (vitest, testing-library)
-- [ ] Create `vitest.config.ts`
-- [ ] Add test scripts to `package.json`
-- [ ] Write tests for `src/lib/spotify.ts` (80% coverage goal)
-- [ ] Write tests for `src/lib/ocr.ts` (80% coverage goal)
-- [ ] Write tests for `src/lib/gemini.ts` (80% coverage goal)
-- [ ] Write integration tests for API routes
-- [ ] Write component tests for upload and review-tracks pages
-- [ ] Set up MSW for mocking external APIs
-- [ ] Add GitHub Actions workflow for CI testing
-- [ ] Add coverage reporting
+- [x] Install testing dependencies (vitest, testing-library)
+- [x] Create `vitest.config.ts`
+- [x] Add test scripts to `package.json` _(test, test:ui, test:run, test:coverage)_
+- [x] Write tests for `src/lib/spotify.ts` (80% coverage goal)
+- [ ] Write tests for `src/lib/ocr.ts` (80% coverage goal) _(no test file yet)_
+- [ ] Write tests for `src/lib/gemini.ts` (80% coverage goal) _(no test file yet)_
+- [x] Write integration tests for API routes _(health, auth/me, apple-music store-token, dev routes)_
+- [ ] Write component tests for upload and review-tracks pages _(no component tests yet)_
+- [x] Set up MSW for mocking external APIs _(`src/test/mocks/`)_
+- [x] Add GitHub Actions workflow for CI testing _(`.github/workflows/test.yml`)_
+- [x] Add coverage reporting _(`@vitest/coverage-v8`)_
 
 #### Test Coverage Goal
 
@@ -290,15 +315,15 @@ const response = await axios.post<AnalyzeResponse>('/api/analyze', formData);
 
 #### Implementation Checklist
 
-- [ ] Create `src/types/spotify.ts` with all Spotify API types
-- [ ] Create `src/types/errors.ts` with error handling types
+- [~] Create `src/types/spotify.ts` with all Spotify API types _(done differently: consolidated into `src/types/index.ts` — `SpotifyUser`, `Track`, `SearchTracksResponse`, etc.)_
+- [~] Create `src/types/errors.ts` with error handling types _(done differently: `AppError` lives in `src/lib/error-utils.ts`)_
 - [ ] Fix all `any` types in useState hooks
-- [ ] Fix all `any` types in catch blocks with proper type guards
+- [ ] Fix all `any` types in catch blocks with proper type guards _(many `catch (err: any)` remain)_
 - [ ] Add generic types to all Axios calls
-- [ ] Add types to all `.map()` callbacks
-- [ ] Update `src/types/index.ts` with exports
-- [ ] Run TypeScript compiler in strict mode: `npx tsc --noEmit`
-- [ ] Fix any new errors revealed by strict mode
+- [ ] Add types to all `.map()` callbacks _(track-mapping callbacks still use `any[]`)_
+- [x] Update `src/types/index.ts` with exports
+- [x] Run TypeScript compiler in strict mode: `npx tsc --noEmit` _(`strict: true` in tsconfig)_
+- [ ] Fix any new errors revealed by strict mode _(~41 `any` remain across `src/`)_
 
 ---
 
@@ -364,15 +389,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 #### Implementation Checklist
 
-- [ ] Install rate limiting library
-- [ ] Create `src/lib/rate-limit.ts` with configuration
-- [ ] Apply rate limiting to `/api/analyze` (5 req/min)
-- [ ] Apply rate limiting to `/api/create-playlist` (10 req/min)
-- [ ] Apply rate limiting to `/api/search-tracks` (10 req/min)
-- [ ] Add user-friendly error messages for rate limit errors
+- [x] Install rate limiting library
+- [x] Create `src/lib/rate-limit.ts` with configuration
+- [x] Apply rate limiting to `/api/analyze`
+- [x] Apply rate limiting to `/api/create-playlist`
+- [x] Apply rate limiting to `/api/search-tracks`
+- [x] Add user-friendly error messages for rate limit errors
 - [ ] Test rate limiting with automated requests
 - [ ] Document rate limits in API documentation
-- [ ] Consider IP-based limiting for unauthenticated routes
+- [x] Consider IP-based limiting for unauthenticated routes _(also applied to auth routes)_
 
 ---
 
@@ -465,18 +490,22 @@ export function FileUploadSection({ onAnalyze, analyzing }: FileUploadSectionPro
 
 #### Implementation Checklist
 
-- [ ] Create `src/components/` directory structure
-- [ ] Extract `FileUploadSection` from upload.tsx
-- [ ] Extract `ArtistListPanel` from upload.tsx
-- [ ] Extract `TrackCountConfigurator` from upload.tsx
-- [ ] Extract `AdvancedSettings` from upload.tsx
-- [ ] Extract `LoadingAnimation` from upload.tsx
-- [ ] Extract `TrackCard` from review-tracks.tsx
+> **Note:** Implemented with a different structure than proposed below —
+> `components/{features,layout,ui}` rather than `components/{upload,playlist,shared}`.
+> Component names differ but the responsibilities map across.
+
+- [x] Create `src/components/` directory structure _(features/layout/ui)_
+- [x] Extract `FileUploadSection` from upload.tsx _(`features/UploadZone.tsx`)_
+- [x] Extract `ArtistListPanel` from upload.tsx _(`features/ArtistList.tsx`, `EditableArtistList.tsx`)_
+- [x] Extract `TrackCountConfigurator` from upload.tsx _(`features/TrackCountSelector.tsx`, `TrackCountModeSelector.tsx`)_
+- [~] Extract `AdvancedSettings` from upload.tsx _(dev controls in `dev/DevPanel.tsx`; no standalone advanced-settings panel)_
+- [~] Extract `LoadingAnimation` from upload.tsx _(`ui/LoadingSpinner.tsx`; rotating messages still inline)_
+- [ ] Extract `TrackCard` from review-tracks.tsx _(still inline in review-tracks.tsx)_
 - [ ] Extract `TierFilter` from review-tracks.tsx
-- [ ] Extract `PlaylistStats` from review-tracks.tsx
-- [ ] Create shared `TierBadge` component
-- [ ] Create shared `ErrorMessage` component
-- [ ] Update imports in page files
+- [~] Extract `PlaylistStats` from review-tracks.tsx _(`features/PlaylistSummaryPreview.tsx`)_
+- [~] Create shared `TierBadge` component _(generic `ui/Badge.tsx`)_
+- [x] Create shared `ErrorMessage` component _(`ui/ErrorMessage.tsx`)_
+- [x] Update imports in page files
 - [ ] Write unit tests for extracted components
 - [ ] Verify UI behavior unchanged
 
@@ -646,16 +675,16 @@ export function ErrorMessage({ error, onRetry, onDismiss }: ErrorMessageProps) {
 
 #### Implementation Checklist
 
-- [ ] Create `src/types/errors.ts` with error types
-- [ ] Create `src/components/ErrorBoundary.tsx`
-- [ ] Wrap `_app.tsx` with ErrorBoundary
-- [ ] Create `src/hooks/useRetry.ts`
-- [ ] Create `src/components/shared/ErrorMessage.tsx`
-- [ ] Update all catch blocks to use typed errors
-- [ ] Add retry logic to image analysis
+- [~] Create `src/types/errors.ts` with error types _(`AppError` in `src/lib/error-utils.ts` instead; no typed error-code enum)_
+- [ ] Create `src/components/ErrorBoundary.tsx` _(not implemented)_
+- [ ] Wrap `_app.tsx` with ErrorBoundary _(not implemented)_
+- [ ] Create `src/hooks/useRetry.ts` _(not implemented; gemini/hybrid have server-side retry)_
+- [x] Create `src/components/shared/ErrorMessage.tsx` _(`ui/ErrorMessage.tsx`)_
+- [~] Update all catch blocks to use typed errors _(`parseApiError` used in places; many `catch (err: any)` remain)_
+- [ ] Add retry logic to image analysis _(frontend; server-side retry exists in gemini/hybrid)_
 - [ ] Add retry logic to playlist creation
 - [ ] Add error recovery guidance ("Try logging in again")
-- [ ] Test error scenarios (network failure, auth expired, etc.)
+- [ ] Test error scenarios (network failure, auth expired, etc.) _(`error-utils.test.ts` covers parsing only)_
 
 ---
 
@@ -784,8 +813,8 @@ processBatch(artists, searchArtist, SPOTIFY_RATE_LIMIT.BATCH_SIZE, SPOTIFY_RATE_
 
 #### Implementation Checklist
 
-- [ ] Create `src/lib/constants.ts`
-- [ ] Add all configuration constants with JSDoc comments
+- [x] Create `src/lib/constants.ts` _(exists but minimal — only `MAX_ARTISTS_PER_SEARCH`)_
+- [ ] Add all configuration constants with JSDoc comments _(file size/types live in `validation.ts`; tier counts, batch sizes, UI intervals still inline)_
 - [ ] Replace magic numbers in `src/lib/spotify.ts`
 - [ ] Replace magic numbers in `src/pages/upload.tsx`
 - [ ] Replace magic numbers in `src/pages/api/analyze.ts`
@@ -799,6 +828,9 @@ processBatch(artists, searchArtist, SPOTIFY_RATE_LIMIT.BATCH_SIZE, SPOTIFY_RATE_
 ## Priority 3: Nice to Have (Polish)
 
 ### 8. Performance Optimizations
+
+> **Status: ❌ Not started.** No image compression, no response cache, still using
+> `<img>` (not `next/image`), no `lz-string`. All boxes below remain unchecked.
 
 **Estimated Time**: 3-4 days
 **Impact**: Medium - Faster load times, better user experience
@@ -914,6 +946,9 @@ sessionStorage.setItem('tracks', compress(JSON.stringify(tracks)));
 ---
 
 ### 9. Error Tracking
+
+> **Status: ❌ Not started.** No Sentry dependency or config. Production visibility
+> currently relies on Vercel logs (see CLAUDE.md "Viewing Production Logs").
 
 **Estimated Time**: 1 day
 **Impact**: Medium - Better visibility into production errors
@@ -1164,17 +1199,21 @@ console.log(`Validated file type: ${validation.detectedType}`);
 
 #### Implementation Checklist
 
-- [ ] Install `file-type` package
-- [ ] Create `src/lib/file-validation.ts`
-- [ ] Implement `validateImageFile()` function
-- [ ] Implement `validateFileName()` function
-- [ ] Add validation to `/api/analyze` endpoint
-- [ ] Add validation before processing in Gemini/Vision
-- [ ] Add file type constants to `constants.ts`
-- [ ] Test with valid images (JPEG, PNG, WebP)
-- [ ] Test with invalid files (PDF, TXT, renamed files)
+> **Note:** Implemented inside `src/lib/validation.ts` rather than a separate
+> `file-validation.ts`. File-type constants (`ALLOWED_IMAGE_MIME_TYPES`,
+> `ALLOWED_IMAGE_EXTENSIONS`, `MAX_FILE_SIZE`) live there too.
+
+- [x] Install `file-type` package _(^16.5.4)_
+- [~] Create `src/lib/file-validation.ts` _(folded into `validation.ts`)_
+- [x] Implement `validateImageFile()` function
+- [ ] Implement `validateFileName()` function _(magic-byte check covers spoofing; no separate filename/path-traversal guard)_
+- [x] Add validation to `/api/analyze` endpoint
+- [x] Add validation before processing in Gemini/Vision
+- [~] Add file type constants to `constants.ts` _(live in `validation.ts`)_
+- [x] Test with valid images (JPEG, PNG, WebP)
+- [x] Test with invalid files (PDF, TXT, renamed files) _(`validation.test.ts`)_
 - [ ] Test with corrupted files
-- [ ] Add user-friendly error messages
+- [x] Add user-friendly error messages
 - [ ] Document supported file types in UI
 
 #### Security Benefits
