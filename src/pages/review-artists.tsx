@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
@@ -21,6 +21,9 @@ import TrackCountModeSelector, {
 import TrackSelectionModeSelector from '@/components/features/TrackSelectionModeSelector';
 import BulkActionsBar from '@/components/features/BulkActionsBar';
 import PlaylistSummaryPreview from '@/components/features/PlaylistSummaryPreview';
+import PersonalizationHeader, {
+  PersonalizationResult,
+} from '@/components/features/PersonalizationHeader';
 import { fadeIn, slideUp } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -51,6 +54,19 @@ export default function ReviewArtists() {
 
   // Selection state for bulk operations
   const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
+
+  // Personalization (loved + hidden gems). Fires once after the lineup loads,
+  // merges affinity tags back into `artists` when the single (~10s) response lands.
+  const [personalizing, setPersonalizing] = useState(false);
+  const [personalizeResult, setPersonalizeResult] = useState<PersonalizationResult | null>(null);
+  // Guards a single fire (incl. React Strict-Mode double-mount, which preserves refs).
+  const personalizeStartedRef = useRef(false);
+  // True while this component instance is mounted; gates late/stale responses so a
+  // navigation away (or Strict-Mode unmount/remount) can't merge into a dead screen.
+  const activeRef = useRef(true);
+  // Mirror of the loaded lineup so the fire effect can read it without re-triggering.
+  const artistsRef = useRef<Artist[]>([]);
+  artistsRef.current = artists;
 
   useEffect(() => {
     // Redirect if not authenticated
@@ -101,6 +117,74 @@ export default function ReviewArtists() {
 
     setLoading(false);
   }, [authLoading, user, router]);
+
+  // Track mount status. Refs survive Strict-Mode's unmount/remount, so after the
+  // double-invoke settles activeRef is back to true; on a real unmount it stays false.
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  // Personalize the lineup against the user's library (Apple Music only — it's the
+  // platform exposing a user library). Fires once; merges affinity fields by name so
+  // any edits made during the ~10s wait are preserved (locked decision #9).
+  useEffect(() => {
+    if (loading || authLoading) return;
+    if (personalizeStartedRef.current) return;
+    if (platform !== 'apple-music') return;
+    if (artistsRef.current.length === 0) return;
+
+    personalizeStartedRef.current = true;
+    setPersonalizing(true);
+
+    apiClient
+      .post('/api/personalize', { artists: artistsRef.current, platform })
+      .then((res) => {
+        if (!activeRef.current) return; // navigated away / stale
+        const data = res.data as {
+          artists: Artist[];
+          lovedCount: number;
+          gemCount: number;
+          degraded: boolean;
+        };
+
+        setPersonalizeResult({
+          lovedCount: data.lovedCount,
+          gemCount: data.gemCount,
+          degraded: data.degraded,
+        });
+
+        if (data.degraded) return;
+
+        // Merge ONLY affinity fields, keyed by name, into current state — never
+        // replace the artist objects (protects removals/edits during the wait).
+        const affinityByName = new Map(data.artists.map((a) => [a.name, a]));
+        setArtists((prev) =>
+          prev.map((artist) => {
+            const annotated = affinityByName.get(artist.name);
+            if (!annotated?.affinity) return artist;
+            return {
+              ...artist,
+              affinity: annotated.affinity,
+              affinityConfidence: annotated.affinityConfidence,
+              affinityReason: annotated.affinityReason,
+              affinityLinkedTo: annotated.affinityLinkedTo,
+            };
+          })
+        );
+      })
+      .catch((err) => {
+        if (!activeRef.current) return;
+        console.error('[ReviewArtists] Personalize failed:', err);
+        // Degrade quietly — the header hides itself and the lineup still works.
+        setPersonalizeResult({ lovedCount: 0, gemCount: 0, degraded: true });
+      })
+      .finally(() => {
+        if (activeRef.current) setPersonalizing(false);
+      });
+  }, [loading, authLoading, platform]);
 
   // Toggle artist selection
   const handleToggleSelection = (artistName: string) => {
@@ -322,6 +406,17 @@ export default function ReviewArtists() {
                   title={error.title}
                   action={error.action}
                   onDismiss={() => setError(null)}
+                />
+              </div>
+            )}
+
+            {/* Personalization header (loved + hidden gems) */}
+            {(personalizing || personalizeResult) && (
+              <div className="mb-6">
+                <PersonalizationHeader
+                  personalizing={personalizing}
+                  result={personalizeResult}
+                  artists={artists}
                 />
               </div>
             )}

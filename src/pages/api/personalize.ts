@@ -72,10 +72,17 @@ export default async function handler(
   const platform: MusicPlatform =
     (requestedPlatform as MusicPlatform) || authenticatedPlatform || 'apple-music';
 
-  // Dev mock: skip personalization entirely (no external calls), return plain lineup.
+  // Dev mock: fabricate loved/gem tags (no external calls) so the loved/gems
+  // header can be exercised without a real library or Gemini. mockDelayMs lets
+  // you also feel the "personalizing…" state.
   if (useMock) {
-    console.log('[DEV MODE] Personalize mocked — returning plain lineup');
-    return res.status(200).json({ artists, lovedCount: 0, gemCount: 0, degraded: true });
+    console.log('[DEV MODE] Personalize mocked — fabricating loved/gem tags');
+    const { mockPersonalize } = await import('@/lib/mock-data');
+    const delay = devConfig?.mockDelayMs ?? 0;
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    return res.status(200).json(mockPersonalize(artists));
   }
 
   const accessToken = getPlatformAccessTokenOrDev(req);
