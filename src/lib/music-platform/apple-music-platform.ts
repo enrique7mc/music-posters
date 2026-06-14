@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
 import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
 import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
@@ -341,8 +341,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         url: playlistUrl,
       };
     } catch (error) {
-      const axiosError = error as AxiosError;
-      console.error('[Apple Music] Error creating playlist:', axiosError.response?.data || error);
+      // errMessage() only: a raw axios error carries config.headers (the bearer
+      // developer token + Music-User-Token), which util.inspect would print to logs.
+      console.error('[Apple Music] Error creating playlist:', errMessage(error));
       throw error;
     }
   }

@@ -469,7 +469,7 @@ export function mockPersonalize(artists: Artist[]): {
   gemCount: number;
   degraded: boolean;
 } {
-  const lovedReasons = 'Already in your library';
+  const lovedReason = 'Already in your library';
   const gemReasons = [
     'Same scene as the artists you love',
     'Shares producers with your top plays',
@@ -487,7 +487,7 @@ export function mockPersonalize(artists: Artist[]): {
         ...artist,
         affinity: 'loved' as const,
         affinityConfidence: 1,
-        affinityReason: lovedReasons,
+        affinityReason: lovedReason,
       };
     }
     if (i < lovedCap + gemCap) {

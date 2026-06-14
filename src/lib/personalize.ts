@@ -29,7 +29,10 @@ import { MusicPlatformService } from '@/lib/music-platform/types';
 const GEMINI_MODEL = 'gemini-3.5-flash';
 const GEM_MAX_COUNT = 12; // cap surfaced gems so the screen stays scannable
 const GEM_MIN_CONFIDENCE = 0.5; // drop low-confidence guesses
-const GEM_MATCH_THRESHOLD = 0.85; // gem name must clearly map back to a lineup name
+// Gem name must clearly map back to a submitted lineup name. Independent of
+// LOVED_MATCH_THRESHOLD despite the shared 0.85 — this gates a Gemini name
+// against the lineup, not a lineup name against the loved set.
+const GEM_MATCH_THRESHOLD = 0.85;
 const GEM_SEED_CAP = 8; // how many loved artists to seed Gemini with
 const GEM_LINKED_CAP = 3; // loved seeds surfaced per gem ("for fans of …")
 const GEM_REASON_MAX_LEN = 200; // cap untrusted Gemini reason text before it reaches state/DOM

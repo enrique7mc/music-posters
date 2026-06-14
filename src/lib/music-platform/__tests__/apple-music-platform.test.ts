@@ -187,4 +187,22 @@ describe('AppleMusicPlatformService error redaction (errMessage)', () => {
     expect(logged).not.toContain(SECRET);
     expect(logged).toContain('status code 500'); // logged the safe message instead
   });
+
+  it('never logs the bearer/user tokens when createPlaylist hits a network error', async () => {
+    // A network-level failure makes axios throw an error with NO `.response` —
+    // exactly the case the old `response?.data || error` fallback leaked, since
+    // it fell through to the raw axios error (config.headers carry both tokens).
+    server.use(
+      http.post('https://api.music.apple.com/v1/me/library/playlists', () => HttpResponse.error())
+    );
+
+    await expect(
+      service.createPlaylist('user-id', 'My Playlist', 'user-token-SECRET')
+    ).rejects.toBeTruthy();
+
+    expect(errorSpy).toHaveBeenCalled();
+    const logged = errorSpy.mock.calls.flat().map(String).join(' | ');
+    expect(logged).not.toContain(SECRET); // developer bearer token
+    expect(logged).not.toContain('user-token-SECRET'); // Music-User-Token
+  });
 });

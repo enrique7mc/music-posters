@@ -9,9 +9,9 @@
  *    the user we recognized an artist they don't actually listen to, which
  *    breaks trust, so the bar is higher.
  *
- * The normalization + similarity here was validated by the latency spike
- * (scripts/spike-personalize.ts): 12/14 zero false-positives at the 0.85
- * loved-overlap threshold on a real Apple Music library.
+ * The normalization + similarity here was validated by a throwaway latency
+ * spike: 12/14 zero false-positives at the 0.85 loved-overlap threshold on a
+ * real Apple Music library.
  */
 
 /** Default threshold for loved-overlap matching (conservative — see file header). */

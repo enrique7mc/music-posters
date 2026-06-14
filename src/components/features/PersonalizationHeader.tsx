@@ -26,7 +26,8 @@ function pct(confidence?: number): number {
 
 /**
  * Light, additive header that frames the personalization magic on the
- * review-artists screen ("8 you love, 5 gems"). Per locked decision #6 there are
+ * review-artists screen ("8 you already love · 5 hidden gems"). Per locked
+ * decision #6 there are
  * NO toggles here — affinity auto-derives the per-artist track mode downstream in
  * search-tracks. This header is purely informational.
  *
@@ -70,7 +71,7 @@ export default function PersonalizationHeader({
     return null;
   }
 
-  // Summary line: "8 you love · 5 gems", omitting any zero side.
+  // Summary line: "8 you already love · 5 hidden gems", omitting any zero side.
   const parts: string[] = [];
   if (loved.length > 0) {
     parts.push(`${loved.length} you already love`);

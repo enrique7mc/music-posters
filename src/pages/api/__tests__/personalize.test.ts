@@ -135,4 +135,20 @@ describe('/api/personalize', () => {
     expect(data.lovedCount).toBe(0);
     expect(data.artists[0].affinity).toBeUndefined();
   });
+
+  it('returns 401 on a platform mismatch (authed apple-music, body asks spotify)', async () => {
+    // Security boundary: a user authed with one platform must not run a
+    // personalize scan against another. A regression loosening this would
+    // otherwise pass every other test (none send a mismatched platform).
+    const { req, res } = createMocks({
+      method: 'POST',
+      headers: { cookie: APPLE_COOKIE },
+      body: { artists: [{ name: 'Phoenix' }], platform: 'spotify' },
+    });
+
+    await handler(req as any, res as any);
+
+    expect(res._getStatusCode()).toBe(401);
+    expect(JSON.parse(res._getData()).error).toMatch(/log in to spotify/i);
+  });
 });
