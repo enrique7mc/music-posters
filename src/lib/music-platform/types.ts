@@ -95,9 +95,12 @@ export interface MusicPlatformService {
    * platforms that expose a user library implement it (currently Apple Music).
    * Callers must guard on its presence and treat absence as "no personalization".
    * @param token - Platform-specific auth token (user-scoped)
-   * @returns Array of artist names in the user's library
+   * @returns `artists`: names in the user's library. `complete`: false if the
+   *   scan was truncated by an error or the page ceiling — callers should mark
+   *   the result degraded and skip gems so a partial library can't mislabel a
+   *   genuinely-loved artist as an unknown "gem".
    */
-  getLibraryArtists?(token: string): Promise<string[]>;
+  getLibraryArtists?(token: string): Promise<{ artists: string[]; complete: boolean }>;
 }
 
 /**

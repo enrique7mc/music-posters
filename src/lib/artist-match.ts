@@ -40,7 +40,7 @@ export function normalize(s: string): string {
  * Levenshtein edit distance between two strings (operates on the strings as
  * given — callers normalize first via `similarity`).
  */
-export function levenshteinDistance(s1: string, s2: string): number {
+function levenshteinDistance(s1: string, s2: string): number {
   const costs: number[] = [];
   for (let i = 0; i <= s1.length; i++) {
     let lastValue = i;
@@ -68,9 +68,11 @@ export function levenshteinDistance(s1: string, s2: string): number {
 export function similarity(a: string, b: string): number {
   const x = normalize(a);
   const y = normalize(b);
+  // A name that normalizes to "" (e.g. "&", "feat.", emoji-only) must NOT score
+  // 1.0 against another empty-normalizing name — that would be a false "loved".
+  if (x.length === 0 || y.length === 0) return 0;
   const longer = x.length >= y.length ? x : y;
   const shorter = x.length >= y.length ? y : x;
-  if (longer.length === 0) return 1;
   return (longer.length - levenshteinDistance(longer, shorter)) / longer.length;
 }
 

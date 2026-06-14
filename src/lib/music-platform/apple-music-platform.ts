@@ -14,6 +14,16 @@ const DEFAULT_STOREFRONT = 'us'; // US storefront for search
 const LIBRARY_PAGE_LIMIT = 100; // Apple's max page size for library endpoints
 const MAX_LIBRARY_PAGES = 50; // hard ceiling (~5000 artists) to protect the 30s route budget
 const LIBRARY_PAGE_THROTTLE_MS = 50; // inter-page delay to stay under rate limits
+const LIBRARY_PAGE_TIMEOUT_MS = 8000; // per-page deadline so one slow page can't ride to the 30s kill
+
+/**
+ * Extract a safe message from a caught error. NEVER log a raw axios error: its
+ * `config.headers` carries the developer bearer token and the Music-User-Token,
+ * which util.inspect would print straight into production logs.
+ */
+function errMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Selects tracks from a pool based on the selection mode.
@@ -167,7 +177,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         similarity: bestSimilarity,
       };
     } catch (error) {
-      console.error(`[Apple Music] Error searching for artist "${name}":`, error);
+      console.error(`[Apple Music] Error searching for artist "${name}":`, errMessage(error));
       return null;
     }
   }
@@ -221,7 +231,10 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         };
       });
     } catch (error) {
-      console.error(`[Apple Music] Error getting top tracks for artist ${artistId}:`, error);
+      console.error(
+        `[Apple Music] Error getting top tracks for artist ${artistId}:`,
+        errMessage(error)
+      );
       return [];
     }
   }
@@ -232,17 +245,22 @@ export class AppleMusicPlatformService implements MusicPlatformService {
    *  - 100 artists/page (Apple's max for library endpoints)
    *  - 50ms inter-page throttle to stay under rate limits
    *  - MAX_LIBRARY_PAGES ceiling so a huge library can't blow the route budget
+   *  - per-page timeout so one slow page can't ride to the 30s serverless kill
    *  - origin-prepend on `next` (never `/v1/v1`)
    *  - partial-success: on any page error, return what was collected so far
-   *    rather than throwing (caller falls back to a plain, unpersonalized list).
+   *    rather than throwing — but report `complete: false` so the caller can
+   *    mark the result degraded and skip gems (an unscanned loved artist must
+   *    not be mislabeled a "gem"). `complete` is also false when the page
+   *    ceiling is hit with more pages remaining.
    *
    * Requires the Music User Token (library data is user-scoped).
    */
-  async getLibraryArtists(token: string): Promise<string[]> {
+  async getLibraryArtists(token: string): Promise<{ artists: string[]; complete: boolean }> {
     const names: string[] = [];
     let url: string | null =
       `${APPLE_MUSIC_API_BASE_URL}/me/library/artists?limit=${LIBRARY_PAGE_LIMIT}`;
     let pages = 0;
+    let complete = true;
 
     while (url && pages < MAX_LIBRARY_PAGES) {
       // Apple's `next` is an absolute path (`/v1/me/...`). Prepend the ORIGIN
@@ -251,11 +269,18 @@ export class AppleMusicPlatformService implements MusicPlatformService {
 
       let data: any;
       try {
-        const response = await axios.get(requestUrl, { headers: this.getHeaders(token) });
+        const response = await axios.get(requestUrl, {
+          headers: this.getHeaders(token),
+          timeout: LIBRARY_PAGE_TIMEOUT_MS,
+        });
         data = response.data;
       } catch (error) {
-        console.error(`[Apple Music] Error scanning library artists (page ${pages + 1}):`, error);
-        break; // partial-success: keep whatever we already gathered
+        console.error(
+          `[Apple Music] Error scanning library artists (page ${pages + 1}):`,
+          errMessage(error)
+        );
+        complete = false; // partial/failed scan — keep what we have, flag incompleteness
+        break;
       }
 
       pages++;
@@ -269,12 +294,15 @@ export class AppleMusicPlatformService implements MusicPlatformService {
     }
 
     if (url && pages >= MAX_LIBRARY_PAGES) {
+      complete = false; // truncated by the ceiling — more pages remained
       console.warn(
         `[Apple Music] Library scan hit the ${MAX_LIBRARY_PAGES}-page ceiling; loved set may be truncated.`
       );
     }
-    console.log(`[Apple Music] Library scan: ${names.length} artists across ${pages} pages`);
-    return names;
+    console.log(
+      `[Apple Music] Library scan: ${names.length} artists across ${pages} pages (complete: ${complete})`
+    );
+    return { artists: names, complete };
   }
 
   async createPlaylist(

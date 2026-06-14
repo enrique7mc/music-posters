@@ -32,7 +32,26 @@ const GEM_MIN_CONFIDENCE = 0.5; // drop low-confidence guesses
 const GEM_MATCH_THRESHOLD = 0.85; // gem name must clearly map back to a lineup name
 const GEM_SEED_CAP = 8; // how many loved artists to seed Gemini with
 const GEM_LINKED_CAP = 3; // loved seeds surfaced per gem ("for fans of …")
+const GEM_REASON_MAX_LEN = 200; // cap untrusted Gemini reason text before it reaches state/DOM
 const GEMINI_MAX_ATTEMPTS = 3;
+const GEMINI_TIMEOUT_MS = 12000; // per-attempt deadline so a hung Gemini call can't ride to the 30s route kill
+
+/** Reject if `promise` doesn't settle within `ms`. Used to bound the Gemini call. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
 
 export interface PersonalizeResult {
   /** A copy of the input lineup with affinity fields merged in. */
@@ -131,8 +150,13 @@ export function selectGems(
     }
     if (!bestName || bestSim < matchThreshold) continue; // hallucinated / off-lineup
 
+    // Gemini is untrusted: cap the reason so a runaway/hostile response can't
+    // blow the header layout or bloat the response (name + confidence are
+    // already bounded; reason was the one unbounded field).
     const reason =
-      typeof raw.reason === 'string' && raw.reason.trim() ? raw.reason.trim() : undefined;
+      typeof raw.reason === 'string' && raw.reason.trim()
+        ? raw.reason.trim().slice(0, GEM_REASON_MAX_LEN)
+        : undefined;
     const existing = byLineupName.get(bestName);
     if (!existing || confidence > existing.confidence) {
       byLineupName.set(bestName, { lineupName: bestName, confidence, reason });
@@ -172,7 +196,11 @@ async function requestGems(seedNames: string[], unknownLineup: string[]): Promis
 
   for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
+      const result = await withTimeout(
+        model.generateContent(prompt),
+        GEMINI_TIMEOUT_MS,
+        'Gemini gems'
+      );
       const text = result.response.text();
       const gems = parseGemsResponse(text);
       if (gems.length > 0) return gems;
@@ -210,13 +238,22 @@ export async function personalizeLineup(
   }
 
   let lovedNames: string[] = [];
+  let scanComplete = true;
   let degraded = false;
   try {
-    lovedNames = await platform.getLibraryArtists(userToken);
+    const scan = await platform.getLibraryArtists(userToken);
+    lovedNames = scan.artists;
+    scanComplete = scan.complete;
   } catch (error) {
     console.error('[Personalize] Library scan threw:', error);
     degraded = true;
+    scanComplete = false;
   }
+
+  // A truncated/failed scan is incomplete: the loved matches we DID find are real,
+  // but an unscanned loved artist would wrongly land in `unknown` and could be
+  // surfaced as a "gem". Mark degraded and skip the gem pass entirely.
+  if (!scanComplete) degraded = true;
 
   // 2. Match lineup ∩ library (conservative threshold).
   const lineupNames = annotated.map((a) => a.name);
@@ -231,8 +268,9 @@ export async function personalizeLineup(
     }
   }
 
-  // 3. Empty-loved → skip gems entirely (no Gemini call, no cost).
-  if (loved.length === 0 || unknown.length === 0) {
+  // 3. Skip gems when there's nothing to seed from, or when the scan was
+  // incomplete (an unknown artist might actually be loved on an unscanned page).
+  if (loved.length === 0 || unknown.length === 0 || !scanComplete) {
     return { artists: annotated, lovedCount: loved.length, gemCount: 0, degraded };
   }
 

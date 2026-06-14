@@ -458,13 +458,6 @@ export const mockGeminiArtists: Artist[] = [
 ];
 
 /**
- * Get mock tracks for a specific platform.
- * Transforms the mock data to use platform-specific URLs and identifiers.
- *
- * @param platform - The music platform ('spotify' or 'apple-music')
- * @returns Array of Track objects for the specified platform
- */
-/**
  * Dev-only: fabricate a personalize result so the loved/gems header can be
  * eyeballed without a real Apple Music library or Gemini call. Tags a slice of
  * the lineup as `loved` and the next slice as `gem`, mirroring the field shape
@@ -515,6 +508,13 @@ export function mockPersonalize(artists: Artist[]): {
   return { artists: annotated, lovedCount, gemCount, degraded: false };
 }
 
+/**
+ * Get mock tracks for a specific platform.
+ * Transforms the mock data to use platform-specific URLs and identifiers.
+ *
+ * @param platform - The music platform ('spotify' or 'apple-music')
+ * @returns Array of Track objects for the specified platform
+ */
 export function getMockTracksForPlatform(platform: MusicPlatform): Track[] {
   if (platform === 'spotify') {
     return mockTracks;

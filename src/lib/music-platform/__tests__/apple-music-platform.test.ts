@@ -29,9 +29,10 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
       })
     );
 
-    const names = await service.getLibraryArtists('user-token');
+    const { artists, complete } = await service.getLibraryArtists('user-token');
 
-    expect(names).toEqual(['Phoenix', 'Caribou', 'Overmono']);
+    expect(artists).toEqual(['Phoenix', 'Caribou', 'Overmono']);
+    expect(complete).toBe(true); // read every page, no error
     // The second request resolves the relative `next` against the origin only —
     // it must keep a single `/v1`, not a doubled `/v1/v1`.
     expect(requested[1]).toBe(
@@ -40,7 +41,7 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
     expect(requested[1]).not.toContain('/v1/v1');
   });
 
-  it('returns partial results on a mid-scan page error (no throw)', async () => {
+  it('returns partial results AND complete:false on a mid-scan page error (no throw)', async () => {
     server.use(
       http.get(LIBRARY_URL, ({ request }) => {
         const offset = new URL(request.url).searchParams.get('offset');
@@ -54,9 +55,10 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
       })
     );
 
-    const names = await service.getLibraryArtists('user-token');
+    const { artists, complete } = await service.getLibraryArtists('user-token');
 
-    expect(names).toEqual(['Phoenix']); // kept the first page, swallowed the error
+    expect(artists).toEqual(['Phoenix']); // kept the first page, swallowed the error
+    expect(complete).toBe(false); // a failed page means the scan is incomplete
   });
 
   it('skips entries with no name and handles an empty library', async () => {
@@ -68,8 +70,30 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
       )
     );
 
-    const names = await service.getLibraryArtists('user-token');
+    const { artists, complete } = await service.getLibraryArtists('user-token');
 
-    expect(names).toEqual(['Phoenix']);
+    expect(artists).toEqual(['Phoenix']);
+    expect(complete).toBe(true); // clean single page
+  });
+
+  it('stops at the MAX_LIBRARY_PAGES ceiling instead of looping forever', async () => {
+    let calls = 0;
+    server.use(
+      // A library that ALWAYS returns another `next` — without the ceiling this loops forever.
+      http.get(LIBRARY_URL, ({ request }) => {
+        calls++;
+        const offset = Number(new URL(request.url).searchParams.get('offset') || 0);
+        return HttpResponse.json({
+          data: [{ attributes: { name: `Artist ${offset}` } }],
+          next: `/v1/me/library/artists?offset=${offset + 1}&limit=100`,
+        });
+      })
+    );
+
+    const { artists, complete } = await service.getLibraryArtists('user-token');
+
+    expect(calls).toBe(50); // MAX_LIBRARY_PAGES — did not loop unbounded
+    expect(artists).toHaveLength(50);
+    expect(complete).toBe(false); // truncated by the ceiling
   });
 });

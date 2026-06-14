@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Artist, TrackSelectionMode } from '@/types';
+import { Artist, PersonalizeResponse, TrackSelectionMode } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
@@ -143,12 +143,7 @@ export default function ReviewArtists() {
       .post('/api/personalize', { artists: artistsRef.current, platform })
       .then((res) => {
         if (!activeRef.current) return; // navigated away / stale
-        const data = res.data as {
-          artists: Artist[];
-          lovedCount: number;
-          gemCount: number;
-          degraded: boolean;
-        };
+        const data = res.data as PersonalizeResponse;
 
         setPersonalizeResult({
           lovedCount: data.lovedCount,
