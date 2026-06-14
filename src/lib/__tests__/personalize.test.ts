@@ -44,6 +44,17 @@ describe('parseGemsResponse', () => {
   it('returns [] for non-JSON (degrade, never throw)', () => {
     expect(parseGemsResponse('sorry, I cannot help with that')).toEqual([]);
   });
+
+  it('extracts a bare array embedded in prose (noisy-response fallback)', () => {
+    const text =
+      'Here are the gems you asked for: [{"name":"Anz","confidence":0.9,"reason":"techno"}] — enjoy!';
+    expect(parseGemsResponse(text)).toEqual([{ name: 'Anz', confidence: 0.9, reason: 'techno' }]);
+  });
+
+  it('extracts a gems object embedded in prose (noisy-response fallback)', () => {
+    const text = 'Sure! {"gems":[{"name":"Anz","confidence":0.8}]} Hope this helps.';
+    expect(parseGemsResponse(text)).toEqual([{ name: 'Anz', confidence: 0.8 }]);
+  });
 });
 
 describe('selectGems', () => {
@@ -232,5 +243,66 @@ describe('personalizeLineup', () => {
     expect(result.lovedCount).toBe(1); // the loved match we DID find still stands
     expect(result.gemCount).toBe(0); // gems skipped — an unscanned page could hold a "gem"
     expect(generateContent).not.toHaveBeenCalled(); // no Gemini call at all
+  });
+
+  it('retries with backoff on a transient Gemini failure, then succeeds', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.useFakeTimers();
+    try {
+      generateContent.mockRejectedValueOnce(new Error('transient 503')).mockResolvedValueOnce({
+        response: { text: () => '{"gems":[{"name":"Anz","confidence":0.9}]}' },
+      });
+
+      const promise = personalizeLineup(lineup, stubPlatform(['Phoenix']), 'token');
+      await vi.runAllTimersAsync(); // flush the exponential-backoff delay between attempts
+      const result = await promise;
+
+      expect(generateContent).toHaveBeenCalledTimes(2); // failed once, retried, succeeded
+      expect(result.gemCount).toBe(1);
+      expect(result.artists.find((a) => a.name === 'Anz')?.affinity).toBe('gem');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after GEMINI_MAX_ATTEMPTS and keeps loved-only (a gem failure is NOT degraded)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.useFakeTimers();
+    try {
+      generateContent.mockRejectedValue(new Error('persistent 500'));
+
+      const promise = personalizeLineup(lineup, stubPlatform(['Phoenix']), 'token');
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(generateContent).toHaveBeenCalledTimes(3); // GEMINI_MAX_ATTEMPTS exhausted
+      expect(result.gemCount).toBe(0);
+      expect(result.lovedCount).toBe(1); // loved annotations still stand
+      // A complete library scan is NOT degraded even when the gem pass fails —
+      // gems are a best-effort enhancement, not a failure of the core result.
+      expect(result.degraded).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds a hung Gemini call with a per-attempt timeout (never waits forever)', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.useFakeTimers();
+    try {
+      // A call that never settles — without withTimeout this would ride to the
+      // 30s serverless kill. The per-attempt deadline must reject and move on.
+      generateContent.mockReturnValue(new Promise(() => {}));
+
+      const promise = personalizeLineup(lineup, stubPlatform(['Phoenix']), 'token');
+      await vi.runAllTimersAsync(); // fires each per-attempt timeout + the backoffs
+      const result = await promise;
+
+      expect(generateContent).toHaveBeenCalledTimes(3); // timed out each attempt, then gave up
+      expect(result.gemCount).toBe(0);
+      expect(result.lovedCount).toBe(1); // loved still stands despite the hung gem pass
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { artistSchema, searchTracksSchema, MAX_ARTISTS_PER_SEARCH } from '../validation';
+import {
+  artistSchema,
+  searchTracksSchema,
+  personalizeSchema,
+  searchArtistSchema,
+  MAX_ARTISTS_PER_SEARCH,
+} from '../validation';
 
 describe('validation.ts', () => {
   describe('MAX_ARTISTS_PER_SEARCH', () => {
@@ -126,6 +132,73 @@ describe('validation.ts', () => {
       };
 
       expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
+    });
+  });
+
+  describe('personalizeSchema', () => {
+    it('should validate a minimal valid request', () => {
+      expect(() =>
+        personalizeSchema.parse({ artists: [{ name: 'Phoenix' }], platform: 'apple-music' })
+      ).not.toThrow();
+    });
+
+    it('STRIPS any client-supplied affinity metadata (server is the sole authority)', () => {
+      // The whole point of personalizeSchema using the bare artistSchema: a
+      // malicious/buggy client must not be able to pre-declare an artist as
+      // "loved" or "gem". Zod strips unrecognized keys by default.
+      const result = personalizeSchema.parse({
+        artists: [
+          {
+            name: 'Phoenix',
+            affinity: 'loved',
+            affinityConfidence: 0.99,
+            affinityReason: 'trust me',
+            affinityLinkedTo: ['Caribou'],
+          },
+        ],
+      });
+
+      expect(result.artists[0]).toEqual({ name: 'Phoenix' });
+      expect(result.artists[0]).not.toHaveProperty('affinity');
+      expect(result.artists[0]).not.toHaveProperty('affinityConfidence');
+    });
+
+    it('requires at least one artist', () => {
+      expect(() => personalizeSchema.parse({ artists: [] })).toThrow();
+    });
+
+    it(`caps the artist count at MAX_ARTISTS_PER_SEARCH (${MAX_ARTISTS_PER_SEARCH})`, () => {
+      const tooMany = Array.from({ length: MAX_ARTISTS_PER_SEARCH + 1 }, (_, i) => ({
+        name: `Artist ${i}`,
+      }));
+      expect(() => personalizeSchema.parse({ artists: tooMany })).toThrow();
+    });
+  });
+
+  describe('searchArtistSchema', () => {
+    it('KEEPS the affinity tag (search-tracks derives per-artist track mode from it)', () => {
+      const result = searchArtistSchema.parse({ name: 'Phoenix', affinity: 'loved' });
+      expect(result.affinity).toBe('loved');
+    });
+
+    it('strips the other affinity_* display fields, keeping only the tag', () => {
+      const result = searchArtistSchema.parse({
+        name: 'Anz',
+        affinity: 'gem',
+        affinityConfidence: 0.9,
+        affinityReason: 'for fans of Phoenix',
+        affinityLinkedTo: ['Phoenix'],
+      });
+      expect(result).toEqual({ name: 'Anz', affinity: 'gem' });
+    });
+
+    it('treats affinity as optional', () => {
+      const result = searchArtistSchema.parse({ name: 'Phoenix' });
+      expect(result.affinity).toBeUndefined();
+    });
+
+    it('rejects an affinity value outside the loved|gem enum', () => {
+      expect(() => searchArtistSchema.parse({ name: 'Phoenix', affinity: 'headliner' })).toThrow();
     });
   });
 });

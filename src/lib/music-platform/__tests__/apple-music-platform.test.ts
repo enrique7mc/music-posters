@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
 
 const LIBRARY_URL = 'https://api.music.apple.com/v1/me/library/artists';
+const SEARCH_URL = 'https://api.music.apple.com/v1/catalog/us/search';
 
 describe('AppleMusicPlatformService.getLibraryArtists', () => {
   let service: AppleMusicPlatformService;
@@ -95,5 +96,95 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
     expect(calls).toBe(50); // MAX_LIBRARY_PAGES — did not loop unbounded
     expect(artists).toHaveLength(50);
     expect(complete).toBe(false); // truncated by the ceiling
+  });
+});
+
+describe('AppleMusicPlatformService.searchArtist', () => {
+  let service: AppleMusicPlatformService;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+  });
+
+  // Stub the catalog search to return artists with the given names.
+  function stubCatalog(names: string[]) {
+    server.use(
+      http.get(SEARCH_URL, () =>
+        HttpResponse.json({
+          results: {
+            artists: {
+              data: names.map((name, i) => ({ id: `id-${i}`, attributes: { name } })),
+            },
+          },
+        })
+      )
+    );
+  }
+
+  it('matches an accented search term to a de-accented catalog name (normalize regression)', async () => {
+    // Post-refactor searchArtist runs both sides through the shared
+    // artist-match.normalize(), which strips accents. "Beyoncé" must still match
+    // a catalog "Beyonce" — a regression here would silently mismatch artists.
+    stubCatalog(['Beyonce']);
+    const result = await service.searchArtist('Beyoncé', 'user-token');
+    expect(result).not.toBeNull();
+    expect(result!.matched).toBe(true);
+    expect(result!.name).toBe('Beyonce');
+    expect(result!.similarity).toBe(1); // accents normalize away on both sides
+  });
+
+  it('picks the closest catalog entry, ignoring case/punctuation (normalize regression)', async () => {
+    // "Tyler, the Creator" vs "Tyler, The Creator" differ only by case;
+    // "Tyler Childers" is a different artist. normalize() must let the engine
+    // pick the right one, not just the first result.
+    stubCatalog(['Tyler Childers', 'Tyler, The Creator']);
+    const result = await service.searchArtist('Tyler, the Creator', 'user-token');
+    expect(result!.name).toBe('Tyler, The Creator');
+    expect(result!.matched).toBe(true);
+    expect(result!.similarity).toBe(1);
+  });
+
+  it('reports matched:false when the best catalog entry is below CATALOG_MATCH_THRESHOLD', async () => {
+    stubCatalog(['Caribou']); // nothing like "Phoenix"
+    const result = await service.searchArtist('Phoenix', 'user-token');
+    expect(result).not.toBeNull();
+    expect(result!.matched).toBe(false);
+    expect(result!.similarity).toBeLessThan(0.6);
+  });
+
+  it('returns null when the catalog has no results', async () => {
+    server.use(http.get(SEARCH_URL, () => HttpResponse.json({ results: {} })));
+    expect(await service.searchArtist('Nobody', 'user-token')).toBeNull();
+  });
+});
+
+describe('AppleMusicPlatformService error redaction (errMessage)', () => {
+  const SECRET = 'SUPERSECRET_DEV_TOKEN_do_not_log';
+  let service: AppleMusicPlatformService;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken(SECRET);
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it('never logs the bearer developer token when a search errors', async () => {
+    server.use(http.get(SEARCH_URL, () => new HttpResponse(null, { status: 500 })));
+
+    const result = await service.searchArtist('Phoenix', 'user-token');
+
+    expect(result).toBeNull(); // errors degrade to null, never throw
+    expect(errorSpy).toHaveBeenCalled();
+    // The raw axios error carries config.headers.Authorization = `Bearer ${SECRET}`.
+    // errMessage() extracts only error.message, so the token must never appear.
+    const logged = errorSpy.mock.calls.flat().map(String).join(' | ');
+    expect(logged).not.toContain(SECRET);
+    expect(logged).toContain('status code 500'); // logged the safe message instead
   });
 });
