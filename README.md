@@ -74,8 +74,14 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 ## Documentation
 
 - [Quick Start](QUICKSTART.md) - 5-minute setup
-- [Setup Guide](SETUP.md) - Detailed setup instructions
+- [Setup Guide](SETUP.md) - Detailed setup (Spotify, Apple Music, Vision, Gemini)
 - [Architecture](ARCHITECTURE.md) - System design and data flow
+- [docs/](docs/README.md) - Deep docs (Diátaxis), including the **user-aware
+  recommendations** feature:
+  [tutorial](docs/tutorial-personalization.md) ·
+  [how-to](docs/howto-personalization.md) ·
+  [reference](docs/reference-personalization.md) ·
+  [explanation](docs/explanation-personalization.md)
 - [Testing](TESTING.md) - Testing checklist
 - [Changelog](CHANGELOG.md) - Release history
 - [CLAUDE.md](CLAUDE.md) - Project guide, providers, and known limitations
