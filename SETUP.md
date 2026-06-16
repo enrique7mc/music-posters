@@ -1,12 +1,32 @@
 # Music Posters - Setup Guide
 
-This guide will walk you through setting up the Music Posters application from scratch.
+This guide walks you through setting up Music Posters (Playlistd) from scratch.
 
-## Prerequisites
+> **Which platform should I set up?** The **Spotify path is currently broken** by
+> Spotify's February 2026 Web API changes (Development Mode now requires the app
+> owner's Premium, plus removed endpoints). **Apple Music is the working
+> platform.** If you only want a working app, set up **Apple Music + Gemini** and
+> skip the Spotify steps. See [CLAUDE.md → Known Limitations](CLAUDE.md).
 
-- Node.js 18+ installed
-- A Spotify account
-- A Google Cloud account
+## What you need
+
+Pick based on what you want to run:
+
+| Goal                       | Required                                             |
+| -------------------------- | ---------------------------------------------------- |
+| Working app (recommended)  | Node.js 18+, Apple Developer account, Gemini API key |
+| Spotify (currently broken) | Node.js 18+, Spotify account, Google Cloud account   |
+| Best image analysis        | add Google Cloud Vision (for `hybrid` mode)          |
+
+Image analysis is chosen with `IMAGE_ANALYSIS_PROVIDER`:
+
+- `hybrid` (recommended) — Vision OCR + Gemini ranking. Needs **both** Vision and
+  Gemini credentials.
+- `gemini` — Gemini vision only. Needs `GEMINI_API_KEY`.
+- `vision` — OCR only, no ranking. Needs Google Cloud Vision.
+
+`GEMINI_API_KEY` is also what powers the **hidden gems** in personalization, so
+setting up Gemini is recommended regardless.
 
 ## 1. Install Dependencies
 
@@ -14,193 +34,224 @@ This guide will walk you through setting up the Music Posters application from s
 npm install
 ```
 
-## 2. Set Up Spotify Developer App
+## 2. Set Up Apple Music (recommended — the working platform)
 
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Click "Create an App"
-3. Fill in the details:
-   - App name: "Music Posters" (or your choice)
-   - App description: "Convert festival posters to playlists"
-   - Redirect URI: `http://localhost:3000/api/auth/callback`
-4. Click "Create"
-5. Click "Settings" to view your credentials
-6. Copy your **Client ID** and **Client Secret**
+Apple Music needs three credentials from the
+[Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list)
+(requires a paid Apple Developer membership).
 
-## 3. Set Up Google Cloud Vision API
+### 2.1 Create a MusicKit key
 
-### 3.1 Create a Google Cloud Project
+1. Go to **Certificates, Identifiers & Profiles → Keys**.
+2. Create a new key, enable **MusicKit**, and download the `.p8` private key file
+   (you can only download it once).
+3. Note the **Key ID** (shown next to the key).
+4. Note your **Team ID** (top-right of the developer account, or under Membership).
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project or select an existing one
-3. Enable billing for your project (required for Vision API)
+### 2.2 Add the credentials to `.env`
 
-### 3.2 Enable Vision API
+```env
+APPLE_MUSIC_TEAM_ID=your_apple_team_id
+APPLE_MUSIC_KEY_ID=your_apple_music_key_id
+# Paste the full PEM contents of the .p8 file, with literal \n for newlines:
+APPLE_MUSIC_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIGT...\n-----END PRIVATE KEY-----"
+```
 
-1. In your project, go to "APIs & Services" > "Library"
-2. Search for "Cloud Vision API"
-3. Click "Enable"
+The server signs a short-lived **developer token** (ES256 JWT) from these. The
+**Music User Token** is obtained in the browser via MusicKit JS when the user
+connects, and stored in an httpOnly cookie — no extra config needed.
 
-### 3.3 Create Service Account Credentials
+> Apple Music authorization requires the browser host to match `NEXTAUTH_URL`.
+> Use `127.0.0.1`, not `localhost`, or `store-token` returns `403 Invalid origin`.
 
-1. Go to "APIs & Services" > "Credentials"
-2. Click "Create Credentials" > "Service Account"
-3. Fill in the details:
-   - Service account name: "music-posters-vision"
-   - Service account description: "Vision API access for Music Posters"
-4. Click "Create and Continue"
-5. Grant the role: "Cloud Vision" > "Cloud Vision API User"
-6. Click "Continue" then "Done"
+## 3. Set Up Google Gemini API (recommended)
 
-### 3.4 Download Credentials JSON
+Gemini powers image ranking (in `gemini`/`hybrid` modes) and the hidden-gems
+recommendations.
 
-1. In the "Credentials" page, find your service account
-2. Click on the service account email
-3. Go to the "Keys" tab
-4. Click "Add Key" > "Create New Key"
-5. Choose "JSON" format
-6. Click "Create" - a JSON file will download
-7. Rename the file to `google-credentials.json`
-8. Move it to the root of your project directory
+1. Visit https://ai.google.dev and sign in.
+2. Create or select a project and generate an **API key**.
+3. Add it to `.env`:
 
-## 4. Configure Environment Variables
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key
+   IMAGE_ANALYSIS_PROVIDER=hybrid   # or 'gemini'
+   ```
 
-1. Copy the example environment file:
+Cost is about $0.0001 per poster analysis. Without `GEMINI_API_KEY`,
+personalization degrades to loved-only (no gems) and `gemini`/`hybrid` analysis
+won't work.
+
+## 4. Set Up Google Cloud Vision API (for `vision` or `hybrid`)
+
+Skip this if you use `IMAGE_ANALYSIS_PROVIDER=gemini`.
+
+### 4.1 Create a project and enable billing
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com).
+2. Create or select a project and enable billing (required for Vision).
+
+### 4.2 Enable the Vision API
+
+1. **APIs & Services → Library**, search "Cloud Vision API", click **Enable**.
+
+### 4.3 Create a service account key
+
+1. **APIs & Services → Credentials → Create Credentials → Service Account**.
+2. Name it (e.g. `music-posters-vision`) and grant **Cloud Vision API User**.
+3. Open the service account → **Keys → Add Key → Create New Key → JSON**.
+4. Rename the downloaded file to `google-credentials.json` and move it to the
+   project root.
+5. Point `.env` at it:
+
+   ```env
+   GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
+   ```
+
+## 5. Set Up Spotify (optional — currently broken)
+
+> The Spotify path won't create playlists until both the owner reconnects Premium
+> and the removed endpoints are migrated. These steps are kept for reference.
+
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Create an app. Set the Redirect URI to
+   `http://127.0.0.1:3000/api/auth/spotify/callback`.
+3. Copy the **Client ID** and **Client Secret** into `.env`:
+
+   ```env
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+   SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
+   ```
+
+## 6. Configure Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-2. Open `.env` and fill in your credentials:
+A complete `.env` for the recommended (Apple Music + hybrid) setup:
 
 ```env
-# Spotify API Credentials
-SPOTIFY_CLIENT_ID=your_spotify_client_id_here
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
+# Apple Music (the working platform)
+APPLE_MUSIC_TEAM_ID=your_apple_team_id
+APPLE_MUSIC_KEY_ID=your_apple_music_key_id
+APPLE_MUSIC_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 
-# Google Cloud Vision API
-GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
+# Image analysis: 'vision' | 'gemini' | 'hybrid'
+IMAGE_ANALYSIS_PROVIDER=hybrid
+GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json   # needed for vision/hybrid
+
+# Spotify (optional, currently broken)
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
 
 # Next.js
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=http://127.0.0.1:3000
 NEXTAUTH_SECRET=generate_a_random_secret_here
+
+# Dev panel (never set true in production)
+DEV_MODE=false
 ```
 
-3. For `NEXTAUTH_SECRET`, generate a random string:
+Generate `NEXTAUTH_SECRET`:
 
 ```bash
-# On macOS/Linux
 openssl rand -base64 32
-
-# Or use any random string generator
 ```
 
-## 5. Verify Setup
+> Environment variables are read when the Node process starts — restart
+> `npm run dev` after editing `.env`.
 
-Make sure you have:
+## 7. Verify Setup
 
-- ✅ Created a Spotify Developer App
-- ✅ Set the redirect URI to `http://localhost:3000/api/auth/callback`
-- ✅ Enabled Google Cloud Vision API
-- ✅ Downloaded `google-credentials.json` to the project root
-- ✅ Filled in all environment variables in `.env`
+For the recommended setup, confirm:
 
-## 6. Run the Development Server
+- ✅ MusicKit key created; `APPLE_MUSIC_TEAM_ID` / `KEY_ID` / `PRIVATE_KEY` set
+- ✅ `GEMINI_API_KEY` set and `IMAGE_ANALYSIS_PROVIDER` chosen
+- ✅ `google-credentials.json` in the project root (if using `vision`/`hybrid`)
+- ✅ `NEXTAUTH_URL=http://127.0.0.1:3000` (Apple Music origin check)
+- ✅ `NEXTAUTH_SECRET` generated
+
+## 8. Run the Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open **http://127.0.0.1:3000** (not `localhost` — the Apple Music origin check and
+Spotify OAuth both require `127.0.0.1`).
 
-## 7. Test the Application
+## 9. Test the Application
 
-1. Click "Connect with Spotify"
-2. Log in to your Spotify account
-3. Upload a festival poster image (you can search for "Coachella poster" or "Lollapalooza poster" online)
-4. Click "Analyze Poster"
-5. Review the detected artists
-6. Click "Create Spotify Playlist"
-7. Check your Spotify account for the new playlist!
+1. On the landing page, choose **Apple Music** and connect (authorize in the
+   MusicKit prompt).
+2. Upload a festival poster (search an image site for "Coachella poster").
+3. On **Review Artists**, watch the **"Personalized for you"** header appear with
+   the artists you already love and hidden gems (give it ~10s).
+4. Click **Search Tracks & Continue**, review the tracks, and create the playlist.
+5. Check your Apple Music library for the new playlist.
+
+To exercise the UI without real credentials, set `DEV_MODE=true` and use the dev
+panel — see
+[docs/howto-personalization.md](docs/howto-personalization.md#test-without-an-apple-account-dev-mode).
 
 ## Troubleshooting
 
-### "Not authenticated" error
+### "403 Invalid origin" when connecting Apple Music
 
-- Make sure you've logged in with Spotify
-- Check that your Spotify credentials are correct in `.env`
-- Verify the redirect URI matches exactly in both Spotify Dashboard and `.env`
+- The browser host must match `NEXTAUTH_URL`. Use `http://127.0.0.1:3000` and set
+  `NEXTAUTH_URL=http://127.0.0.1:3000`.
 
-### "Failed to analyze image" error
+### Apple Music developer-token errors
 
-- Check that `google-credentials.json` exists in the project root
-- Verify the Vision API is enabled in Google Cloud Console
-- Make sure billing is enabled on your Google Cloud project
-- Check the file path in `GOOGLE_APPLICATION_CREDENTIALS`
+- Verify `APPLE_MUSIC_TEAM_ID`, `APPLE_MUSIC_KEY_ID`, and `APPLE_MUSIC_PRIVATE_KEY`
+  are set. The private key must be the full PEM with `\n`-escaped newlines.
 
-### "Could not find any tracks" error
+### The personalization header never appears
 
-- The OCR might not have detected any artist names
-- Try a different poster with clearer text
-- Check the console logs to see what text was extracted
+- It runs on **Apple Music only**, and only when the lineup overlaps your library.
+  See [docs/howto-personalization.md → Troubleshooting](docs/howto-personalization.md#troubleshooting).
 
-### OAuth redirect issues
+### "Failed to analyze image"
 
-- Make sure the redirect URI in Spotify Dashboard **exactly** matches the one in `.env`
-- It should be: `http://localhost:3000/api/auth/callback` (no trailing slash)
-- The redirect URI is case-sensitive
+- `gemini`/`hybrid`: check `GEMINI_API_KEY`. `vision`/`hybrid`: check
+  `google-credentials.json` exists, Vision API is enabled, and billing is on.
 
-## Production Deployment
+### "Could not find any tracks"
 
-### Vercel (Recommended)
+- The analyzer may have extracted non-artist text, or the lineup didn't match the
+  catalog. Try a clearer poster; check the server console for per-artist matches.
 
-1. Push your code to GitHub (make sure `.env` and `google-credentials.json` are in `.gitignore`)
+### Spotify OAuth / "INVALID_CLIENT: Invalid redirect URI"
 
-2. Go to [Vercel](https://vercel.com) and import your repository
+- Use `127.0.0.1` (not `localhost`) and make the redirect URI match **exactly** in
+  both `.env` and the Spotify Dashboard. (Spotify playlist creation is currently
+  broken regardless — see the banner above.)
 
-3. Add environment variables in Vercel:
-   - `SPOTIFY_CLIENT_ID`
-   - `SPOTIFY_CLIENT_SECRET`
-   - `SPOTIFY_REDIRECT_URI` (update to your production URL: `https://your-domain.vercel.app/api/auth/callback`)
-   - `NEXTAUTH_URL` (your production URL)
-   - `NEXTAUTH_SECRET`
+## Production Deployment (Vercel)
 
-4. For Google Cloud credentials:
-   - Option 1: Copy the entire contents of `google-credentials.json` and add as `GOOGLE_APPLICATION_CREDENTIALS` env var
-   - Option 2: Use Vercel's file upload feature for sensitive files
-
-5. Update Spotify redirect URI:
-   - Go to your Spotify Developer Dashboard
-   - Add the production redirect URI: `https://your-domain.vercel.app/api/auth/callback`
-
-6. Deploy!
-
-## API Rate Limits
-
-- **Spotify API**: 180 requests per minute (authenticated)
-- **Google Vision API**: Free tier includes 1,000 requests per month
-
-For posters with many artists (50+), the Spotify API calls might take 20-30 seconds due to rate limiting.
+1. Push to GitHub (`.env` and `google-credentials.json` stay in `.gitignore`).
+2. Import the repo in [Vercel](https://vercel.com).
+3. Add every variable from your `.env` in the Vercel dashboard. For
+   `GOOGLE_APPLICATION_CREDENTIALS`, paste the JSON contents as the value (or use
+   Vercel's file feature).
+4. Update `SPOTIFY_REDIRECT_URI` and `NEXTAUTH_URL` to the production URL, and add
+   the production redirect URI in the Spotify Dashboard.
+5. Deploy. Production runs at `https://playlistd.xemc.dev`.
 
 ## Cost Considerations
 
-- **Spotify API**: Free
-- **Google Vision API**:
-  - First 1,000 requests/month: Free
-  - After that: $1.50 per 1,000 requests
-  - [Pricing details](https://cloud.google.com/vision/pricing)
+- **Apple Music API / Spotify API:** free (a paid Apple Developer membership is
+  required to issue MusicKit keys).
+- **Gemini:** ~$0.0001 per poster analysis.
+- **Google Vision:** first 1,000 requests/month free, then $1.50 per 1,000.
 
 ## Next Steps
 
-- Test with various festival posters
-- Share with friends
-- Consider adding features from the V2 backlog
-
-## Support
-
-If you encounter issues:
-
-1. Check the browser console for errors
-2. Check the terminal/server logs
-3. Verify all environment variables are set correctly
-4. Make sure your Google Cloud project has billing enabled
+- [QUICKSTART.md](QUICKSTART.md) — condensed setup
+- [docs/](docs/README.md) — deep docs, including the personalization feature
+- [TESTING.md](TESTING.md) — full test checklist
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system design

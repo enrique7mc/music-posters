@@ -458,6 +458,57 @@ export const mockGeminiArtists: Artist[] = [
 ];
 
 /**
+ * Dev-only: fabricate a personalize result so the loved/gems header can be
+ * eyeballed without a real Apple Music library or Gemini call. Tags a slice of
+ * the lineup as `loved` and the next slice as `gem`, mirroring the field shape
+ * the real engine (src/lib/personalize.ts) produces. NOT a real taste signal.
+ */
+export function mockPersonalize(artists: Artist[]): {
+  artists: Artist[];
+  lovedCount: number;
+  gemCount: number;
+  degraded: boolean;
+} {
+  const lovedReason = 'Already in your library';
+  const gemReasons = [
+    'Same scene as the artists you love',
+    'Shares producers with your top plays',
+    'A natural step from your library',
+    'Festival favorite in your genre',
+  ];
+
+  // Spread the tags out so the header has a couple of each on a typical lineup.
+  const lovedCap = Math.min(3, Math.ceil(artists.length / 3));
+  const gemCap = Math.min(4, Math.ceil(artists.length / 3));
+
+  const annotated = artists.map((artist, i) => {
+    if (i < lovedCap) {
+      return {
+        ...artist,
+        affinity: 'loved' as const,
+        affinityConfidence: 1,
+        affinityReason: lovedReason,
+      };
+    }
+    if (i < lovedCap + gemCap) {
+      const gemIndex = i - lovedCap;
+      return {
+        ...artist,
+        affinity: 'gem' as const,
+        affinityConfidence: 0.85 - gemIndex * 0.08, // descending, all >= GEM_MIN_CONFIDENCE
+        affinityReason: gemReasons[gemIndex % gemReasons.length],
+        affinityLinkedTo: artists.slice(0, lovedCap).map((a) => a.name),
+      };
+    }
+    return artist;
+  });
+
+  const lovedCount = annotated.filter((a) => a.affinity === 'loved').length;
+  const gemCount = annotated.filter((a) => a.affinity === 'gem').length;
+  return { artists: annotated, lovedCount, gemCount, degraded: false };
+}
+
+/**
  * Get mock tracks for a specific platform.
  * Transforms the mock data to use platform-specific URLs and identifiers.
  *

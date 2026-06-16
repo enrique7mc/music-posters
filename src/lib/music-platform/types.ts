@@ -88,6 +88,19 @@ export interface MusicPlatformService {
    * @param token - Platform-specific auth token
    */
   uploadPlaylistCover?(playlistId: string, base64ImageData: string, token: string): Promise<void>;
+
+  /**
+   * Scan the authenticated user's full library of artists, used to detect which
+   * lineup artists the user already "loves" for personalization. Optional — only
+   * platforms that expose a user library implement it (currently Apple Music).
+   * Callers must guard on its presence and treat absence as "no personalization".
+   * @param token - Platform-specific auth token (user-scoped)
+   * @returns `artists`: names in the user's library. `complete`: false if the
+   *   scan was truncated by an error or the page ceiling — callers should mark
+   *   the result degraded and skip gems so a partial library can't mislabel a
+   *   genuinely-loved artist as an unknown "gem".
+   */
+  getLibraryArtists?(token: string): Promise<{ artists: string[]; complete: boolean }>;
 }
 
 /**

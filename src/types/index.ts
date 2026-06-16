@@ -15,12 +15,26 @@ export interface PlatformUser {
 // Artist Types
 // ============================================================================
 
+/**
+ * User-taste relationship to an artist, derived from the authed user's library.
+ * - 'loved': the lineup artist is already in the user's library (fuzzy match).
+ * - 'gem':   the user doesn't know them, but they're a likely taste match
+ *            (surfaced by Gemini, seeded from the loved set).
+ * Populated by POST /api/personalize. Prefixed to avoid colliding with the
+ * existing `reasoning` field (which explains the visual-prominence weight).
+ */
+export type Affinity = 'loved' | 'gem';
+
 export interface Artist {
   name: string;
   weight?: number; // 1-10 prominence score (populated by Gemini, undefined for Vision)
   tier?: 'headliner' | 'sub-headliner' | 'mid-tier' | 'undercard'; // Visual tier
   reasoning?: string; // Why this weight was assigned
   spotifyId?: string;
+  affinity?: Affinity; // User-taste tag (loved/gem); undefined = untagged
+  affinityConfidence?: number; // 0-1 match/recommendation confidence
+  affinityReason?: string; // Why this is a gem (or how the loved match was made)
+  affinityLinkedTo?: string[]; // Loved/seed artist names a gem was linked to
 }
 
 export interface AnalyzeResponse {
@@ -35,6 +49,13 @@ export interface CreatePlaylistResponse {
   playlistUrl: string;
   playlistId: string;
   tracksAdded: number;
+}
+
+export interface PersonalizeResponse {
+  artists: Artist[]; // Lineup with affinity fields merged in (loved/gem tags)
+  lovedCount: number;
+  gemCount: number;
+  degraded: boolean; // True if a sub-step failed; client should hide the loved/gems UI
 }
 
 export interface SpotifyTokens {

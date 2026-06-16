@@ -147,11 +147,13 @@ music-posters/
 
 ## What's NOT Included (By Design)
 
-These features were explicitly cut for MVP speed:
+These features were explicitly cut for MVP speed. Several have since shipped (see
+[CHANGELOG.md](CHANGELOG.md)):
 
-- ❌ Artist ranking by font size/position
-- ❌ Manual artist review/editing
-- ❌ Apple Music integration
+- ✅ Artist ranking by visual prominence (Gemini/Hybrid providers) — shipped
+- ✅ Artist review screen (review-artists) — shipped
+- ✅ Apple Music integration — shipped (now the working platform; see Spotify note below)
+- ✅ User-aware recommendations (loved + hidden gems, Apple Music) — shipped in v0.2.0
 - ❌ Async processing (queues/workers)
 - ❌ Database or caching
 - ❌ User accounts or history
@@ -214,9 +216,8 @@ Follow the deployment section in [SETUP.md](SETUP.md) for Vercel deployment.
    - Impact: 50+ artist posters take 30-60 seconds
    - Solution: Already using parallel requests; V2 could add caching
 
-3. **No Preview**: Users can't review artists before playlist creation
-   - Decision: Intentionally cut for MVP
-   - V2: Add manual review screen
+3. ~~**No Preview**~~: ✅ Resolved — a review-artists screen now lets users review
+   the ranked lineup (and loved/gems on Apple Music) before playlist creation
 
 4. **Serverless Timeout**: 10 seconds on Vercel free tier
    - Impact: Very large images might timeout
@@ -282,11 +283,11 @@ npm run build
 
 ## V2 Feature Backlog
 
-Ideas for future iterations:
+Ideas for future iterations (items 1-3 have since shipped):
 
-1. **Artist Review Screen**: Let users edit the list before playlist creation
-2. **Font Size Ranking**: Use Vision API bounding boxes to prioritize headliners
-3. **Apple Music**: Add support for Apple Music playlists
+1. ~~**Artist Review Screen**~~: ✅ Shipped — review-artists screen
+2. ~~**Font Size Ranking**~~: ✅ Shipped — Gemini/Hybrid rank by visual prominence
+3. ~~**Apple Music**~~: ✅ Shipped — now the working playlist platform
 4. **Async Processing**: Add job queue for long-running tasks
 5. **Caching**: Cache Spotify search results
 6. **User History**: Store past playlists (requires database)

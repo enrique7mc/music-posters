@@ -1,42 +1,28 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
 import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
+import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
+// Origin only (no `/v1`). Apple's pagination `next` is an absolute path like
+// `/v1/me/library/artists?offset=100`, so we prepend the origin to it — prepending
+// the base URL would produce a broken `/v1/v1` path (observed in the spike).
+const APPLE_MUSIC_API_ORIGIN = 'https://api.music.apple.com';
 const DEFAULT_STOREFRONT = 'us'; // US storefront for search
 
+// Library scan tuning (getLibraryArtists)
+const LIBRARY_PAGE_LIMIT = 100; // Apple's max page size for library endpoints
+const MAX_LIBRARY_PAGES = 50; // hard ceiling (~5000 artists) to protect the 30s route budget
+const LIBRARY_PAGE_THROTTLE_MS = 50; // inter-page delay to stay under rate limits
+const LIBRARY_PAGE_TIMEOUT_MS = 8000; // per-page deadline so one slow page can't ride to the 30s kill
+
 /**
- * Helper function to calculate string similarity (Levenshtein distance-based)
+ * Extract a safe message from a caught error. NEVER log a raw axios error: its
+ * `config.headers` carries the developer bearer token and the Music-User-Token,
+ * which util.inspect would print straight into production logs.
  */
-function similarity(s1: string, s2: string): number {
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-
-  if (longer.length === 0) return 1.0;
-
-  const editDistance = levenshteinDistance(longer.toLowerCase(), shorter.toLowerCase());
-  return (longer.length - editDistance) / longer.length;
-}
-
-function levenshteinDistance(s1: string, s2: string): number {
-  const costs = [];
-  for (let i = 0; i <= s1.length; i++) {
-    let lastValue = i;
-    for (let j = 0; j <= s2.length; j++) {
-      if (i === 0) {
-        costs[j] = j;
-      } else if (j > 0) {
-        let newValue = costs[j - 1];
-        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-        }
-        costs[j - 1] = lastValue;
-        lastValue = newValue;
-      }
-    }
-    if (i > 0) costs[s2.length] = lastValue;
-  }
-  return costs[s2.length];
+function errMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -168,9 +154,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         }
       }
 
-      // Require at least 60% similarity to avoid completely wrong matches
-      const SIMILARITY_THRESHOLD = 0.6;
-      const matched = bestSimilarity >= SIMILARITY_THRESHOLD;
+      // Require at least 60% similarity to avoid completely wrong matches.
+      // Catalog search is recall-oriented; loved-overlap uses a stricter bar.
+      const matched = bestSimilarity >= CATALOG_MATCH_THRESHOLD;
 
       if (!matched) {
         console.warn(
@@ -191,7 +177,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         similarity: bestSimilarity,
       };
     } catch (error) {
-      console.error(`[Apple Music] Error searching for artist "${name}":`, error);
+      console.error(`[Apple Music] Error searching for artist "${name}":`, errMessage(error));
       return null;
     }
   }
@@ -245,9 +231,96 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         };
       });
     } catch (error) {
-      console.error(`[Apple Music] Error getting top tracks for artist ${artistId}:`, error);
+      console.error(
+        `[Apple Music] Error getting top tracks for artist ${artistId}:`,
+        errMessage(error)
+      );
       return [];
     }
+  }
+
+  /**
+   * Scan the authenticated user's full library of artists (the "loved" set used
+   * by personalization). Paginated, throttled, and capped:
+   *  - 100 artists/page (Apple's max for library endpoints)
+   *  - 50ms inter-page throttle to stay under rate limits
+   *  - MAX_LIBRARY_PAGES ceiling so a huge library can't blow the route budget
+   *  - per-page timeout so one slow page can't ride to the 30s serverless kill
+   *  - origin-prepend on `next` (never `/v1/v1`)
+   *  - partial-success: on any page error, return what was collected so far
+   *    rather than throwing — but report `complete: false` so the caller can
+   *    mark the result degraded and skip gems (an unscanned loved artist must
+   *    not be mislabeled a "gem"). `complete` is also false when the page
+   *    ceiling is hit with more pages remaining.
+   *
+   * Requires the Music User Token (library data is user-scoped).
+   */
+  async getLibraryArtists(token: string): Promise<{ artists: string[]; complete: boolean }> {
+    const names: string[] = [];
+    let url: string | null =
+      `${APPLE_MUSIC_API_BASE_URL}/me/library/artists?limit=${LIBRARY_PAGE_LIMIT}`;
+    let pages = 0;
+    let complete = true;
+
+    while (url && pages < MAX_LIBRARY_PAGES) {
+      // Apple's `next` is an absolute path (`/v1/me/...`). Prepend the ORIGIN
+      // only — prepending the base URL (which ends in `/v1`) yields `/v1/v1`.
+      const requestUrl = url.startsWith('http') ? url : `${APPLE_MUSIC_API_ORIGIN}${url}`;
+
+      // `next` is attacker-influenceable (it comes from the upstream response
+      // body). We attach the developer bearer token + Music-User-Token to this
+      // request, so it must ONLY ever go to Apple — otherwise a malformed or
+      // compromised `next` URL exfiltrates both tokens. Refuse anything else.
+      let requestOrigin = '';
+      try {
+        requestOrigin = new URL(requestUrl).origin;
+      } catch {
+        requestOrigin = '';
+      }
+      if (requestOrigin !== APPLE_MUSIC_API_ORIGIN) {
+        console.error(
+          `[Apple Music] Refusing to follow non-Apple pagination URL (page ${pages + 1}); stopping scan.`
+        );
+        complete = false; // partial scan — treat like a failed page
+        break;
+      }
+
+      let data: any;
+      try {
+        const response = await axios.get(requestUrl, {
+          headers: this.getHeaders(token),
+          timeout: LIBRARY_PAGE_TIMEOUT_MS,
+        });
+        data = response.data;
+      } catch (error) {
+        console.error(
+          `[Apple Music] Error scanning library artists (page ${pages + 1}):`,
+          errMessage(error)
+        );
+        complete = false; // partial/failed scan — keep what we have, flag incompleteness
+        break;
+      }
+
+      pages++;
+      for (const artist of data?.data || []) {
+        const name = artist?.attributes?.name;
+        if (name) names.push(name);
+      }
+
+      url = typeof data?.next === 'string' ? data.next : null;
+      if (url && pages < MAX_LIBRARY_PAGES) await delay(LIBRARY_PAGE_THROTTLE_MS);
+    }
+
+    if (url && pages >= MAX_LIBRARY_PAGES) {
+      complete = false; // truncated by the ceiling — more pages remained
+      console.warn(
+        `[Apple Music] Library scan hit the ${MAX_LIBRARY_PAGES}-page ceiling; loved set may be truncated.`
+      );
+    }
+    console.log(
+      `[Apple Music] Library scan: ${names.length} artists across ${pages} pages (complete: ${complete})`
+    );
+    return { artists: names, complete };
   }
 
   async createPlaylist(
@@ -286,8 +359,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         url: playlistUrl,
       };
     } catch (error) {
-      const axiosError = error as AxiosError;
-      console.error('[Apple Music] Error creating playlist:', axiosError.response?.data || error);
+      // errMessage() only: a raw axios error carries config.headers (the bearer
+      // developer token + Music-User-Token), which util.inspect would print to logs.
+      console.error('[Apple Music] Error creating playlist:', errMessage(error));
       throw error;
     }
   }
