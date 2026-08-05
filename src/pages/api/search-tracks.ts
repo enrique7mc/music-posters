@@ -4,8 +4,10 @@ import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform, searchAndGetTopTracks } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
+import { PlatformAccessError } from '@/lib/music-platform/types';
 import { SearchTracksResponse, MusicPlatform } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { errDetail } from '@/lib/safe-log';
 import { searchTracksSchema, validateRequest } from '@/lib/validation';
 
 /**
@@ -194,7 +196,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(200).json(response);
   } catch (error: any) {
-    console.error('Error searching tracks:', error);
+    // errDetail() only — raw axios errors carry the access token in config.headers.
+    console.error('Error searching tracks:', errDetail(error));
+
+    // The platform refused us at the access-control layer (e.g. Spotify's Feb-2026
+    // tier gating on /artists/{id}/top-tracks). Surfaced as a distinct message because
+    // "no tracks found" would send the user hunting for a problem with their poster.
+    if (error instanceof PlatformAccessError) {
+      const platformName = error.platform === 'spotify' ? 'Spotify' : 'Apple Music';
+      return res.status(502).json({
+        error:
+          `${platformName} denied access to a required endpoint (${error.endpoint}, HTTP ${error.status}). ` +
+          `This is an app-permission issue, not a problem with your poster.`,
+      });
+    }
 
     // Handle API errors
     if (error.response?.status === 401) {

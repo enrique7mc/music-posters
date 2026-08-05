@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { parse, serialize } from 'cookie';
 import { exchangeCodeForTokens } from '@/lib/spotify';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { errDetail } from '@/lib/safe-log';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -32,10 +33,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // In development, derive redirect URI from request host to match login
+    // Must be byte-identical to the redirect_uri sent to /authorize — Spotify
+    // rejects the token exchange otherwise. Keep this in lockstep with
+    // spotify/login.ts. In production, `undefined` makes exchangeCodeForTokens
+    // fall back to SPOTIFY_REDIRECT_URI, which is what login.ts sent.
     const redirectUri =
       process.env.NODE_ENV !== 'production'
-        ? `http://${req.headers.host}/api/auth/callback`
+        ? `http://${req.headers.host}/api/auth/spotify/callback`
         : undefined;
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
@@ -72,7 +76,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Redirect to upload page after successful authentication
     res.redirect('/upload');
   } catch (err) {
-    console.error('Error exchanging code for tokens:', err);
+    // errDetail() only. The axios error for this call carries `config.data`, which is
+    // the token-exchange form body — it contains SPOTIFY_CLIENT_SECRET in plaintext.
+    console.error('Error exchanging code for tokens:', errDetail(err));
     res.redirect('/?error=auth_failed');
   }
 }

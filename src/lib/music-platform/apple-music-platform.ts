@@ -2,6 +2,10 @@ import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
 import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
 import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
+// Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
+// never reach console.error (config.headers carries the developer bearer token and
+// the Music-User-Token).
+import { errMessage } from '@/lib/safe-log';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
 // Origin only (no `/v1`). Apple's pagination `next` is an absolute path like
@@ -15,15 +19,6 @@ const LIBRARY_PAGE_LIMIT = 100; // Apple's max page size for library endpoints
 const MAX_LIBRARY_PAGES = 50; // hard ceiling (~5000 artists) to protect the 30s route budget
 const LIBRARY_PAGE_THROTTLE_MS = 50; // inter-page delay to stay under rate limits
 const LIBRARY_PAGE_TIMEOUT_MS = 8000; // per-page deadline so one slow page can't ride to the 30s kill
-
-/**
- * Extract a safe message from a caught error. NEVER log a raw axios error: its
- * `config.headers` carries the developer bearer token and the Music-User-Token,
- * which util.inspect would print straight into production logs.
- */
-function errMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * Selects tracks from a pool based on the selection mode.

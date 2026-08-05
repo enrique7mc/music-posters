@@ -1,6 +1,25 @@
 import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
-import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
+import {
+  MusicPlatformService,
+  ArtistSearchResult,
+  PlaylistResult,
+  PlatformAccessError,
+} from './types';
+import { errMessage } from '@/lib/safe-log';
+
+/**
+ * 401/403 mean the app isn't permitted to call this endpoint at all — retrying per
+ * artist is pointless. Rethrow as PlatformAccessError so the orchestrator aborts the
+ * batch instead of grinding through every remaining artist. Anything else (404,
+ * network blip, malformed response) stays a per-artist degradation.
+ */
+function throwIfAccessDenied(error: unknown, endpoint: string): void {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 401 || status === 403) {
+    throw new PlatformAccessError('spotify', status, endpoint);
+  }
+}
 
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
 
@@ -139,7 +158,9 @@ export class SpotifyPlatformService implements MusicPlatformService {
         similarity: bestSimilarity,
       };
     } catch (error) {
-      console.error(`[Spotify] Error searching for artist "${name}":`, error);
+      throwIfAccessDenied(error, 'GET /search');
+      // errMessage() only — a raw axios error carries config.headers.Authorization.
+      console.error(`[Spotify] Error searching for artist "${name}":`, errMessage(error));
       return null;
     }
   }
@@ -181,7 +202,11 @@ export class SpotifyPlatformService implements MusicPlatformService {
         platform: 'spotify' as const,
       }));
     } catch (error) {
-      console.error(`[Spotify] Error getting top tracks for artist ${artistId}:`, error);
+      throwIfAccessDenied(error, 'GET /artists/{id}/top-tracks');
+      console.error(
+        `[Spotify] Error getting top tracks for artist ${artistId}:`,
+        errMessage(error)
+      );
       return [];
     }
   }

@@ -5,7 +5,8 @@ import { getMusicPlatform } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { SpotifyPlatformService } from '@/lib/music-platform/spotify-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
-import { getPlaylistTracks, uploadPlaylistCover } from '@/lib/spotify';
+import { getPlaylistTracks } from '@/lib/spotify';
+import { errDetail } from '@/lib/safe-log';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 import { generatePlaylistCover } from '@/lib/cover-generator';
@@ -198,7 +199,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       platform,
     });
   } catch (error: any) {
-    console.error('Error creating playlist:', error);
+    // errDetail() only — createPlaylist/addTracksToPlaylist rethrow raw axios errors,
+    // whose config.headers carry the Spotify bearer or Apple Music-User-Token.
+    console.error('Error creating playlist:', errDetail(error));
 
     // Handle API errors
     if (error.response?.status === 401) {

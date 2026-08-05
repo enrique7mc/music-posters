@@ -1,6 +1,35 @@
 import { Track, PlatformUser, MusicPlatform, TrackSelectionMode } from '@/types';
 
 /**
+ * Thrown when a platform rejects us at the access-control layer (401/403) rather
+ * than failing on data. These are NOT per-artist failures — if the platform won't
+ * authorize one call it won't authorize the next 58 either, so callers should abort
+ * the whole batch instead of degrading to an empty result per artist.
+ *
+ * Motivating case: Spotify's Feb-2026 tier gating returns 403 on
+ * `/artists/{id}/top-tracks` for every request. Before this existed, a 59-artist
+ * poster burned 59 requests over 48 seconds and then reported the useless
+ * "Could not find any tracks" — instead of "Spotify denied access to this endpoint."
+ */
+export class PlatformAccessError extends Error {
+  readonly status: number;
+  readonly platform: MusicPlatform;
+  readonly endpoint: string;
+
+  constructor(platform: MusicPlatform, status: number, endpoint: string, message?: string) {
+    super(
+      message ??
+        `${platform} denied access to ${endpoint} (HTTP ${status}). ` +
+          `This is an app-permission problem, not a per-artist failure.`
+    );
+    this.name = 'PlatformAccessError';
+    this.status = status;
+    this.platform = platform;
+    this.endpoint = endpoint;
+  }
+}
+
+/**
  * Result of searching for an artist on a music platform
  */
 export interface ArtistSearchResult {
