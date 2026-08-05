@@ -7,7 +7,9 @@ import { errMessage, errDetail } from '../safe-log';
  * not an incidental property.
  */
 
-const ACCESS_TOKEN = 'BQC9-super-secret-access-token';
+// Fixtures only — these must never be real credentials, even in a test whose whole
+// purpose is proving credentials don't leak.
+const ACCESS_TOKEN = 'BQC9-fake-access-token-for-tests';
 const CLIENT_SECRET = 'fake-client-secret-for-tests';
 
 /** Shaped like a real axios error: credentials live in `config`, not in `message`. */
