@@ -171,7 +171,8 @@ You need to set up two external services:
 
 1. Go to https://developer.spotify.com/dashboard
 2. Create a new app
-3. Set redirect URI: `http://localhost:3000/api/auth/callback`
+3. Set redirect URI: `http://127.0.0.1:3000/api/auth/spotify/callback`
+   (`localhost` is rejected by Spotify — use the loopback IP)
 4. Copy Client ID and Secret
 
 #### Google Cloud Vision API
