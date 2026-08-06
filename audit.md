@@ -223,7 +223,7 @@ artist names score differently depending on which platform is asked.
 No `pageExtensions` restriction in `next.config.js`, so `src/pages/api/**/__tests__/*.test.ts` are
 compiled into routes. Confirmed in the build output and in `.next/server/pages/api/__tests__/`:
 
-```
+```text
 ƒ /api/__tests__/health.test
 ƒ /api/__tests__/personalize.test
 ƒ /api/auth/__tests__/apple-music-store-token.test

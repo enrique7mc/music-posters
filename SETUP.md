@@ -52,7 +52,7 @@ no external calls.
 Add `GEMINI_API_KEY` + `IMAGE_ANALYSIS_PROVIDER=gemini` (§3) and switch
 `mockAnalysis` off to analyze real posters — that still needs no music platform.
 
-> The dev endpoints are localhost-only, and env vars are read at process start:
+> The dev endpoints are loopback-only, and env vars are read at process start:
 > restart `npm run dev` after editing `.env`.
 
 ## 2. Set Up Apple Music (recommended — the working platform)

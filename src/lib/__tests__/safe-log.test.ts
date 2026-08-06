@@ -80,6 +80,32 @@ describe('errDetail', () => {
     }
   });
 
+  // Spotify's two APIs return different error shapes. Treating `error` as always an
+  // object reduced OAuth failures to a bare status code, hiding the one field that
+  // actually names the problem.
+  it('surfaces the Accounts/OAuth shape where `error` is a string', () => {
+    const error: any = new Error('Request failed with status code 400');
+    error.response = {
+      status: 400,
+      data: { error: 'invalid_grant', error_description: 'Invalid redirect URI' },
+    };
+    expect(errDetail(error)).toBe(
+      'Request failed with status code 400 (400: invalid_grant: Invalid redirect URI)'
+    );
+  });
+
+  it('falls back to the error code when no description is given', () => {
+    const error: any = new Error('Request failed with status code 400');
+    error.response = { status: 400, data: { error: 'invalid_client' } };
+    expect(errDetail(error)).toBe('Request failed with status code 400 (400: invalid_client)');
+  });
+
+  it('still handles the Web API shape where `error` is an object', () => {
+    const error: any = new Error('Request failed with status code 403');
+    error.response = { status: 403, data: { error: { status: 403, message: 'Forbidden' } } };
+    expect(errDetail(error)).toBe('Request failed with status code 403 (403: Forbidden)');
+  });
+
   it('tolerates a malformed response body without throwing', () => {
     const error: any = new Error('weird');
     error.response = { status: 418, data: 'not-an-object' };

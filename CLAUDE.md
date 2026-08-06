@@ -186,7 +186,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 **Auth-First Design**: Users must authenticate with Spotify BEFORE uploading images.
 
 ```
-User → /api/auth/login → Spotify OAuth → /api/auth/callback
+User → /api/auth/spotify/login → Spotify OAuth → /api/auth/spotify/callback
   ↓
 Exchange code for tokens → Store in httpOnly cookies → Redirect to /upload
 ```
@@ -375,8 +375,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 ### `/api/auth/*`
 
-- `/api/auth/login` - Initiates Spotify OAuth
-- `/api/auth/callback` - Handles OAuth redirect
+- `/api/auth/spotify/login` - Initiates Spotify OAuth (**active**)
+- `/api/auth/spotify/callback` - Handles the OAuth redirect (**active**; this is the
+  path registered in the Spotify dashboard)
+- `/api/auth/login`, `/api/auth/callback` - **Legacy shims** that redirect to the
+  routes above. Kept for previously-registered URIs; never sent to Spotify now
 - `/api/auth/me` - Returns current user (or 401)
 - `/api/auth/logout` - Clears cookies
 

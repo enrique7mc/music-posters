@@ -38,16 +38,39 @@ export function errDetail(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } })?.response;
   if (!response?.status) return base;
 
-  const apiMessage =
-    typeof response.data === 'object' && response.data !== null
-      ? (
-          (response.data as { error?: { message?: string } | string }).error as
-            | { message?: string }
-            | undefined
-        )?.message
-      : undefined;
-
-  return apiMessage
-    ? `${base} (${response.status}: ${apiMessage})`
+  return apiMessage(response.data)
+    ? `${base} (${response.status}: ${apiMessage(response.data)})`
     : `${base} (${response.status})`;
+}
+
+/**
+ * Pull the API's own error text out of a response body. Handles both shapes the
+ * Spotify APIs use, because they differ and only one was handled before:
+ *
+ *   Web API:   { error: { status: 403, message: "Forbidden" } }
+ *   Accounts:  { error: "invalid_grant", error_description: "Invalid redirect URI" }
+ *
+ * The second is the one that actually names an OAuth failure, and treating `error`
+ * as always-an-object silently reduced those logs to a bare status code.
+ *
+ * Reads only these known-safe fields — never `config`, which carries credentials.
+ */
+function apiMessage(data: unknown): string | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const body = data as { error?: unknown; error_description?: unknown };
+
+  // Accounts/OAuth shape: `error` is a string code, detail lives alongside it.
+  if (typeof body.error === 'string') {
+    return typeof body.error_description === 'string'
+      ? `${body.error}: ${body.error_description}`
+      : body.error;
+  }
+
+  // Web API shape: `error` is an object with a message.
+  if (typeof body.error === 'object' && body.error !== null) {
+    const message = (body.error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+
+  return undefined;
 }

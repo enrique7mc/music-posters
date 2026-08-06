@@ -64,12 +64,6 @@ GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
 NEXTAUTH_URL=http://127.0.0.1:3000
 ```
 
-Generate random secret:
-
-```bash
-openssl rand -base64 32
-```
-
 ---
 
 ## Step 5: Run (10 seconds)
@@ -78,7 +72,8 @@ openssl rand -base64 32
 npm run dev
 ```
 
-Open: http://localhost:3000
+Open: http://127.0.0.1:3000 (**not** `localhost` — Spotify OAuth and the Apple
+Music origin check both require the loopback IP)
 
 ---
 
