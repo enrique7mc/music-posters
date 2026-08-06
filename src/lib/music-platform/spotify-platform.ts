@@ -1,6 +1,29 @@
 import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
-import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
+import {
+  MusicPlatformService,
+  ArtistSearchResult,
+  PlaylistResult,
+  PlatformAccessError,
+} from './types';
+import { errMessage } from '@/lib/safe-log';
+
+/**
+ * Both statuses fail the whole batch, so both throw — but as different types, because
+ * the remedy differs:
+ *   403 → app not permitted (tier gating). Wrapped; the route returns 403.
+ *   401 → token expired. Rethrown raw; the route returns 401 and the client re-auths.
+ * Everything else falls through and stays a per-artist degradation.
+ */
+function throwIfAccessDenied(error: unknown, endpoint: string): void {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 403) {
+    throw new PlatformAccessError('spotify', status, endpoint);
+  }
+  if (status === 401) {
+    throw error; // raw: swallowing it would report "Could not find any tracks"
+  }
+}
 
 const SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1';
 
@@ -139,7 +162,9 @@ export class SpotifyPlatformService implements MusicPlatformService {
         similarity: bestSimilarity,
       };
     } catch (error) {
-      console.error(`[Spotify] Error searching for artist "${name}":`, error);
+      throwIfAccessDenied(error, 'GET /search');
+      // errMessage() only — a raw axios error carries config.headers.Authorization.
+      console.error(`[Spotify] Error searching for artist "${name}":`, errMessage(error));
       return null;
     }
   }
@@ -181,7 +206,11 @@ export class SpotifyPlatformService implements MusicPlatformService {
         platform: 'spotify' as const,
       }));
     } catch (error) {
-      console.error(`[Spotify] Error getting top tracks for artist ${artistId}:`, error);
+      throwIfAccessDenied(error, 'GET /artists/{id}/top-tracks');
+      console.error(
+        `[Spotify] Error getting top tracks for artist ${artistId}:`,
+        errMessage(error)
+      );
       return [];
     }
   }

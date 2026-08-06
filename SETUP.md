@@ -34,6 +34,27 @@ setting up Gemini is recommended regardless.
 npm install
 ```
 
+## 1b. Run with no credentials at all (fastest path)
+
+If you just want the app running — to work on the UI, or because Spotify is blocked
+and you don't have a paid Apple Developer membership — you need **no credentials**:
+
+```env
+DEV_MODE=true
+```
+
+Then `npm run dev` and open **http://127.0.0.1:3000**. A floating dev panel appears;
+toggle **skipAuth** (which auto-enables `dryRunPlaylist` + `mockTrackSearch`, so a
+fake token can never reach a real API) and **mockAnalysis**. The full
+upload → review-artists → review-tracks → success flow runs against mock data with
+no external calls.
+
+Add `GEMINI_API_KEY` + `IMAGE_ANALYSIS_PROVIDER=gemini` (§3) and switch
+`mockAnalysis` off to analyze real posters — that still needs no music platform.
+
+> The dev endpoints are loopback-only, and env vars are read at process start:
+> restart `npm run dev` after editing `.env`.
+
 ## 2. Set Up Apple Music (recommended — the working platform)
 
 Apple Music needs three credentials from the
@@ -108,6 +129,13 @@ Skip this if you use `IMAGE_ANALYSIS_PROVIDER=gemini`.
    GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
    ```
 
+   **Or** paste the JSON inline instead of using a file — `src/lib/ocr.ts` prefers
+   this when set, and it's the easier option on Vercel (no file to upload):
+
+   ```env
+   GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"...",...}
+   ```
+
 ## 5. Set Up Spotify (optional — currently broken)
 
 > The Spotify path won't create playlists until both the owner reconnects Premium
@@ -149,18 +177,18 @@ SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
 
 # Next.js
+# NEXTAUTH_URL is used only by the Apple Music CSRF origin check
+# (src/pages/api/auth/apple-music/store-token.ts). Omit it if you're not using
+# Apple Music. Must be 127.0.0.1, not localhost.
 NEXTAUTH_URL=http://127.0.0.1:3000
-NEXTAUTH_SECRET=generate_a_random_secret_here
 
 # Dev panel (never set true in production)
 DEV_MODE=false
 ```
 
-Generate `NEXTAUTH_SECRET`:
-
-```bash
-openssl rand -base64 32
-```
+> **`NEXTAUTH_SECRET` is not needed.** Despite the name, this app doesn't use
+> NextAuth (it isn't a dependency) — the only reference to the variable anywhere is
+> `src/test/setup.ts`. Nothing in production reads it.
 
 > Environment variables are read when the Node process starts — restart
 > `npm run dev` after editing `.env`.
@@ -171,9 +199,9 @@ For the recommended setup, confirm:
 
 - ✅ MusicKit key created; `APPLE_MUSIC_TEAM_ID` / `KEY_ID` / `PRIVATE_KEY` set
 - ✅ `GEMINI_API_KEY` set and `IMAGE_ANALYSIS_PROVIDER` chosen
-- ✅ `google-credentials.json` in the project root (if using `vision`/`hybrid`)
+- ✅ `google-credentials.json` in the project root, **or** `GOOGLE_CREDENTIALS_JSON`
+  set inline (if using `vision`/`hybrid`)
 - ✅ `NEXTAUTH_URL=http://127.0.0.1:3000` (Apple Music origin check)
-- ✅ `NEXTAUTH_SECRET` generated
 
 ## 8. Run the Development Server
 

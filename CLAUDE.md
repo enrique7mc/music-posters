@@ -77,7 +77,7 @@ Required environment variables (see `.env.example`):
 # Spotify API
 SPOTIFY_CLIENT_ID=<from Spotify Developer Dashboard>
 SPOTIFY_CLIENT_SECRET=<from Spotify Developer Dashboard>
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback  # MUST use 127.0.0.1
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback  # MUST use 127.0.0.1, never localhost
 
 # Image Analysis Provider (choose one: 'vision', 'gemini', or 'hybrid')
 IMAGE_ANALYSIS_PROVIDER=vision
@@ -98,7 +98,13 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 
 **Critical**:
 
-- Spotify OAuth requires `127.0.0.1` (not `localhost`) due to recent Spotify policy changes.
+- Spotify OAuth requires `127.0.0.1` (not `localhost`) — Spotify explicitly prohibits
+  `localhost` in redirect URIs. The registered URI must match **exactly** (scheme, host,
+  port, path). Both dev and production use the path `/api/auth/spotify/callback`;
+  `/api/auth/callback` remains only as a legacy shim and is no longer sent to Spotify.
+  For a floating dev port, register the loopback URI without a port
+  (`http://127.0.0.1/api/auth/spotify/callback`) — Spotify permits any port at
+  authorization time for loopback addresses.
 - Set `IMAGE_ANALYSIS_PROVIDER=hybrid` for best results (comprehensive OCR + intelligent AI filtering)
 - Set `IMAGE_ANALYSIS_PROVIDER=gemini` for vision-first AI with ranking (may miss small text on dense posters)
 - Set `IMAGE_ANALYSIS_PROVIDER=vision` for traditional OCR only (no ranking, more noise)
@@ -180,7 +186,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 **Auth-First Design**: Users must authenticate with Spotify BEFORE uploading images.
 
 ```
-User → /api/auth/login → Spotify OAuth → /api/auth/callback
+User → /api/auth/spotify/login → Spotify OAuth → /api/auth/spotify/callback
   ↓
 Exchange code for tokens → Store in httpOnly cookies → Redirect to /upload
 ```
@@ -369,8 +375,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 ### `/api/auth/*`
 
-- `/api/auth/login` - Initiates Spotify OAuth
-- `/api/auth/callback` - Handles OAuth redirect
+- `/api/auth/spotify/login` - Initiates Spotify OAuth (**active**)
+- `/api/auth/spotify/callback` - Handles the OAuth redirect (**active**; this is the
+  path registered in the Spotify dashboard)
+- `/api/auth/login`, `/api/auth/callback` - **Legacy shims** that redirect to the
+  routes above. Kept for previously-registered URIs; never sent to Spotify now
 - `/api/auth/me` - Returns current user (or 401)
 - `/api/auth/logout` - Clears cookies
 
@@ -652,7 +661,7 @@ To bypass real API calls during development or testing:
 - `IMAGE_ANALYSIS_PROVIDER`: Set to `vision`, `gemini`, or `hybrid`
 - `GOOGLE_APPLICATION_CREDENTIALS`: Upload JSON file or paste contents (required for Vision API and Hybrid mode)
 - `GEMINI_API_KEY`: Add API key from https://ai.google.dev (required for Gemini and Hybrid mode)
-- Update `SPOTIFY_REDIRECT_URI` to `https://your-domain.vercel.app/api/auth/callback`
+- Update `SPOTIFY_REDIRECT_URI` to `https://your-domain.vercel.app/api/auth/spotify/callback`
 
 **Recommendation**: Start with `IMAGE_ANALYSIS_PROVIDER=hybrid` for best results (requires both Vision and Gemini credentials).
 

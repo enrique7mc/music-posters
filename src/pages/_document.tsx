@@ -10,8 +10,11 @@ export default function Document() {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
-        {/* Apple MusicKit JS for Apple Music integration */}
-        <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" async></script>
+        {/*
+          MusicKit JS is NOT loaded here. It's injected on demand by
+          AuthContext.initMusicKit() when the user actually reaches for Apple Music,
+          so Spotify-only visitors never fetch Apple's CDN script.
+        */}
       </Head>
       <body className="antialiased">
         <Main />

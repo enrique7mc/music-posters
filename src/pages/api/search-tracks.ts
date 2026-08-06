@@ -4,8 +4,10 @@ import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform, searchAndGetTopTracks } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
+import { PlatformAccessError } from '@/lib/music-platform/types';
 import { SearchTracksResponse, MusicPlatform } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { errDetail } from '@/lib/safe-log';
 import { searchTracksSchema, validateRequest } from '@/lib/validation';
 
 /**
@@ -194,7 +196,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(200).json(response);
   } catch (error: any) {
-    console.error('Error searching tracks:', error);
+    // errDetail() only — raw axios errors carry the access token in config.headers.
+    console.error('Error searching tracks:', errDetail(error));
+
+    // Distinct message: "no tracks found" would send the user hunting their poster.
+    // Details stay server-side — errDetail() above already logged them.
+    // Only 403 arrives as PlatformAccessError; expired tokens (401) come through raw
+    // and are handled below. Not 502 — api-client retries that on this route.
+    if (error instanceof PlatformAccessError) {
+      return res.status(403).json({
+        error: 'The music service cannot complete this request. Please try again later.',
+      });
+    }
 
     // Handle API errors
     if (error.response?.status === 401) {

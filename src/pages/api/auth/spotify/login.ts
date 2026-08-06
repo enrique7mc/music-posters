@@ -13,6 +13,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
+  // Spotify rejects `localhost` in redirect URIs, and dev derives the URI from the
+  // request host. Bounce BEFORE the state cookie is set — rewriting only the redirect
+  // URI would land the callback on a different origin than the cookie, so state
+  // validation would fail with `invalid_state`.
+  const host = req.headers.host || '';
+  if (process.env.NODE_ENV !== 'production' && /^localhost(:|$)/.test(host)) {
+    const loopbackHost = host.replace(/^localhost/, '127.0.0.1');
+    return res.redirect(307, `http://${loopbackHost}${req.url || '/api/auth/spotify/login'}`);
+  }
+
   const scopes = [
     'playlist-modify-public',
     'playlist-modify-private',
@@ -35,10 +45,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   );
 
-  // In development, derive redirect URI from request host to handle port changes
+  // In development, derive the redirect URI from the request host so the port can
+  // float (Next picks 3001+ when 3000 is taken). Both environments use the SAME
+  // path — /api/auth/spotify/callback — so only one URI shape has to be registered
+  // in the Spotify dashboard. (/api/auth/callback still exists as a legacy shim,
+  // but we no longer ask Spotify to redirect there.)
+  //
+  // Spotify requires an exact match on the registered URI, and prohibits
+  // `localhost` — register the loopback IP. For a floating port you can register
+  // without one (`http://127.0.0.1/api/auth/spotify/callback`) and Spotify accepts
+  // any port at authorization time; otherwise pin the port and run on it.
+  // https://developer.spotify.com/documentation/web-api/concepts/redirect_uri
   const redirectUri =
     process.env.NODE_ENV !== 'production'
-      ? `http://${req.headers.host}/api/auth/callback`
+      ? `http://${req.headers.host}/api/auth/spotify/callback`
       : process.env.SPOTIFY_REDIRECT_URI!;
 
   const params = new URLSearchParams({

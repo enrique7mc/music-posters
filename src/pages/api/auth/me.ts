@@ -10,6 +10,7 @@ import { getMusicPlatform } from '@/lib/music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { errDetail } from '@/lib/safe-log';
 import { PlatformUser } from '@/types';
 
 /**
@@ -90,7 +91,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       display_name: user.displayName,
     });
   } catch (err: any) {
-    console.error('Error fetching user:', err);
+    // errDetail() only — the raw axios error carries the access token in config.headers.
+    console.error('Error fetching user:', errDetail(err));
     // Differentiate auth failures from server/config errors
     if (err?.response?.status === 401) {
       return res.status(401).json({ error: 'Invalid or expired token' });

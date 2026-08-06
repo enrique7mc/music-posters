@@ -28,7 +28,8 @@ npm install
 1. Go to: https://developer.spotify.com/dashboard
 2. Click "Create App"
 3. Name: "Music Posters"
-4. Redirect URI: `http://localhost:3000/api/auth/callback`
+4. Redirect URI: `http://127.0.0.1:3000/api/auth/spotify/callback`
+   (Spotify **prohibits** `localhost` — the loopback IP is required)
 5. Copy **Client ID** and **Client Secret**
 
 ---
@@ -58,16 +59,9 @@ Edit `.env`:
 ```env
 SPOTIFY_CLIENT_ID=paste_your_client_id
 SPOTIFY_CLIENT_SECRET=paste_your_client_secret
-SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=any_random_string_here
-```
-
-Generate random secret:
-
-```bash
-openssl rand -base64 32
+NEXTAUTH_URL=http://127.0.0.1:3000
 ```
 
 ---
@@ -78,7 +72,8 @@ openssl rand -base64 32
 npm run dev
 ```
 
-Open: http://localhost:3000
+Open: http://127.0.0.1:3000 (**not** `localhost` — Spotify OAuth and the Apple
+Music origin check both require the loopback IP)
 
 ---
 

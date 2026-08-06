@@ -34,10 +34,93 @@ interface AuthContextType {
   platform: MusicPlatform | null;
   loading: boolean;
   musicKitReady: boolean;
+  /**
+   * Loads + configures MusicKit on demand. Idempotent and de-duplicated: concurrent
+   * callers share one in-flight promise. Resolves true once MusicKit is usable.
+   * Nothing Apple-related is fetched until this is called.
+   */
+  initMusicKit: () => Promise<boolean>;
   checkAuth: () => Promise<void>;
   loginWithSpotify: () => void;
   loginWithAppleMusic: () => Promise<void>;
   logout: () => Promise<void>;
+}
+
+const MUSICKIT_SRC = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
+const MUSICKIT_TIMEOUT_MS = 10000;
+const MUSICKIT_SCRIPT_TIMEOUT_MS = 10000;
+
+/**
+ * Inject the MusicKit CDN script and resolve once loaded. Two ways this could hang
+ * forever (and initMusicKit memoises the hang, killing the Apple button silently):
+ *  1. A leftover tag whose load/error already fired — so we remove and re-inject,
+ *     which is also what actually retries the download.
+ *  2. A stalled request that fires neither event — hence the timeout.
+ */
+function loadMusicKitScript(timeoutMs = MUSICKIT_SCRIPT_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.MusicKit) return resolve();
+
+    // Clear any tag from a previous attempt (see 1 above).
+    document.querySelectorAll('script[data-musickit]').forEach((el) => el.remove());
+
+    const script = document.createElement('script');
+    script.src = MUSICKIT_SRC;
+    script.async = true;
+    script.dataset.musickit = 'true';
+
+    const settle = (finish: () => void) => {
+      clearTimeout(timer);
+      script.onload = null;
+      script.onerror = null;
+      finish();
+    };
+    const fail = (message: string) =>
+      settle(() => {
+        script.remove(); // leave no stale tag for the next attempt
+
+        reject(new Error(message));
+      });
+
+    const timer = setTimeout(() => fail('MusicKit JS load timed out'), timeoutMs);
+    script.onload = () => settle(resolve);
+    script.onerror = () => fail('MusicKit JS failed to load');
+
+    document.head.appendChild(script);
+  });
+}
+
+/**
+ * The script's load event fires before MusicKit finishes bootstrapping, so wait for
+ * `window.MusicKit` to actually appear — via the `musickitloaded` event, with a poll
+ * as a fallback and a hard timeout so a blocked CDN can't hang the caller forever.
+ */
+function waitForMusicKit(timeoutMs = MUSICKIT_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.MusicKit) return resolve();
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener('musickitloaded', onLoaded);
+    };
+    const onLoaded = () => {
+      cleanup();
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('MusicKit did not initialize in time'));
+    }, timeoutMs);
+    const poll = setInterval(() => {
+      if (window.MusicKit) {
+        cleanup();
+        resolve();
+      }
+    }, 100);
+
+    document.addEventListener('musickitloaded', onLoaded);
+  });
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,64 +137,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [musicKitReady, setMusicKitReady] = useState(false);
   const hasChecked = useRef(false);
   const checkAuthPromise = useRef<Promise<void> | null>(null);
-  const musicKitInitialized = useRef(false);
+  const musicKitPromise = useRef<Promise<boolean> | null>(null);
 
-  // Initialize MusicKit when available
-  useEffect(() => {
-    let checkMusicKitInterval: NodeJS.Timeout | null = null;
-    let cleanupTimeout: NodeJS.Timeout | null = null;
+  /**
+   * Lazily load + configure MusicKit. Previously this ran on mount for EVERY visitor,
+   * which meant a Spotify-only user still paid for Apple's CDN script, a 100ms polling
+   * loop, and a developer-token request that 500s when Apple isn't configured. Now
+   * nothing Apple-related happens until someone actually reaches for Apple Music.
+   */
+  const initMusicKit = useCallback(async (): Promise<boolean> => {
+    if (musicKitReady) return true;
+    // De-dupe concurrent callers (e.g. selecting the platform and clicking Connect).
+    if (musicKitPromise.current) return musicKitPromise.current;
 
-    const initMusicKit = async () => {
-      if (musicKitInitialized.current || !window.MusicKit) return;
-      // Mark as initialized immediately to prevent concurrent calls
-      musicKitInitialized.current = true;
-
+    musicKitPromise.current = (async () => {
       try {
-        // Fetch developer token from our API
-        const response = await axios.get('/api/auth/apple-music/developer-token');
-        const { token } = response.data;
+        await loadMusicKitScript();
+        await waitForMusicKit();
 
-        window.MusicKit.configure({
-          developerToken: token,
-          app: {
-            name: 'Playlistd',
-            build: '1.0.0',
-          },
+        const response = await axios.get('/api/auth/apple-music/developer-token');
+        window.MusicKit!.configure({
+          developerToken: response.data.token,
+          app: { name: 'Playlistd', build: '1.0.0' },
         });
 
         setMusicKitReady(true);
-        console.log('MusicKit initialized successfully');
+        return true;
       } catch (error) {
-        // Reset on failure so it can be retried
-        musicKitInitialized.current = false;
         console.error('Failed to initialize MusicKit:', error);
-        // MusicKit may not be configured, which is fine - user can still use Spotify
+        // Clear so a later attempt can retry (transient CDN/network failures).
+        musicKitPromise.current = null;
+        return false;
       }
-    };
+    })();
 
-    // Check if MusicKit is already loaded
-    if (window.MusicKit) {
-      initMusicKit();
-    } else {
-      // Wait for MusicKit to load
-      checkMusicKitInterval = setInterval(() => {
-        if (window.MusicKit) {
-          if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
-          initMusicKit();
-        }
-      }, 100);
-
-      // Stop checking after 10 seconds
-      cleanupTimeout = setTimeout(() => {
-        if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
-      }, 10000);
-    }
-
-    return () => {
-      if (checkMusicKitInterval) clearInterval(checkMusicKitInterval);
-      if (cleanupTimeout) clearTimeout(cleanupTimeout);
-    };
-  }, []);
+    return musicKitPromise.current;
+  }, [musicKitReady]);
 
   const checkAuth = useCallback(async () => {
     if (checkAuthPromise.current) {
@@ -169,8 +230,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const loginWithAppleMusic = useCallback(async () => {
-    if (!window.MusicKit) {
-      throw new Error('MusicKit not available. Please try again later.');
+    // Ensure MusicKit is loaded — with lazy init it may not be yet.
+    const ready = await initMusicKit();
+    if (!ready || !window.MusicKit) {
+      throw new Error('Apple Music is unavailable. Please try again later.');
     }
 
     try {
@@ -199,7 +262,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Apple Music login failed:', error);
       throw error;
     }
-  }, [checkAuth, router]);
+  }, [checkAuth, router, initMusicKit]);
 
   const logout = useCallback(async () => {
     try {
@@ -234,6 +297,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         platform,
         loading,
         musicKitReady,
+        initMusicKit,
         checkAuth,
         loginWithSpotify,
         loginWithAppleMusic,

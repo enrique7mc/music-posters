@@ -52,18 +52,31 @@ apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
     !error.config.url.startsWith('/api/auth/')
   ) {
     if (typeof window !== 'undefined') {
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      // login bounces localhost → 127.0.0.1 (Spotify forbids `localhost`), and those
+      // are separate origins with separate sessionStorage. Carry the path in the URL
+      // instead; the landing page persists it on whichever origin we end up on.
+      let destination = '/';
       try {
+        const target = new URL('/', window.location.href);
+        if (target.hostname === 'localhost') target.hostname = '127.0.0.1';
+        target.searchParams.set('returnTo', returnTo);
+        destination = target.toString();
+      } catch {
+        // Never throw here: that would replace the 401 the caller is awaiting.
+      }
+
+      try {
+        // Also write it here — sufficient on its own for single-origin (production).
         sessionStorage.setItem(
           'returnAfterAuth',
-          JSON.stringify({
-            url: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-            timestamp: Date.now(),
-          })
+          JSON.stringify({ url: returnTo, timestamp: Date.now() })
         );
       } catch {
-        // sessionStorage quota exceeded — proceed without return URL
+        // sessionStorage quota exceeded — the query param still carries it
       }
-      window.location.href = '/';
+      window.location.href = destination;
     }
   }
   return Promise.reject(error);
