@@ -52,18 +52,38 @@ apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
     !error.config.url.startsWith('/api/auth/')
   ) {
     if (typeof window !== 'undefined') {
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      // In development the app is reachable on both `localhost` and `127.0.0.1`, and
+      // /api/auth/spotify/login bounces to `127.0.0.1` because Spotify prohibits
+      // `localhost` in redirect URIs. Those are distinct origins with separate
+      // sessionStorage, so anything written here on `localhost` is unreadable after
+      // the bounce and the user loses their place. Send the return path through the
+      // URL — host-independent — and let the landing page persist it on whichever
+      // origin the flow actually continues from.
+      let destination = '/';
       try {
+        const target = new URL('/', window.location.href);
+        if (target.hostname === 'localhost') target.hostname = '127.0.0.1';
+        target.searchParams.set('returnTo', returnTo);
+        destination = target.toString();
+      } catch {
+        // Unparseable location (non-browser or stubbed env). Fall back to a plain
+        // redirect — this interceptor must never throw, or it would replace the 401
+        // the caller is waiting on with a URL error.
+      }
+
+      try {
+        // Still write it here: on a single-origin (production) flow this is enough on
+        // its own, and it keeps working if the query param is stripped by anything.
         sessionStorage.setItem(
           'returnAfterAuth',
-          JSON.stringify({
-            url: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-            timestamp: Date.now(),
-          })
+          JSON.stringify({ url: returnTo, timestamp: Date.now() })
         );
       } catch {
-        // sessionStorage quota exceeded — proceed without return URL
+        // sessionStorage quota exceeded — the query param still carries it
       }
-      window.location.href = '/';
+      window.location.href = destination;
     }
   }
   return Promise.reject(error);

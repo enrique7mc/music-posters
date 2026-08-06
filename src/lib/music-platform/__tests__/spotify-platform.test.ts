@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { SpotifyPlatformService } from '../spotify-platform';
@@ -46,6 +47,20 @@ describe('SpotifyPlatformService — access-denied fail-fast', () => {
     );
   });
 
+  // /api/search-tracks maps 401 → 401 (so the client re-authenticates) and 403 → 403
+  // (an app-tier permission problem no login can fix). That routing depends entirely
+  // on `status` surviving the wrap, so pin it: collapsing both to one code would
+  // strand the user on a dead session with no way back.
+  it('preserves the upstream status so the route can tell 401 from 403', async () => {
+    server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 401 })));
+    const expired = await service.getArtistTopTracks('artist_1', TOKEN).catch((e) => e);
+    expect(expired.status).toBe(401);
+
+    server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 403 })));
+    const forbidden = await service.getArtistTopTracks('artist_1', TOKEN).catch((e) => e);
+    expect(forbidden.status).toBe(403);
+  });
+
   it('still degrades to [] for non-access errors (500) — those ARE per-artist', async () => {
     server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 500 })));
 
@@ -65,7 +80,9 @@ describe('SpotifyPlatformService — access-denied fail-fast', () => {
 
 describe('SpotifyPlatformService — never logs credentials', () => {
   let service: SpotifyPlatformService;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
+  // Explicit MockInstance rather than ReturnType<typeof vi.spyOn>, which infers a
+  // constructor signature and fails tsc (see issue #42).
+  let errorSpy: MockInstance<(...args: unknown[]) => void>;
 
   beforeEach(() => {
     service = new SpotifyPlatformService();

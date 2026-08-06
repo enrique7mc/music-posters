@@ -202,12 +202,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // The platform refused us at the access-control layer (e.g. Spotify's Feb-2026
     // tier gating on /artists/{id}/top-tracks). Surfaced as a distinct message because
     // "no tracks found" would send the user hunting for a problem with their poster.
+    // Generic messages to the client: the endpoint path and upstream status are
+    // diagnostics, already captured server-side by errDetail() above.
     if (error instanceof PlatformAccessError) {
       const platformName = error.platform === 'spotify' ? 'Spotify' : 'Apple Music';
-      return res.status(502).json({
+
+      // 401 upstream means the user's token expired or was revoked — a fixable
+      // auth problem. It must surface as 401 so the client's interceptor stores the
+      // return URL and starts re-authentication. Reporting it as a permission
+      // failure would strand the user on a dead session with no way back.
+      if (error.status === 401) {
+        return res.status(401).json({
+          error: `${platformName} authentication expired. Please log in again.`,
+        });
+      }
+
+      // 403 is an app-tier permission problem: retrying cannot help. Deliberately
+      // NOT 502 — api-client.ts treats 502 as retryable on this route, so it would
+      // burn two pointless retries (2s + 4s backoff) before surfacing the error.
+      return res.status(403).json({
         error:
-          `${platformName} denied access to a required endpoint (${error.endpoint}, HTTP ${error.status}). ` +
-          `This is an app-permission issue, not a problem with your poster.`,
+          `${platformName} denied access to a required API. This is an app-permission ` +
+          `issue, not a problem with your poster.`,
       });
     }
 

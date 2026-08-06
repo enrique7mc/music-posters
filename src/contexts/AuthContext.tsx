@@ -48,25 +48,51 @@ interface AuthContextType {
 
 const MUSICKIT_SRC = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
 const MUSICKIT_TIMEOUT_MS = 10000;
+const MUSICKIT_SCRIPT_TIMEOUT_MS = 10000;
 
-/** Inject the MusicKit CDN script once. Resolves when it has loaded. */
-function loadMusicKitScript(): Promise<void> {
+/**
+ * Inject the MusicKit CDN script and resolve once it has loaded.
+ *
+ * Two failure modes this must survive, both of which otherwise leave the promise
+ * pending forever — and because initMusicKit() memoises it, a hang here disables the
+ * Apple Music button permanently with no error shown:
+ *
+ *  1. A leftover tag from a failed attempt. Its load/error events have already fired
+ *     (or never will), so subscribing to them would wait on an event that can't come.
+ *     We remove stale tags and re-inject, which is also what actually retries the
+ *     download — reusing the dead tag would never re-request it.
+ *  2. A stalled request. If the CDN accepts the connection but never responds,
+ *     neither `load` nor `error` fires, so the load itself needs its own deadline.
+ */
+function loadMusicKitScript(timeoutMs = MUSICKIT_SCRIPT_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.MusicKit) return resolve();
 
-    const existing = document.querySelector<HTMLScriptElement>('script[data-musickit]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('MusicKit JS failed to load')));
-      return;
-    }
+    // Clear any tag from a previous attempt (see 1 above).
+    document.querySelectorAll('script[data-musickit]').forEach((el) => el.remove());
 
     const script = document.createElement('script');
     script.src = MUSICKIT_SRC;
     script.async = true;
     script.dataset.musickit = 'true';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('MusicKit JS failed to load'));
+
+    const settle = (finish: () => void) => {
+      clearTimeout(timer);
+      script.onload = null;
+      script.onerror = null;
+      finish();
+    };
+    const fail = (message: string) =>
+      settle(() => {
+        // Leave no stale tag behind, so the next attempt starts clean.
+        script.remove();
+        reject(new Error(message));
+      });
+
+    const timer = setTimeout(() => fail('MusicKit JS load timed out'), timeoutMs);
+    script.onload = () => settle(resolve);
+    script.onerror = () => fail('MusicKit JS failed to load');
+
     document.head.appendChild(script);
   });
 }
