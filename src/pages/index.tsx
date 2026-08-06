@@ -40,8 +40,7 @@ export default function Home() {
         setError('Apple Music is unavailable right now. You can still connect with Spotify.');
       }
     } finally {
-      // finally, not a trailing call: initMusicKit swallows its own errors today, but
-      // if that ever changes a throw would leave the button stuck on "(Loading...)".
+      // finally: a future throw in initMusicKit would otherwise stick on "(Loading...)".
       setAppleLoading(false);
     }
   };
@@ -60,15 +59,13 @@ export default function Home() {
     }
   }, [router.query.error]);
 
-  // Persist a return path handed over in the URL by the 401 interceptor. It travels
-  // as a query param because a dev-mode `localhost` → `127.0.0.1` bounce crosses an
-  // origin boundary, and sessionStorage does not survive that. Writing it here puts
-  // it on the origin the rest of the auth flow actually runs on.
+  // Persist the return path the 401 interceptor passed in the URL — it travels as a
+  // param because a localhost → 127.0.0.1 bounce crosses an origin boundary.
   useEffect(() => {
     const returnTo = router.query.returnTo;
     if (typeof returnTo !== 'string' || !returnTo) return;
 
-    // Same-origin paths only — never let a crafted URL bounce the user off-site.
+    // Same-origin paths only — a crafted URL must not bounce the user off-site.
     if (returnTo.startsWith('/') && !returnTo.startsWith('//')) {
       try {
         sessionStorage.setItem(

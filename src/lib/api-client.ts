@@ -54,13 +54,9 @@ apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
     if (typeof window !== 'undefined') {
       const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
-      // In development the app is reachable on both `localhost` and `127.0.0.1`, and
-      // /api/auth/spotify/login bounces to `127.0.0.1` because Spotify prohibits
-      // `localhost` in redirect URIs. Those are distinct origins with separate
-      // sessionStorage, so anything written here on `localhost` is unreadable after
-      // the bounce and the user loses their place. Send the return path through the
-      // URL — host-independent — and let the landing page persist it on whichever
-      // origin the flow actually continues from.
+      // login bounces localhost → 127.0.0.1 (Spotify forbids `localhost`), and those
+      // are separate origins with separate sessionStorage. Carry the path in the URL
+      // instead; the landing page persists it on whichever origin we end up on.
       let destination = '/';
       try {
         const target = new URL('/', window.location.href);
@@ -68,14 +64,11 @@ apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
         target.searchParams.set('returnTo', returnTo);
         destination = target.toString();
       } catch {
-        // Unparseable location (non-browser or stubbed env). Fall back to a plain
-        // redirect — this interceptor must never throw, or it would replace the 401
-        // the caller is waiting on with a URL error.
+        // Never throw here: that would replace the 401 the caller is awaiting.
       }
 
       try {
-        // Still write it here: on a single-origin (production) flow this is enough on
-        // its own, and it keeps working if the query param is stripped by anything.
+        // Also write it here — sufficient on its own for single-origin (production).
         sessionStorage.setItem(
           'returnAfterAuth',
           JSON.stringify({ url: returnTo, timestamp: Date.now() })

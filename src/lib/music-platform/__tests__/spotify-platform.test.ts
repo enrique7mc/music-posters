@@ -17,9 +17,7 @@ describe('SpotifyPlatformService — access-denied fail-fast', () => {
     service = new SpotifyPlatformService();
   });
 
-  // Spotify's Feb-2026 tier gating returns 403 on /artists/{id}/top-tracks for every
-  // request. Degrading to [] per artist meant a 59-artist poster burned 59 requests
-  // over 48s and then reported "Could not find any tracks" — the wrong diagnosis.
+  // Degrading to [] per artist meant 59 requests over 48s, then the wrong diagnosis.
   it('throws PlatformAccessError on 403 from top-tracks instead of degrading to []', async () => {
     server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 403 })));
 
@@ -39,26 +37,20 @@ describe('SpotifyPlatformService — access-denied fail-fast', () => {
     expect(error.endpoint).toContain('top-tracks');
   });
 
-  it('throws on 401 too — an expired token is not a per-artist failure', async () => {
+  // The route tells them apart by type: wrapped → 403, raw → 401 "log in again".
+  it('rethrows 401 raw, not wrapped, so the route can return 401', async () => {
     server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 401 })));
 
-    await expect(service.getArtistTopTracks('artist_1', TOKEN)).rejects.toBeInstanceOf(
-      PlatformAccessError
-    );
+    const error = await service.getArtistTopTracks('artist_1', TOKEN).catch((e) => e);
+
+    expect(error).not.toBeInstanceOf(PlatformAccessError);
+    expect(error.response?.status).toBe(401);
   });
 
-  // /api/search-tracks maps 401 → 401 (so the client re-authenticates) and 403 → 403
-  // (an app-tier permission problem no login can fix). That routing depends entirely
-  // on `status` surviving the wrap, so pin it: collapsing both to one code would
-  // strand the user on a dead session with no way back.
-  it('preserves the upstream status so the route can tell 401 from 403', async () => {
-    server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 401 })));
-    const expired = await service.getArtistTopTracks('artist_1', TOKEN).catch((e) => e);
-    expect(expired.status).toBe(401);
-
-    server.use(http.get(TOP_TRACKS_URL, () => new HttpResponse(null, { status: 403 })));
-    const forbidden = await service.getArtistTopTracks('artist_1', TOKEN).catch((e) => e);
-    expect(forbidden.status).toBe(403);
+  // Returning null here is what would produce "Could not find any tracks" instead.
+  it('does not swallow 401 into an empty result', async () => {
+    server.use(http.get(SEARCH_URL, () => new HttpResponse(null, { status: 401 })));
+    await expect(service.searchArtist('Phoenix', TOKEN)).rejects.toBeTruthy();
   });
 
   it('still degrades to [] for non-access errors (500) — those ARE per-artist', async () => {
@@ -80,8 +72,7 @@ describe('SpotifyPlatformService — access-denied fail-fast', () => {
 
 describe('SpotifyPlatformService — never logs credentials', () => {
   let service: SpotifyPlatformService;
-  // Explicit MockInstance rather than ReturnType<typeof vi.spyOn>, which infers a
-  // constructor signature and fails tsc (see issue #42).
+  // Explicit type: ReturnType<typeof vi.spyOn> infers a constructor and fails tsc (#42).
   let errorSpy: MockInstance<(...args: unknown[]) => void>;
 
   beforeEach(() => {
@@ -93,9 +84,7 @@ describe('SpotifyPlatformService — never logs credentials', () => {
     errorSpy.mockRestore();
   });
 
-  // A raw axios error carries config.headers.Authorization = `Bearer ${TOKEN}`.
-  // console.error prints objects via util.inspect, so passing the error itself put
-  // the user's access token straight into the Vercel logs.
+  // A raw axios error carries the token in config.headers; console.error prints it.
   it('never logs the access token when a search errors', async () => {
     server.use(http.get(SEARCH_URL, () => new HttpResponse(null, { status: 500 })));
 

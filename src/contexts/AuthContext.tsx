@@ -51,18 +51,11 @@ const MUSICKIT_TIMEOUT_MS = 10000;
 const MUSICKIT_SCRIPT_TIMEOUT_MS = 10000;
 
 /**
- * Inject the MusicKit CDN script and resolve once it has loaded.
- *
- * Two failure modes this must survive, both of which otherwise leave the promise
- * pending forever — and because initMusicKit() memoises it, a hang here disables the
- * Apple Music button permanently with no error shown:
- *
- *  1. A leftover tag from a failed attempt. Its load/error events have already fired
- *     (or never will), so subscribing to them would wait on an event that can't come.
- *     We remove stale tags and re-inject, which is also what actually retries the
- *     download — reusing the dead tag would never re-request it.
- *  2. A stalled request. If the CDN accepts the connection but never responds,
- *     neither `load` nor `error` fires, so the load itself needs its own deadline.
+ * Inject the MusicKit CDN script and resolve once loaded. Two ways this could hang
+ * forever (and initMusicKit memoises the hang, killing the Apple button silently):
+ *  1. A leftover tag whose load/error already fired — so we remove and re-inject,
+ *     which is also what actually retries the download.
+ *  2. A stalled request that fires neither event — hence the timeout.
  */
 function loadMusicKitScript(timeoutMs = MUSICKIT_SCRIPT_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -84,8 +77,8 @@ function loadMusicKitScript(timeoutMs = MUSICKIT_SCRIPT_TIMEOUT_MS): Promise<voi
     };
     const fail = (message: string) =>
       settle(() => {
-        // Leave no stale tag behind, so the next attempt starts clean.
-        script.remove();
+        script.remove(); // leave no stale tag for the next attempt
+
         reject(new Error(message));
       });
 

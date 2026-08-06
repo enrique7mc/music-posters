@@ -9,15 +9,19 @@ import {
 import { errMessage } from '@/lib/safe-log';
 
 /**
- * 401/403 mean the app isn't permitted to call this endpoint at all — retrying per
- * artist is pointless. Rethrow as PlatformAccessError so the orchestrator aborts the
- * batch instead of grinding through every remaining artist. Anything else (404,
- * network blip, malformed response) stays a per-artist degradation.
+ * Both statuses fail the whole batch, so both throw — but as different types, because
+ * the remedy differs:
+ *   403 → app not permitted (tier gating). Wrapped; the route returns 403.
+ *   401 → token expired. Rethrown raw; the route returns 401 and the client re-auths.
+ * Everything else falls through and stays a per-artist degradation.
  */
 function throwIfAccessDenied(error: unknown, endpoint: string): void {
   const status = (error as { response?: { status?: number } })?.response?.status;
-  if (status === 401 || status === 403) {
+  if (status === 403) {
     throw new PlatformAccessError('spotify', status, endpoint);
+  }
+  if (status === 401) {
+    throw error; // raw: swallowing it would report "Could not find any tracks"
   }
 }
 

@@ -13,16 +13,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return; // Rate limit exceeded, response already sent
   }
 
-  // Spotify PROHIBITS `localhost` in redirect URIs — the loopback IP is required.
-  // In dev we derive the redirect URI from the request host, so browsing to
-  // http://localhost:3000 (what `next dev` prints) would produce a rejected
-  // `redirect_uri=http://localhost:3000/...`.
-  //
-  // Rewriting just the redirect URI is NOT enough: Spotify would then send the user
-  // back to 127.0.0.1, a different origin from the one that set the state cookie
-  // below — cookies are host-scoped, so state validation in the callback would fail
-  // with `invalid_state`. Bounce to the loopback host FIRST, before the cookie is
-  // set, so the entire flow (cookie, redirect URI, callback) shares one origin.
+  // Spotify rejects `localhost` in redirect URIs, and dev derives the URI from the
+  // request host. Bounce BEFORE the state cookie is set — rewriting only the redirect
+  // URI would land the callback on a different origin than the cookie, so state
+  // validation would fail with `invalid_state`.
   const host = req.headers.host || '';
   if (process.env.NODE_ENV !== 'production' && /^localhost(:|$)/.test(host)) {
     const loopbackHost = host.replace(/^localhost/, '127.0.0.1');
