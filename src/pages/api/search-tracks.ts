@@ -204,11 +204,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Only 403 arrives as PlatformAccessError; expired tokens (401) come through raw
     // and are handled below. Not 502 — api-client retries that on this route.
     if (error instanceof PlatformAccessError) {
-      const platformName = error.platform === 'spotify' ? 'Spotify' : 'Apple Music';
       return res.status(403).json({
-        error:
-          `${platformName} denied access to a required API. This is an app-permission ` +
-          `issue, not a problem with your poster.`,
+        error: 'The music service cannot complete this request. Please try again later.',
       });
     }
 
