@@ -33,6 +33,7 @@ export default function Home() {
   const handleSelectAppleMusic = async () => {
     setSelectedPlatform('apple-music');
     if (musicKitReady || appleLoading) return;
+    setError(null); // clear a previous failure so a successful retry looks successful
     setAppleLoading(true);
     try {
       const ok = await initMusicKit();
@@ -62,6 +63,10 @@ export default function Home() {
   // Persist the return path the 401 interceptor passed in the URL — it travels as a
   // param because a localhost → 127.0.0.1 bounce crosses an origin boundary.
   useEffect(() => {
+    // router.query is empty until hydration completes, so waiting on isReady is what
+    // makes this fire at all on a cold load.
+    if (!router.isReady) return;
+
     const returnTo = router.query.returnTo;
     if (typeof returnTo !== 'string' || !returnTo) return;
 
@@ -78,7 +83,7 @@ export default function Home() {
     }
     // Strip the param so a refresh or share doesn't carry it around.
     router.replace('/', undefined, { shallow: true });
-  }, [router]);
+  }, [router, router.isReady, router.query.returnTo]);
 
   const handleLogin = async () => {
     setError(null);

@@ -3,10 +3,11 @@
 **Date:** 2026-08-05 · **Verified by:** live probes with client-credentials **and** a real user token
 **Note:** call sites are cited by symbol, not line number — line numbers go stale on every refactor.
 
-> **Verdict:** every endpoint we need has a replacement. The migration is ~4 methods in one file
-> (`spotify-platform.ts`). Two things are _not_ solved by code: no ranking signal is available (§5),
-> and Development Mode requires the owner's Premium plus a 5-user cap (§6).
-
+> **Verdict:** every endpoint we need has a viable path forward, though the `top-tracks`
+> replacement is a **fallback rather than an equivalent** (§2, §5). The migration is ~4 methods in
+> one file (`spotify-platform.ts`). Two things are _not_ solved by code: no ranking signal is
+> available (§5), and Development Mode requires the owner's Premium plus a 5-user cap (§6).
+>
 > **⚠️ Read §6 before starting the migration.** Nothing in this document is a global API removal —
 > these are **Development Mode restrictions**. The migration guide states that
 > _"apps in extended quota mode are not affected by any of the changes described in this guide — all
@@ -17,29 +18,39 @@
 
 ## 1. Endpoints — what works
 
-| Endpoint                        | Used by                               | Status                                      |
-| ------------------------------- | ------------------------------------- | ------------------------------------------- |
-| `POST /api/token`               | `exchangeCodeForTokens`               | ✅ Works                                    |
-| `GET /search`                   | `SpotifyPlatform.searchArtist`        | ✅ Works — `limit` max now **10**           |
-| `GET /me`                       | `SpotifyPlatform.getCurrentUser`      | ✅ Works — `email` deprecated               |
-| `GET /artists/{id}/albums`      | (unused)                              | ✅ Works — `limit` cut 50 → **10**          |
-| `GET /albums/{id}/tracks`       | (unused)                              | ✅ Works — `limit` 50                       |
-| `PUT /playlists/{id}/images`    | `SpotifyPlatform.uploadPlaylistCover` | ✅ Works — still 256 KB, `ugc-image-upload` |
-| `GET /me/top/artists`           | (not yet used)                        | ✅ Works — could power Spotify "gems"       |
-| `GET /me/following?type=artist` | (not yet used)                        | ✅ Works                                    |
-| `GET /me/tracks`                | (not yet used)                        | ✅ Works                                    |
+| Endpoint                        | Used by                               | Status                                                |
+| ------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `POST /api/token`               | `exchangeCodeForTokens`               | ✅ Works                                              |
+| `GET /search`                   | `SpotifyPlatform.searchArtist`        | ✅ Works — `limit` max now **10**                     |
+| `GET /me`                       | `SpotifyPlatform.getCurrentUser`      | ✅ Works — `email` deprecated                         |
+| `GET /artists/{id}/albums`      | (unused)                              | ✅ Works — `limit` cut 50 → **10**                    |
+| `GET /albums/{id}/tracks`       | (unused)                              | ✅ Works — `limit` 50                                 |
+| `PUT /playlists/{id}/images`    | `SpotifyPlatform.uploadPlaylistCover` | ✅ Works — still 256 KB, `ugc-image-upload`           |
+| `GET /me/top/artists`           | (not yet used)                        | ✅ Works — "loved" only; gems are policy-gated (§6.3) |
+| `GET /me/following?type=artist` | (not yet used)                        | ✅ Works                                              |
+| `GET /me/tracks`                | (not yet used)                        | ✅ Works                                              |
 
 ## 2. Endpoints — what's broken for Development Mode, and the replacement
 
 _"Restricted" throughout means **restricted for Development Mode apps**, not removed from the
 API. Extended Quota apps are unaffected — see §6._
 
-| Endpoint                       | Used by                               | Status               | Replacement                                                | Effort |
-| ------------------------------ | ------------------------------------- | -------------------- | ---------------------------------------------------------- | ------ |
-| `GET /artists/{id}/top-tracks` | `SpotifyPlatform.getArtistTopTracks`  | 🔴 **403 Forbidden** | `GET /search?q=artist:"X"&type=artist,track&limit=10` → §5 | **M**  |
-| `POST /users/{id}/playlists`   | `SpotifyPlatform.createPlaylist`      | 🔴 Restricted        | `POST /me/playlists` — same body, drop `userId`            | **S**  |
-| `POST /playlists/{id}/tracks`  | `SpotifyPlatform.addTracksToPlaylist` | 🟠 Renamed           | `POST /playlists/{id}/items` — body still `uris`, max 100  | **XS** |
-| `GET /playlists/{id}/tracks`   | `getPlaylistTracks`                   | 🟠 Renamed           | `GET /playlists/{id}/items`; response `tracks` → `items`   | **XS** |
+| Endpoint                       | Used by                               | Status               | Replacement                                                                               | Effort |
+| ------------------------------ | ------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------- | ------ |
+| `GET /artists/{id}/top-tracks` | `SpotifyPlatform.getArtistTopTracks`  | 🔴 **403 Forbidden** | ⚠️ _Fallback, not equivalent:_ `GET /search?q=artist:"X"&type=artist,track&limit=10` → §5 | **M**  |
+| `POST /users/{id}/playlists`   | `SpotifyPlatform.createPlaylist`      | 🔴 Restricted        | `POST /me/playlists` — same body, drop `userId`                                           | **S**  |
+| `POST /playlists/{id}/tracks`  | `SpotifyPlatform.addTracksToPlaylist` | 🟠 Renamed           | `POST /playlists/{id}/items` — body still `uris`, max 100                                 | **XS** |
+| `GET /playlists/{id}/tracks`   | `getPlaylistTracks`                   | 🟠 Renamed           | `GET /playlists/{id}/items`; response `tracks` → `items`                                  | **XS** |
+
+**On the `top-tracks` row:** search is a **candidate fallback, not a replacement**. It loses
+top-track semantics entirely — results are relevance-ordered, not ranked by plays, and nothing in
+the response says which tracks are an artist's biggest. Implementations must therefore filter
+results to exact-artist matches (search returns features and covers) and tolerate artists returning
+fewer tracks than requested, or none.
+
+Pagination does **not** recover the lost depth: `limit` above 10 returns `400 "Invalid limit"`, and
+a `limit=10` request yields only ~5 results (§4). Deeper paging would return more search hits, not
+better-ranked ones — the ranking signal is absent at any depth.
 
 **Restricted but unused by us** (listed so we don't reach for them): batch `GET /tracks`, `GET /artists`,
 `GET /albums` (single-ID only now) · `GET /browse/*` · `GET /markets` · `GET /users/{id}` ·
@@ -167,7 +178,7 @@ Eligibility (tightened May 2025 — organisations only, individuals excluded):
 5 authorized users, so the Spotify API cannot get us there. The only route is reaching that scale on
 another platform (Apple Music has no equivalent cap) and then applying.
 
-### 6.3 Can we commercialise? Yes.
+### 6.3 Can we commercialise? The policy appears to permit it — confirm before relying on it.
 
 Spotify's Developer Policy splits apps in two, and the category decides everything:
 
@@ -182,27 +193,37 @@ absent for our tier anyway). Permitted commercial uses, verbatim: _"the sale of 
 sponsorships, or promotions on the Non-Streaming SDA"_ and _"the sale of, or sale of access to, a
 Non-Streaming SDA (including any e-commerce initiated via the Non-Streaming SDA)."_
 
-No separate partner agreement is required. Commercialising also **helps** an Extended Quota
-application, since "demonstrated commercial viability" is one of the criteria.
+Those are the **only** permitted commercial uses — the allowance is narrow, not a general licence.
+Nothing here says our particular product automatically qualifies; **that is Spotify's determination,
+not ours.** Confirm with them before building a business on it. No separate partner agreement is
+mentioned in the terms, but that is an absence of evidence rather than a confirmation.
+
+Commercialising may also _help_ an Extended Quota application, since "demonstrated commercial
+viability" is one of the criteria — though it does nothing about the 250k-MAU bar (§6.2).
 
 Four rules to build within:
 
 1. **Don't sell Spotify data itself** — the product must be the poster analysis, not catalog access.
 2. **No standalone metadata product** — metadata, cover art and preview clips must link back to
    Spotify.
-3. **Add independent value** — don't replicate Spotify's own experience. Poster OCR + AI ranking
-   qualifies.
-4. **No AI/ML ingestion of Spotify Content.** ⚠️ This is a live constraint on the "gems" idea in §7:
-   sending `GET /me/top/artists` results to Gemini is arguably ingesting Spotify Content into an AI
-   model. Today's implementation uses Apple Music data and is clean. **Get clarity on this clause
-   before sourcing gems from Spotify**, especially if commercialising.
+3. **Add independent value** — don't replicate Spotify's own experience. Poster OCR + AI ranking is
+   plausibly the independent value, but treat that as our reading pending Spotify's confirmation.
+4. **No analysing, profiling, or AI/ML ingestion of Spotify Content.** ⚠️ The policy prohibits
+   analysing Spotify Content, building user profiles from it, and ingesting it into an AI/ML model.
+   This directly blocks the "gems" idea in §7: sending `GET /me/top/artists` results to Gemini would
+   be both profiling and ingestion. **Keep Gemini/LLM inputs to non-Spotify sources.** Today's
+   implementation uses Apple Music library data and is unaffected.
 
 ### 6.4 Strategic consequence
 
-Apple Music has **no user cap and no equivalent restrictions**. A commercial product could serve
-unlimited Apple Music users today while Spotify stays capped at 5 until 250k MAU is reached
-elsewhere. That asymmetry argues for Apple Music as the primary platform and Spotify as a secondary,
-deliberately-degraded integration.
+Apple Music has **no documented five-user Development Mode cap** — the specific limit that makes
+Spotify unusable beyond a tester group. That is a narrow comparison, not a claim that Apple is
+unrestricted: Apple has its own rate limiting (429s), token lifetimes, and
+[MusicKit usage terms](https://developer.apple.com/documentation/applemusicapi), plus a paid
+developer membership.
+
+Still, the asymmetry on the axis that matters — how many users you may serve — argues for Apple
+Music as the primary platform and Spotify as a secondary, deliberately-degraded integration.
 
 **Sequencing:** reconnect Premium → ask about the 403 (§6.1) → only then migrate.
 
@@ -235,9 +256,12 @@ deliberately-degraded integration.
 11. ~~Fail fast on the first 403~~ — **done**. `PlatformAccessError` aborts the batch and
     `/api/search-tracks` returns a 502 explaining it is an app-permission problem.
 
-**Optional, high value:** implement `getLibraryArtists` for Spotify via `GET /me/top/artists` — it
-survived the migration and would fix `personalize.ts` returning `degraded: true` for every Spotify
-user today.
+**Optional — but policy-gated.** `GET /me/top/artists` survived the migration and could implement
+`getLibraryArtists` for Spotify, fixing `personalize.ts` returning `degraded: true` for every
+Spotify user. ⚠️ **The "loved" half only.** The "gems" half feeds those artists to Gemini, which
+§6.3 rule 4 prohibits (analysing Spotify Content, profiling users from it, ingesting it into an
+AI/ML model). Deterministic loved-matching uses no LLM and is fine; gems for Spotify users would
+need either Spotify's confirmation or a non-LLM approach.
 
 ## Sources
 
