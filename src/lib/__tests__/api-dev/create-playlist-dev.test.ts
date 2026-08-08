@@ -19,13 +19,14 @@ describe('/api/create-playlist (dev mode)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...originalEnv };
     resetDevConfig();
   });
 
   it('dry-run returns fake URL without hitting APIs', async () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
     resetDevConfig();
     updateDevConfig({ skipAuth: true, dryRunPlaylist: true });
 

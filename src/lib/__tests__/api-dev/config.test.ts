@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMocks } from 'node-mocks-http';
 import handler from '@/pages/api/dev/config';
 import { resetDevConfig } from '@/lib/dev-mode';
@@ -11,6 +11,7 @@ describe('/api/dev/config', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...originalEnv };
     resetDevConfig();
   });
@@ -28,7 +29,7 @@ describe('/api/dev/config', () => {
 
   it('GET returns 403 when dev mode unavailable', () => {
     delete process.env.DEV_MODE;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createReq('GET');
     handler(req, res);
@@ -38,7 +39,7 @@ describe('/api/dev/config', () => {
 
   it('GET returns config when dev mode available', () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createReq('GET');
     handler(req, res);
@@ -54,7 +55,7 @@ describe('/api/dev/config', () => {
 
   it('PATCH merges and returns updated config', () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createReq('PATCH', { mockAnalysis: true, mockDelayMs: 500 });
     handler(req, res);
@@ -67,7 +68,7 @@ describe('/api/dev/config', () => {
 
   it('PATCH with invalid body returns 400', () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createReq('PATCH', { mockAnalysis: 'not-a-boolean' });
     handler(req, res);
@@ -79,7 +80,7 @@ describe('/api/dev/config', () => {
 
   it('rejects non-localhost requests', () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createMocks({
       method: 'GET',
@@ -95,7 +96,7 @@ describe('/api/dev/config', () => {
 
   it('returns 405 for unsupported methods', () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
 
     const { req, res } = createReq('DELETE');
     handler(req, res);

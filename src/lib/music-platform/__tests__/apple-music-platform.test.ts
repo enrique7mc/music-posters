@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
@@ -188,7 +189,8 @@ describe('AppleMusicPlatformService.searchArtist', () => {
 describe('AppleMusicPlatformService error redaction (errMessage)', () => {
   const SECRET = 'SUPERSECRET_DEV_TOKEN_do_not_log';
   let service: AppleMusicPlatformService;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
+  // Explicit type: ReturnType<typeof vi.spyOn> infers a constructor signature.
+  let errorSpy: MockInstance<(...args: unknown[]) => void>;
 
   beforeEach(() => {
     service = new AppleMusicPlatformService();
