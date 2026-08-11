@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { NextApiRequest, NextApiResponse } from 'next';
 import {
   setAuthCookies,
@@ -16,9 +16,8 @@ import { resetDevConfig, updateDevConfig } from '../dev-mode';
 describe('auth.ts', () => {
   describe('setAuthCookies', () => {
     it('should set access and refresh token cookies', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       setAuthCookies(mockRes, 'access_token_123', 'refresh_token_456', 3600);
 
@@ -32,48 +31,44 @@ describe('auth.ts', () => {
     });
 
     it('should set httpOnly flag on cookies', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       setAuthCookies(mockRes, 'access_token_123', 'refresh_token_456', 3600);
 
-      const cookies = mockRes.setHeader.mock.calls[0][1] as string[];
+      const cookies = setHeader.mock.calls[0][1] as string[];
       expect(cookies[0]).toContain('HttpOnly');
       expect(cookies[1]).toContain('HttpOnly');
     });
 
     it('should set SameSite=lax on cookies', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       setAuthCookies(mockRes, 'access_token_123', 'refresh_token_456', 3600);
 
-      const cookies = mockRes.setHeader.mock.calls[0][1] as string[];
+      const cookies = setHeader.mock.calls[0][1] as string[];
       expect(cookies[0]).toContain('SameSite=Lax');
       expect(cookies[1]).toContain('SameSite=Lax');
     });
 
     it('should set correct Max-Age for access token', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       setAuthCookies(mockRes, 'access_token_123', 'refresh_token_456', 3600);
 
-      const cookies = mockRes.setHeader.mock.calls[0][1] as string[];
+      const cookies = setHeader.mock.calls[0][1] as string[];
       expect(cookies[0]).toContain('Max-Age=3600');
     });
 
     it('should set 30 day Max-Age for refresh token', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       setAuthCookies(mockRes, 'access_token_123', 'refresh_token_456', 3600);
 
-      const cookies = mockRes.setHeader.mock.calls[0][1] as string[];
+      const cookies = setHeader.mock.calls[0][1] as string[];
       const expectedMaxAge = 60 * 60 * 24 * 30; // 30 days
       expect(cookies[1]).toContain(`Max-Age=${expectedMaxAge}`);
     });
@@ -153,9 +148,8 @@ describe('auth.ts', () => {
 
   describe('clearAuthCookies', () => {
     it('should clear access and refresh token cookies', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       clearAuthCookies(mockRes);
 
@@ -169,13 +163,12 @@ describe('auth.ts', () => {
     });
 
     it('should set Max-Age=0 to expire cookies immediately', () => {
-      const mockRes = {
-        setHeader: vi.fn(),
-      } as unknown as NextApiResponse;
+      const setHeader = vi.fn();
+      const mockRes = { setHeader } as unknown as NextApiResponse;
 
       clearAuthCookies(mockRes);
 
-      const cookies = mockRes.setHeader.mock.calls[0][1] as string[];
+      const cookies = setHeader.mock.calls[0][1] as string[];
       expect(cookies[0]).toContain('Max-Age=0');
       expect(cookies[1]).toContain('Max-Age=0');
     });
@@ -218,6 +211,7 @@ describe('auth.ts', () => {
     const originalEnv = { ...process.env };
 
     afterEach(() => {
+      vi.unstubAllEnvs();
       process.env = { ...originalEnv };
       resetDevConfig();
     });
@@ -235,7 +229,7 @@ describe('auth.ts', () => {
 
     it('isAuthenticatedOrDev returns true when skipAuth enabled', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       resetDevConfig();
 
       updateDevConfig({ skipAuth: true });
@@ -249,7 +243,7 @@ describe('auth.ts', () => {
 
     it('getPlatformAccessTokenOrDev returns fake token when skipAuth enabled', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       resetDevConfig();
 
       updateDevConfig({ skipAuth: true });
@@ -263,7 +257,7 @@ describe('auth.ts', () => {
 
     it('getAuthenticatedPlatformOrDev returns fakePlatform when skipAuth enabled', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       resetDevConfig();
 
       updateDevConfig({ skipAuth: true, fakePlatform: 'apple-music' });
@@ -277,7 +271,7 @@ describe('auth.ts', () => {
 
     it('wrappers delegate to real functions when dev mode on but skipAuth off', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       resetDevConfig();
 
       const mockReq = {

@@ -15,13 +15,14 @@ describe('/api/auth/me (dev mode)', () => {
   const originalEnv = { ...process.env };
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...originalEnv };
     resetDevConfig();
   });
 
   it('returns fake user when skipAuth is enabled', async () => {
     process.env.DEV_MODE = 'true';
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
     resetDevConfig();
     updateDevConfig({ skipAuth: true, fakePlatform: 'spotify' });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { isDevModeAvailable, getDevConfig, updateDevConfig, resetDevConfig } from '../dev-mode';
 
 describe('dev-mode.ts', () => {
@@ -9,6 +9,7 @@ describe('dev-mode.ts', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...originalEnv };
     resetDevConfig();
   });
@@ -16,28 +17,28 @@ describe('dev-mode.ts', () => {
   describe('isDevModeAvailable', () => {
     it('returns false when NODE_ENV=production', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
 
       expect(isDevModeAvailable()).toBe(false);
     });
 
     it('returns false when DEV_MODE is unset', () => {
       delete process.env.DEV_MODE;
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(isDevModeAvailable()).toBe(false);
     });
 
     it('returns true when DEV_MODE=true and NODE_ENV is not production', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(isDevModeAvailable()).toBe(true);
     });
 
     it('returns false when DEV_MODE=false', () => {
       process.env.DEV_MODE = 'false';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(isDevModeAvailable()).toBe(false);
     });
@@ -46,7 +47,7 @@ describe('dev-mode.ts', () => {
   describe('getDevConfig', () => {
     it('returns all-disabled config when dev mode not available', () => {
       delete process.env.DEV_MODE;
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       const config = getDevConfig();
 
@@ -59,7 +60,7 @@ describe('dev-mode.ts', () => {
 
     it('defaults mockAnalysis and mockTrackSearch to false', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       const config = getDevConfig();
 
@@ -70,7 +71,7 @@ describe('dev-mode.ts', () => {
 
     it('reads MOCK_DATA_DELAY_MS for initial delay value', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       process.env.MOCK_DATA_DELAY_MS = '2000';
 
       const config = getDevConfig();
@@ -80,7 +81,7 @@ describe('dev-mode.ts', () => {
 
     it('ignores invalid MOCK_DATA_DELAY_MS values', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       process.env.MOCK_DATA_DELAY_MS = 'abc';
 
       const config = getDevConfig();
@@ -90,7 +91,7 @@ describe('dev-mode.ts', () => {
 
     it('defaults fakePlatform to spotify', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       const config = getDevConfig();
 
@@ -101,7 +102,7 @@ describe('dev-mode.ts', () => {
   describe('updateDevConfig', () => {
     it('enforces skipAuth → dryRunPlaylist coupling', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       const config = updateDevConfig({ skipAuth: true, dryRunPlaylist: false });
 
@@ -112,7 +113,7 @@ describe('dev-mode.ts', () => {
 
     it('allows dryRunPlaylist=true without skipAuth', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       const config = updateDevConfig({ dryRunPlaylist: true, skipAuth: false });
 
@@ -122,28 +123,28 @@ describe('dev-mode.ts', () => {
 
     it('throws when dev mode is not available', () => {
       delete process.env.DEV_MODE;
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(() => updateDevConfig({ mockAnalysis: true })).toThrow('Dev mode is not available');
     });
 
     it('throws on invalid config key', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(() => updateDevConfig({ invalidKey: true } as any)).toThrow('Invalid config key');
     });
 
     it('throws on invalid type', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(() => updateDevConfig({ mockAnalysis: 'yes' } as any)).toThrow('Invalid type');
     });
 
     it('throws on invalid fakePlatform value', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(() => updateDevConfig({ fakePlatform: 'tidal' as any })).toThrow(
         'Invalid fakePlatform'
@@ -152,14 +153,14 @@ describe('dev-mode.ts', () => {
 
     it('throws on out-of-range mockDelayMs', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       expect(() => updateDevConfig({ mockDelayMs: 10000 })).toThrow('mockDelayMs must be between');
     });
 
     it('merges partial updates', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
 
       updateDevConfig({ mockAnalysis: true });
       const config = updateDevConfig({ mockTrackSearch: true });
@@ -172,7 +173,7 @@ describe('dev-mode.ts', () => {
   describe('security boundary', () => {
     it('NODE_ENV=production + DEV_MODE=true → all dev features OFF', () => {
       process.env.DEV_MODE = 'true';
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
 
       expect(isDevModeAvailable()).toBe(false);
 

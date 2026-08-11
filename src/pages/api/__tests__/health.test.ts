@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMocks } from 'node-mocks-http';
+import type { RequestMethod } from 'node-mocks-http';
 import handler from '../health';
 
 describe('/api/health', () => {
@@ -32,7 +33,7 @@ describe('/api/health', () => {
   });
 
   it('should work with any HTTP method', () => {
-    const methods = ['GET', 'POST', 'PUT', 'DELETE'];
+    const methods: RequestMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
 
     methods.forEach((method) => {
       const { req, res } = createMocks({ method });
