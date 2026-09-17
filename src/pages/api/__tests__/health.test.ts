@@ -32,13 +32,14 @@ describe('/api/health', () => {
     expect(new Date(data.timestamp).toISOString()).toBe(data.timestamp);
   });
 
-  it('should work with any HTTP method', () => {
-    const methods: RequestMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
+  it('should reject non-GET methods with 405', () => {
+    const methods: RequestMethod[] = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
     methods.forEach((method) => {
       const { req, res } = createMocks({ method });
       handler(req, res);
-      expect(res._getStatusCode()).toBe(200);
+      expect(res._getStatusCode()).toBe(405);
+      expect(JSON.parse(res._getData())).toEqual({ error: 'Method not allowed' });
     });
   });
 });
