@@ -270,6 +270,16 @@ panel — see
    the production redirect URI in the Spotify Dashboard.
 5. Deploy. Production runs at `https://playlistd.xemc.dev`.
 
+### Viewing production logs
+
+- **Vercel Dashboard** (recommended): vercel.com → playlistd → Logs tab. Supports
+  historical logs, filtering by host/route/status, and expanding individual requests
+  to see all console output. Filter by host `playlistd.xemc.dev` for production
+  traffic.
+- **Vercel CLI** (`npx vercel logs <deployment-url>`): streams **new** logs only — it
+  does not fetch history. Start the stream before triggering the request. Get the
+  deployment URL from `npx vercel ls` (the CLI does not accept the custom domain).
+
 ## Cost Considerations
 
 - **Apple Music API / Spotify API:** free (a paid Apple Developer membership is
