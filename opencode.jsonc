@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "implementer",
+  "permissions": [
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "read", "resource": ".env", "effect": "ask" },
+    { "action": "read", "resource": ".env.*", "effect": "ask" },
+    { "action": "read", "resource": "*/.env", "effect": "ask" },
+    { "action": "read", "resource": "*/.env.*", "effect": "ask" },
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git push *", "effect": "deny" },
+    {
+      "action": "shell",
+      "resource": "git reset --hard *",
+      "effect": "deny",
+    },
+    { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
+  ],
+  "experimental": {
+    "subagent_depth": 1,
+  },
+}
