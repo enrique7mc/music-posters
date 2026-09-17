@@ -25,5 +25,6 @@ surfaced by Gemini (**hidden gems**).
 - [../ARCHITECTURE.md](../ARCHITECTURE.md) — system design and data flow
 - [../TESTING.md](../TESTING.md) — testing checklist
 - [../CHANGELOG.md](../CHANGELOG.md) — release history
-- [../CLAUDE.md](../CLAUDE.md) — provider guide and known limitations (incl. the
-  Spotify February 2026 breakage)
+- [../SPOTIFY_MIGRATION.md](../SPOTIFY_MIGRATION.md) — current Spotify limitations
+  and deferred migration plan
+- [../AGENTS.md](../AGENTS.md) — repository instructions for coding agents

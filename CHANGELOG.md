@@ -48,4 +48,4 @@ All notable changes to this project are documented here. The format is based on
   deduped and capped, and the reason text is sanitized (control / zero-width /
   bidi-override characters) and length-capped before it reaches the DOM.
 - The Spotify path remains broken by Spotify's February 2026 Web API changes (see
-  `CLAUDE.md` → Known Limitations). Apple Music is the working platform.
+  `SPOTIFY_MIGRATION.md`). Apple Music is the working platform.

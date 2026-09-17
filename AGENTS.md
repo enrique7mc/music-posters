@@ -34,8 +34,8 @@ pre-commit hook formats staged files.
 - Tests: `__tests__/` directories next to the code; setup in `src/test/`
   (Vitest + Testing Library + MSW)
 
-Flow: auth → upload → `/api/analyze` (extract + rank artists) → review →
-`/api/create-playlist`.
+Flow: auth → upload → `/api/analyze` (extract + rank artists) → artist
+review → `/api/search-tracks` → track review → `/api/create-playlist`.
 
 ## Hard rules
 
@@ -43,12 +43,14 @@ Flow: auth → upload → `/api/analyze` (extract + rank artists) → review →
   Apple Music 5 req/batch + 500ms. Do not increase without testing for HTTP 429.
 - `/api/analyze`: keep `bodyParser: false` (formidable parses multipart); 10MB max
   upload; always delete the temp file after reading it.
-- `/api/create-playlist`: 150-artist cap (`MAX_ARTISTS_PER_SEARCH`) — keep it.
+- `/api/search-tracks`: 150-artist cap (`MAX_ARTISTS_PER_SEARCH`) — keep it.
 - `DEV_MODE=true` must stay blocked when `NODE_ENV === 'production'`.
 - `google-credentials.json` and `.env` are gitignored; never commit secrets.
 - Env vars are read at server start; they do not hot-reload.
-- API routes: method check → auth check → validation → logic → specific
-  405/401/400/429/500.
+- API routes: check the method first; apply rate limiting, authentication (if
+  required), validation, and logic where applicable. Preserve intentional public
+  endpoints, route-specific rate-limit/auth ordering, and specific
+  405/401/400/429/500 responses.
 
 ## Working agreements
 

@@ -11,7 +11,7 @@ already love plus hidden gems picked for your taste.
 
 > **Note:** The Spotify path is currently broken by Spotify's February 2026 Web
 > API changes — **Apple Music is the working platform.** See
-> [CLAUDE.md → Known Limitations](CLAUDE.md) for details.
+> [SPOTIFY_MIGRATION.md](SPOTIFY_MIGRATION.md) for details.
 
 ## Quick Start
 
@@ -84,7 +84,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
   [explanation](docs/explanation-personalization.md)
 - [Testing](TESTING.md) - Testing checklist
 - [Changelog](CHANGELOG.md) - Release history
-- [CLAUDE.md](CLAUDE.md) - Project guide, providers, and known limitations
+- [Spotify Migration](SPOTIFY_MIGRATION.md) - Current Spotify limitations and
+  deferred migration plan
+- [Agent Guide](AGENTS.md) - Repository instructions for coding agents
 
 ## MVP Philosophy
 

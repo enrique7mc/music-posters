@@ -20,12 +20,12 @@ section was implemented differently than originally proposed, the deviation is n
 | 6   | Error Handling System       | 🟡 Partial     | `ui/ErrorMessage.tsx` + `lib/error-utils.ts` (`AppError`, `parseApiError`) done. **Gaps:** no `ErrorBoundary`, no `useRetry` hook, no typed error-code enum, `_app.tsx` not wrapped                                         |
 | 7   | Constants File              | 🟡 Minimal     | `src/lib/constants.ts` holds only `MAX_ARTISTS_PER_SEARCH`. Other constants live in `validation.ts` (file size/types) or remain inline                                                                                      |
 | 8   | Performance Optimizations   | ❌ Not started | No image compression, no response cache, no `next/image` (still `<img>`), no `lz-string`                                                                                                                                    |
-| 9   | Error Tracking (Sentry)     | ❌ Not started | No Sentry config or dependency. Production logging is via Vercel (see CLAUDE.md)                                                                                                                                            |
+| 9   | Error Tracking (Sentry)     | ❌ Not started | No Sentry config or dependency. Production logging is via Vercel (see `SETUP.md`)                                                                                                                                           |
 | 10  | File Validation             | ✅ Done        | Folded into `src/lib/validation.ts` (`validateImageFile`, `validateFileSize`) rather than a separate `file-validation.ts`                                                                                                   |
 
 > **Out-of-scope work that also shipped:** Apple Music support (`src/lib/music-platform/`,
-> `src/lib/apple-music-auth.ts`) was added after this doc was written. See CLAUDE.md
-> "Known Limitations" for the current Spotify Premium constraint.
+> `src/lib/apple-music-auth.ts`) was added after this doc was written. See
+> `SPOTIFY_MIGRATION.md` for the current Spotify Premium constraint.
 
 ---
 
@@ -948,7 +948,7 @@ sessionStorage.setItem('tracks', compress(JSON.stringify(tracks)));
 ### 9. Error Tracking
 
 > **Status: ❌ Not started.** No Sentry dependency or config. Production visibility
-> currently relies on Vercel logs (see CLAUDE.md "Viewing Production Logs").
+> currently relies on Vercel logs (see `SETUP.md` “Viewing production logs”).
 
 **Estimated Time**: 1 day
 **Impact**: Medium - Better visibility into production errors
@@ -1049,7 +1049,7 @@ Sentry.captureMessage('User created large playlist', {
 - [ ] Add custom event tracking for user actions
 - [ ] Test error reporting in staging environment
 - [ ] Set up Sentry alerts for critical errors
-- [ ] Document error tracking in CLAUDE.md
+- [ ] Document error tracking in `SETUP.md` and operational conventions in `AGENTS.md`
 
 #### What You'll Get
 
@@ -1303,7 +1303,7 @@ After implementing multiple improvements, test:
 
 After each improvement, update:
 
-- [ ] `CLAUDE.md` - Add new patterns and conventions
+- [ ] `AGENTS.md` - Add new agent-relevant patterns and conventions
 - [ ] `README.md` - Update setup instructions if needed
 - [ ] Code comments - Add JSDoc to new functions
 - [ ] Type definitions - Document complex types
@@ -1335,7 +1335,7 @@ If you encounter issues while implementing these improvements:
 
 1. Check existing tests for usage examples
 2. Review similar implementations in the codebase
-3. Consult documentation in `CLAUDE.md`
+3. Consult the canonical documentation linked from `AGENTS.md`
 4. Test in isolation before integrating
 5. Ask for code review before merging
 

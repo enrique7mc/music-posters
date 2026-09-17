@@ -4,8 +4,9 @@ Get Music Posters running in 5 minutes (assuming you have credentials).
 
 > **Heads up:** The Spotify path below is currently broken by Spotify's February
 > 2026 Web API changes — **Apple Music is the working platform.** See
-> [CLAUDE.md → Known Limitations](CLAUDE.md) for platform status and the Gemini /
-> Apple Music environment variables. The Spotify steps here remain for reference.
+> [SPOTIFY_MIGRATION.md](SPOTIFY_MIGRATION.md) for platform status and
+> [SETUP.md](SETUP.md) for the Gemini / Apple Music environment variables. The
+> Spotify steps here remain for reference.
 
 ## Prerequisites Checklist
 

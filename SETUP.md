@@ -6,7 +6,7 @@ This guide walks you through setting up Music Posters (Playlistd) from scratch.
 > Spotify's February 2026 Web API changes (Development Mode now requires the app
 > owner's Premium, plus removed endpoints). **Apple Music is the working
 > platform.** If you only want a working app, set up **Apple Music + Gemini** and
-> skip the Spotify steps. See [CLAUDE.md → Known Limitations](CLAUDE.md).
+> skip the Spotify steps. See [SPOTIFY_MIGRATION.md](SPOTIFY_MIGRATION.md).
 
 ## What you need
 
