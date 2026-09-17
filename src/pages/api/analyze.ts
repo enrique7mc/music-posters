@@ -32,6 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
+  let tempFilePath: string | undefined;
+
   try {
     const form = formidable({
       maxFileSize: 10 * 1024 * 1024, // 10MB max
@@ -51,15 +53,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'No image file provided' });
     }
 
+    tempFilePath = imageFile.filepath;
+
     // Read the image file
-    const imageBuffer = fs.readFileSync(imageFile.filepath);
+    const imageBuffer = fs.readFileSync(tempFilePath);
 
     // Validate file type and size using magic bytes
     console.log('[Analyze API] Validating file type and size...');
     const validation = await validateImageFile(imageBuffer);
     if (!validation.isValid) {
-      // Clean up temp file before returning error
-      fs.unlinkSync(imageFile.filepath);
       return res.status(400).json({
         error: validation.error || 'Invalid file',
         allowedTypes: ALLOWED_IMAGE_MIME_TYPES,
@@ -112,9 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('[Analyze API] Analyzing with Vision API...');
       result = await analyzeImage(imageBuffer);
     }
-
-    // Clean up the temporary file
-    fs.unlinkSync(imageFile.filepath);
 
     // Generate a thumbnail version of the poster for playlist cover (300x300)
     // This is stored in sessionStorage and later used to create the playlist cover
@@ -174,5 +173,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       error: error.message || 'Failed to analyze image',
     });
+  } finally {
+    if (tempFilePath) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.error('Failed to delete temporary upload:', cleanupError);
+      }
+    }
   }
 }

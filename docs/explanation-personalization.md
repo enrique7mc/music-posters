@@ -86,7 +86,7 @@ The loved set is the lineup-anchored taste signal. Heavy rotation is not.
 - **Apple Music only.** Personalization needs a readable user library.
   Spotify's library endpoints are off the table here (the Spotify path is also
   broken by the February 2026 API changes — see
-  [../CLAUDE.md](../CLAUDE.md)). Other platforms return the plain lineup with
+  [../SPOTIFY_MIGRATION.md](../SPOTIFY_MIGRATION.md)). Other platforms return the plain lineup with
   `degraded: true`. Accepted: this is a personal app and Apple Music is the
   working platform.
 - **~10 seconds of latency.** The Gemini pass is a ~7–11s floor; the library scan
@@ -176,4 +176,6 @@ exfiltrate those tokens. (This was a CRITICAL finding from adversarial review.)
   constants, and endpoint contract.
 - [howto-personalization.md](./howto-personalization.md) — tune the thresholds
   this document explains.
-- [../CLAUDE.md](../CLAUDE.md) — provider setup and the Spotify limitation.
+- [../SETUP.md](../SETUP.md) — image-analysis provider setup.
+- [../SPOTIFY_MIGRATION.md](../SPOTIFY_MIGRATION.md) — current Spotify limitation
+  and deferred migration plan.

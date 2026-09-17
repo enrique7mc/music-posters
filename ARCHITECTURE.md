@@ -7,7 +7,7 @@ three image-analysis providers, a review screen, and user-aware recommendations.
 
 > **Spotify status:** the Spotify path is broken by Spotify's February 2026 Web
 > API changes (Premium-gated Development Mode + removed endpoints). **Apple Music
-> is the working platform.** See [CLAUDE.md → Known Limitations](CLAUDE.md).
+> is the working platform.** See [SPOTIFY_MIGRATION.md](SPOTIFY_MIGRATION.md).
 
 ## System Architecture
 
@@ -76,7 +76,9 @@ Upload image → POST /api/analyze (formidable, bodyParser off, 10MB cap)
   → Artist[] (name, optional weight/tier/reasoning) + rawText + provider
 ```
 
-See [CLAUDE.md → Image Analysis Methods](CLAUDE.md) for the per-provider detail.
+Provider configuration is documented in [SETUP.md](SETUP.md); implementation
+details live in `src/lib/ocr.ts`, `src/lib/gemini.ts`, and
+`src/lib/hybrid-analyzer.ts`.
 
 ### 3. Personalization — loved + hidden gems (Apple Music)
 
