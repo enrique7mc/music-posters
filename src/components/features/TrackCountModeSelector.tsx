@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Card, { CardContent } from '@/components/ui/Card';
+import TrackCountInput from './TrackCountInput';
 
 export type TrackCountMode = 'tier-based' | 'custom-per-tier' | 'per-artist';
 
@@ -44,7 +45,38 @@ export default function TrackCountModeSelector({
   disabled = false,
   showTierModes = true,
 }: TrackCountModeSelectorProps) {
-  const trackCountOptions = [1, 2, 3, 5, 10];
+  const tierFields: Array<{
+    tier: keyof TierCounts;
+    id: string;
+    label: string;
+    // Accessible names include the visible label text (WCAG 2.5.3 Label in Name).
+    inputLabel: string;
+  }> = [
+    {
+      tier: 'headliner',
+      id: 'tier-count-headliner',
+      label: 'Headliners',
+      inputLabel: 'Headliners track count',
+    },
+    {
+      tier: 'sub-headliner',
+      id: 'tier-count-sub-headliner',
+      label: 'Sub-headliners',
+      inputLabel: 'Sub-headliners track count',
+    },
+    {
+      tier: 'mid-tier',
+      id: 'tier-count-mid-tier',
+      label: 'Mid-tier',
+      inputLabel: 'Mid-tier track count',
+    },
+    {
+      tier: 'undercard',
+      id: 'tier-count-undercard',
+      label: 'Undercard',
+      inputLabel: 'Undercard track count',
+    },
+  ];
 
   return (
     <Card variant="glass" className="overflow-hidden">
@@ -184,99 +216,22 @@ export default function TrackCountModeSelector({
             className="overflow-hidden"
           >
             <div className="space-y-4 pt-2">
-              {/* Headliner */}
-              <div>
-                <label className="block text-sm font-medium text-dark-200 mb-2">Headliners</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {trackCountOptions.map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => onTierCountChange('headliner', count)}
-                      disabled={disabled}
-                      className={cn(
-                        'py-2 px-3 rounded text-sm font-semibold transition-all',
-                        tierCounts.headliner === count
-                          ? 'bg-accent-500 text-white'
-                          : 'bg-dark-800 text-dark-300 hover:bg-dark-700',
-                        disabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {count}
-                    </button>
-                  ))}
+              <p className="text-xs text-dark-400">Whole numbers, 1–25 tracks per tier.</p>
+              {tierFields.map(({ tier, id, label, inputLabel }) => (
+                <div key={tier}>
+                  <label htmlFor={id} className="block text-sm font-medium text-dark-200 mb-2">
+                    {label}
+                  </label>
+                  <TrackCountInput
+                    id={id}
+                    value={tierCounts[tier]}
+                    onCommit={(count) => onTierCountChange(tier, count)}
+                    label={inputLabel}
+                    disabled={disabled}
+                    className="w-24"
+                  />
                 </div>
-              </div>
-
-              {/* Sub-headliner */}
-              <div>
-                <label className="block text-sm font-medium text-dark-200 mb-2">
-                  Sub-headliners
-                </label>
-                <div className="grid grid-cols-5 gap-2">
-                  {trackCountOptions.map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => onTierCountChange('sub-headliner', count)}
-                      disabled={disabled}
-                      className={cn(
-                        'py-2 px-3 rounded text-sm font-semibold transition-all',
-                        tierCounts['sub-headliner'] === count
-                          ? 'bg-accent-500 text-white'
-                          : 'bg-dark-800 text-dark-300 hover:bg-dark-700',
-                        disabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Mid-tier */}
-              <div>
-                <label className="block text-sm font-medium text-dark-200 mb-2">Mid-tier</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {trackCountOptions.map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => onTierCountChange('mid-tier', count)}
-                      disabled={disabled}
-                      className={cn(
-                        'py-2 px-3 rounded text-sm font-semibold transition-all',
-                        tierCounts['mid-tier'] === count
-                          ? 'bg-accent-500 text-white'
-                          : 'bg-dark-800 text-dark-300 hover:bg-dark-700',
-                        disabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Undercard */}
-              <div>
-                <label className="block text-sm font-medium text-dark-200 mb-2">Undercard</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {trackCountOptions.map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => onTierCountChange('undercard', count)}
-                      disabled={disabled}
-                      className={cn(
-                        'py-2 px-3 rounded text-sm font-semibold transition-all',
-                        tierCounts.undercard === count
-                          ? 'bg-accent-500 text-white'
-                          : 'bg-dark-800 text-dark-300 hover:bg-dark-700',
-                        disabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -289,7 +244,7 @@ export default function TrackCountModeSelector({
             className="mt-3 p-3 bg-dark-800/50 rounded-lg border border-dark-700"
           >
             <p className="text-xs text-dark-400">
-              Customize track counts for each artist individually in the list below
+              Customize track counts (1–25 tracks) for each artist individually in the list below
             </p>
           </motion.div>
         )}

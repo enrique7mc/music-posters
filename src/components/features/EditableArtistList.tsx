@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import { staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
 import type { TrackCountMode } from './TrackCountModeSelector';
+import TrackCountInput from './TrackCountInput';
 
 interface EditableArtistListProps {
   artists: Artist[];
@@ -45,8 +46,6 @@ export default function EditableArtistList({
 
   const isManual = inputSource === 'text';
   const hasRanking = !isManual && (provider === 'gemini' || provider === 'hybrid');
-  // Curated track count options for better UX (per-artist mode)
-  const trackCountOptions = [1, 2, 3, 5, 10];
 
   return (
     <div className="space-y-6">
@@ -137,18 +136,12 @@ export default function EditableArtistList({
               {/* Track count selector (only in per-artist mode) */}
               {trackCountMode === 'per-artist' && (
                 <div className="flex-shrink-0">
-                  <select
-                    value={perArtistCounts[artist.name] || 3}
-                    onChange={(e) => onPerArtistCountChange(artist.name, parseInt(e.target.value))}
-                    className="px-3 py-2 bg-dark-800 border border-dark-700 rounded text-sm text-dark-100 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50"
-                    aria-label={`Track count for ${artist.name}`}
-                  >
-                    {trackCountOptions.map((count) => (
-                      <option key={count} value={count}>
-                        {count} {count === 1 ? 'track' : 'tracks'}
-                      </option>
-                    ))}
-                  </select>
+                  <TrackCountInput
+                    value={perArtistCounts[artist.name] ?? 3}
+                    onCommit={(count) => onPerArtistCountChange(artist.name, count)}
+                    label={`Track count for ${artist.name}`}
+                    className="w-20"
+                  />
                 </div>
               )}
 

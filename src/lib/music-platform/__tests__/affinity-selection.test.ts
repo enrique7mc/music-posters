@@ -24,6 +24,76 @@ describe('getSelectionModeForArtist', () => {
   );
 });
 
+describe('searchAndGetTopTracks track count limits', () => {
+  // Stub platform that records the limit used for each artist id.
+  function limitRecordingPlatform(limitByArtist: Record<string, number>): MusicPlatformService {
+    return {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => ({ id: name, name, matched: true, similarity: 1 }),
+      getArtistTopTracks: async (
+        artistId: string,
+        _token: string,
+        limit?: number
+      ): Promise<Track[]> => {
+        limitByArtist[artistId] = limit ?? 0;
+        return [];
+      },
+    } as unknown as MusicPlatformService;
+  }
+
+  // MANDATORY REGRESSION (1–25 range): a requested count must reach the
+  // platform unreduced — the old 1–10 clamp silently turned 25 into 10.
+  it('passes a per-artist count of 25 through instead of reducing it to 10', async () => {
+    const limitByArtist: Record<string, number> = {};
+    await searchAndGetTopTracks(limitRecordingPlatform(limitByArtist), [{ name: 'A' }], 'token', {
+      mode: 'per-artist',
+      perArtistCounts: { A: 25 },
+    });
+    expect(limitByArtist.A).toBe(25);
+  });
+
+  it('passes custom-per-tier counts above 10 through', async () => {
+    const limitByArtist: Record<string, number> = {};
+    await searchAndGetTopTracks(
+      limitRecordingPlatform(limitByArtist),
+      [
+        { name: 'A', tier: 'headliner' },
+        { name: 'B', tier: 'undercard' },
+      ],
+      'token',
+      {
+        mode: 'custom-per-tier',
+        tierCounts: { headliner: 17, 'sub-headliner': 5, 'mid-tier': 3, undercard: 25 },
+      }
+    );
+    expect(limitByArtist).toEqual({ A: 17, B: 25 });
+  });
+
+  it('aligns the uniform custom mode with the 1–25 range', async () => {
+    const limitByArtist: Record<string, number> = {};
+    await searchAndGetTopTracks(limitRecordingPlatform(limitByArtist), [{ name: 'A' }], 'token', {
+      mode: 'custom',
+      customCount: 25,
+    });
+    expect(limitByArtist.A).toBe(25);
+  });
+
+  it('defensively clamps out-of-range counts to the 1–25 range', async () => {
+    const limitByArtist: Record<string, number> = {};
+    await searchAndGetTopTracks(
+      limitRecordingPlatform(limitByArtist),
+      [{ name: 'A' }, { name: 'B' }],
+      'token',
+      {
+        mode: 'per-artist',
+        perArtistCounts: { A: 99, B: 0 },
+      }
+    );
+    expect(limitByArtist).toEqual({ A: 25, B: 1 });
+  });
+});
+
 describe('searchAndGetTopTracks affinity → per-artist mode', () => {
   // Stub platform that records the selectionMode used for each artist id.
   function recordingPlatform(

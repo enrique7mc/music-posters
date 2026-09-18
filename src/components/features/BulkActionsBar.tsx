@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Artist } from '@/types';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
-import { cn } from '@/lib/utils';
 import type { TrackCountMode, TierCounts } from './TrackCountModeSelector';
+import { DEFAULT_TIER_COUNTS } from './TrackCountModeSelector';
+import TrackCountInput from './TrackCountInput';
 
 interface BulkActionsBarProps {
   artists: Artist[];
@@ -27,8 +29,14 @@ export default function BulkActionsBar({
 
   const hasRanking = availableTiers.length > 0;
 
-  // Track count options (curated list for better UX)
-  const trackCountOptions = [1, 2, 3, 5, 10];
+  // Staged counts per tier, applied to the lineup only via the explicit
+  // Apply action. Seeded with the tier defaults so Apply can also restore a
+  // tier to its recommended count (TrackCountInput commits typed values here).
+  const [stagedTierCounts, setStagedTierCounts] = useState<Record<string, number>>(() =>
+    Object.fromEntries(
+      availableTiers.map((tier) => [tier, DEFAULT_TIER_COUNTS[tier as keyof TierCounts]])
+    )
+  );
 
   return (
     <Card variant="glass" className="overflow-hidden">
@@ -80,7 +88,7 @@ export default function BulkActionsBar({
             className="mt-4 pt-4 border-t border-dark-700 space-y-3"
           >
             <p className="text-xs text-dark-400 mb-2">
-              Apply track count to all artists in a tier:
+              Apply a track count (1–25) to all artists in a tier:
             </p>
 
             {availableTiers.map((tier) => {
@@ -100,32 +108,36 @@ export default function BulkActionsBar({
                 undercard: '·',
               };
 
+              const tierLabel = tierLabels[tier as keyof typeof tierLabels];
               const artistCount = artists.filter((a) => a.tier === tier).length;
+              const stagedCount =
+                stagedTierCounts[tier] ?? DEFAULT_TIER_COUNTS[tier as keyof TierCounts];
 
               return (
                 <div key={tier} className="flex items-center gap-3 p-2 bg-dark-800/50 rounded">
                   <div className="flex-1 flex items-center gap-2">
                     <span className="text-lg">{tierIcons[tier as keyof typeof tierIcons]}</span>
-                    <span className="text-sm text-dark-200">
-                      {tierLabels[tier as keyof typeof tierLabels]}
-                    </span>
+                    <span className="text-sm text-dark-200">{tierLabel}</span>
                     <span className="text-xs text-dark-500">({artistCount})</span>
                   </div>
 
-                  <select
-                    onChange={(e) => onApplyToTier(tier, parseInt(e.target.value))}
-                    className="px-2 py-1 bg-dark-900 border border-dark-700 rounded text-xs text-dark-100 focus:border-accent-500 focus:outline-none"
-                    defaultValue=""
+                  <TrackCountInput
+                    value={stagedCount}
+                    onCommit={(count) =>
+                      setStagedTierCounts((prev) => ({ ...prev, [tier]: count }))
+                    }
+                    label={`Track count for ${tierLabel} tier`}
+                    className="w-20"
+                  />
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onApplyToTier(tier, stagedCount)}
+                    aria-label={`Apply track count to ${tierLabel}`}
                   >
-                    <option value="" disabled>
-                      Apply...
-                    </option>
-                    {trackCountOptions.map((count) => (
-                      <option key={count} value={count}>
-                        {count} {count === 1 ? 'track' : 'tracks'}
-                      </option>
-                    ))}
-                  </select>
+                    Apply
+                  </Button>
                 </div>
               );
             })}

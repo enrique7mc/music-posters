@@ -69,7 +69,8 @@ export interface MusicPlatformService {
    * Get top tracks for an artist
    * @param artistId - Platform-specific artist ID
    * @param token - Platform-specific auth token
-   * @param limit - Number of tracks to fetch (1-10)
+   * @param limit - Number of tracks to fetch (1-25; Apple Music selects from a
+   *   single 25-song top-songs request, Spotify may return fewer upstream)
    * @param selectionMode - Track selection mode (popular, balanced, deep-cuts)
    * @returns Array of Track objects
    */
