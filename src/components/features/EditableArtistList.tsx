@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Artist } from '@/types';
+import { Artist, ArtistInputSource } from '@/types';
 import { TierBadge } from '../ui/Badge';
 import Card from '../ui/Card';
 import Checkbox from '../ui/Checkbox';
@@ -17,6 +17,8 @@ interface EditableArtistListProps {
   onToggleSelection: (artistName: string) => void;
   onRemoveArtist: (artistName: string) => void;
   onPerArtistCountChange: (artistName: string, count: number) => void;
+  /** How the lineup entered the flow. Defaults to 'poster' for older sessions. */
+  inputSource?: ArtistInputSource;
 }
 
 export default function EditableArtistList({
@@ -28,6 +30,7 @@ export default function EditableArtistList({
   onToggleSelection,
   onRemoveArtist,
   onPerArtistCountChange,
+  inputSource = 'poster',
 }: EditableArtistListProps) {
   // Calculate tier counts for summary
   const tierCounts = artists.reduce(
@@ -40,7 +43,8 @@ export default function EditableArtistList({
     {} as Record<string, number>
   );
 
-  const hasRanking = provider === 'gemini' || provider === 'hybrid';
+  const isManual = inputSource === 'text';
+  const hasRanking = !isManual && (provider === 'gemini' || provider === 'hybrid');
   // Curated track count options for better UX (per-artist mode)
   const trackCountOptions = [1, 2, 3, 5, 10];
 
@@ -50,11 +54,13 @@ export default function EditableArtistList({
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-bold text-dark-50">Review Artists ({artists.length})</h3>
         <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
-          {provider === 'hybrid'
-            ? '🔄 Hybrid AI'
-            : provider === 'gemini'
-              ? '🤖 Gemini AI'
-              : '👁️ Vision API'}
+          {isManual
+            ? '✍️ Entered manually'
+            : provider === 'hybrid'
+              ? '🔄 Hybrid AI'
+              : provider === 'gemini'
+                ? '🤖 Gemini AI'
+                : '👁️ Vision API'}
         </span>
       </div>
 
@@ -186,7 +192,9 @@ export default function EditableArtistList({
         <div className="text-center py-12">
           <p className="text-dark-400 text-lg">No artists to display</p>
           <p className="text-dark-500 text-sm mt-2">
-            All artists have been removed. Upload a new poster to start over.
+            {isManual
+              ? 'All artists have been removed. Go back and enter artists again to start over.'
+              : 'All artists have been removed. Upload a new poster to start over.'}
           </p>
         </div>
       )}
@@ -195,9 +203,11 @@ export default function EditableArtistList({
       {artists.length > 0 && (
         <div className="mt-6 p-4 bg-dark-900/50 rounded-lg border border-dark-800">
           <p className="text-sm text-dark-400">
-            {hasRanking
-              ? '✨ Artists are ranked by visual prominence. Remove unwanted artists or adjust track counts before continuing.'
-              : '📋 Review the extracted artists. Remove any incorrect detections before continuing.'}
+            {isManual
+              ? '✍️ You entered these artists manually. Adjust track counts or remove artists before continuing.'
+              : hasRanking
+                ? '✨ Artists are ranked by visual prominence. Remove unwanted artists or adjust track counts before continuing.'
+                : '📋 Review the extracted artists. Remove any incorrect detections before continuing.'}
           </p>
         </div>
       )}

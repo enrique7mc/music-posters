@@ -119,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             acc[artistName.trim()] = count;
             return acc;
           },
-          {} as Record<string, number>
+          Object.create(null) as Record<string, number>
         )
       : undefined;
 

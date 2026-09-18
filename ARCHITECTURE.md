@@ -1,9 +1,10 @@
 # Architecture Overview
 
-Music Posters (Playlistd) turns a festival poster image into a music playlist. It
-is a stateless Next.js app: no database, OAuth tokens in httpOnly cookies, all
-work synchronous. Since V1 it has grown a second music platform (Apple Music),
-three image-analysis providers, a review screen, and user-aware recommendations.
+Music Posters (Playlistd) turns a festival poster image or a manually entered
+artist list into a music playlist. It is a stateless Next.js app: no database,
+OAuth tokens in httpOnly cookies, all work synchronous. Since V1 it has grown a
+second music platform (Apple Music), three image-analysis providers, a review
+screen, and user-aware recommendations.
 
 > **Spotify status:** the Spotify path is broken by Spotify's February 2026 Web
 > API changes (Premium-gated Development Mode + removed endpoints). **Apple Music
@@ -15,7 +16,7 @@ three image-analysis providers, a review screen, and user-aware recommendations.
 ┌──────────────────────────────────────────────────────────────────────┐
 │                          Frontend (Next.js Pages)                      │
 │  index → upload → review-artists → review-tracks → success            │
-│  (platform select)  (image)   (loved/gems, edit)  (track edit)        │
+│  (platform select) (image/text) (loved/gems, edit) (track edit)       │
 └───────────────┬───────────────────────────────────────┬──────────────┘
                 │ HTTP (axios)                            │ httpOnly cookie auth
 ┌───────────────▼───────────────────────────────────────▼──────────────┐
@@ -65,20 +66,28 @@ exposes platform-agnostic helpers (`getAuthenticatedPlatform`,
 `getPlatformAccessToken`) plus dev-mode wrappers. `GET /api/auth/login` and
 `/api/auth/callback` are thin redirects to the Spotify routes (legacy aliases).
 
-### 2. Image analysis
+### 2. Lineup input
 
 ```
-Upload image → POST /api/analyze (formidable, bodyParser off, 10MB cap)
-  → branch on IMAGE_ANALYSIS_PROVIDER:
-       vision → Google Vision OCR + heuristic filtering (no ranking)
-       gemini → Gemini vision analysis with weight/tier ranking
-       hybrid → Vision OCR text + Gemini analysis (ranking + completeness)
-  → Artist[] (name, optional weight/tier/reasoning) + rawText + provider
+/upload → choose one input path:
+  Upload poster → POST /api/analyze (formidable, bodyParser off, 10MB cap)
+    → branch on IMAGE_ANALYSIS_PROVIDER:
+         vision → Google Vision OCR + heuristic filtering (no ranking)
+         gemini → Gemini vision analysis with weight/tier ranking
+         hybrid → Vision OCR text + Gemini analysis (ranking + completeness)
+    → Artist[] (name, optional weight/tier/reasoning) + rawText + provider
+
+  Enter artists → browser-only newline parsing and validation
+    → Artist[] (name only) → review-artists (skips /api/analyze)
 ```
 
 Provider configuration is documented in [SETUP.md](SETUP.md); implementation
 details live in `src/lib/ocr.ts`, `src/lib/gemini.ts`, and
-`src/lib/hybrid-analyzer.ts`.
+`src/lib/hybrid-analyzer.ts`. Manual entry is parsed by
+`src/lib/artist-text.ts`; it reuses the existing review and track-search flow
+and adds no API endpoint. The `inputSource` sessionStorage key distinguishes
+`poster` and `text` runs; missing or unknown values are treated as `poster` for
+backward compatibility.
 
 ### 3. Personalization — loved + hidden gems (Apple Music)
 
@@ -200,20 +209,21 @@ src/
 │   │   ├── health.ts
 │   │   └── dev/{config,mock-session}.ts
 │   ├── index.tsx                 # landing + platform selector
-│   ├── upload.tsx                # image upload + analysis
+│   ├── upload.tsx                # poster upload or manual artist entry
 │   ├── review-artists.tsx        # ranked lineup + personalization header
 │   ├── review-tracks.tsx         # track review/edit
 │   └── success.tsx
 ├── lib/
 │   ├── auth.ts, apple-music-auth.ts        # cookies + Apple developer token
 │   ├── ocr.ts, gemini.ts, gemini-parser.ts, hybrid-analyzer.ts  # image analysis
+│   ├── artist-text.ts                         # browser-safe manual-lineup parser
 │   ├── personalize.ts, artist-match.ts     # loved + gems engine
 │   ├── music-platform/                     # platform abstraction
 │   │   ├── types.ts, index.ts              # MusicPlatformService + orchestration
 │   │   ├── spotify-platform.ts, apple-music-platform.ts
 │   ├── validation.ts, rate-limit.ts, error-utils.ts
 │   ├── cover-generator.ts, dev-mode.ts, mock-data.ts, constants.ts
-├── components/   # ui/, layout/, features/ (incl. PersonalizationHeader), dev/
+├── components/   # ui/, layout/, features/ (incl. ArtistTextInput), dev/
 ├── contexts/AuthContext.tsx
 ├── types/index.ts
 └── styles/globals.css
@@ -250,6 +260,8 @@ src/
 
 - Zod schemas validate every API body; uploads are checked by magic bytes
   (`file-type`) and capped at 10MB; artist counts and name lengths are bounded.
+  Manual input is also bounded and validated in the browser before entering the
+  existing server-validated track-search flow.
 
 ## Rate Limiting
 

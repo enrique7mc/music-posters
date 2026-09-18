@@ -5,9 +5,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 
-Convert festival posters into Spotify or Apple Music playlists using AI. Upload a
-poster, get a ranked artist lineup, and (on Apple Music) see which artists you
-already love plus hidden gems picked for your taste.
+Turn a festival poster or a manually entered artist lineup into a Spotify or
+Apple Music playlist. Upload a poster for AI extraction or type artists one per
+line, then review the lineup and (on Apple Music) see which artists you already
+love plus hidden gems picked for your taste.
 
 > **Note:** The Spotify path is currently broken by Spotify's February 2026 Web
 > API changes — **Apple Music is the working platform.** See
@@ -34,11 +35,12 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the app.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000) to see the app.
 
 ## Features
 
 - Upload festival poster images
+- Enter artists manually, one per line, without uploading a poster
 - AI-powered artist extraction with three providers: Google Cloud Vision (OCR),
   Gemini 3.5 Flash (vision-first), or Hybrid (OCR + Gemini)
 - Artist ranking by visual prominence (Gemini/Hybrid modes), with tier badges
@@ -52,9 +54,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 ## How It Works
 
 1. User authenticates with Spotify or Apple Music
-2. Uploads a festival poster image
-3. The chosen provider extracts artists (Vision OCR, Gemini, or Hybrid) and ranks
-   them by visual prominence
+2. Chooses a festival poster image or enters artists one per line
+3. Poster input is extracted and ranked by Vision OCR, Gemini, or Hybrid; manual
+   input is validated in the browser and skips image analysis
 4. On Apple Music, `POST /api/personalize` tags the lineup against your library
    (loved) and asks Gemini for hidden gems seeded from your loved set
 5. User reviews the ranked lineup on the review screen
@@ -99,6 +101,7 @@ Shipped since V1:
 - Apple Music as a second platform
 - A review screen for the lineup before playlist creation
 - User-aware recommendations (loved + hidden gems) on Apple Music
+- Manual artist entry as an alternative to poster analysis
 
 Still explicitly out of scope:
 

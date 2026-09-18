@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Manual artist entry.** Users can now type a lineup one artist per line instead
+  of uploading a poster, then review the artists, adjust the default five tracks
+  per artist, and continue through the existing track and playlist flow.
+
 ### Changed
 
 - **Agent-friendly repo instructions.** `AGENTS.md` is now the canonical,

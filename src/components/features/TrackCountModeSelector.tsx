@@ -17,6 +17,11 @@ interface TrackCountModeSelectorProps {
   onModeChange: (mode: TrackCountMode) => void;
   onTierCountChange: (tier: keyof TierCounts, count: number) => void;
   disabled?: boolean;
+  /**
+   * Show the tier-based and custom-per-tier modes. Defaults to true; pass
+   * false for manually entered lineups, which have no tiers.
+   */
+  showTierModes?: boolean;
 }
 
 export const DEFAULT_TIER_COUNTS: TierCounts & { default: number } = {
@@ -37,6 +42,7 @@ export default function TrackCountModeSelector({
   onModeChange,
   onTierCountChange,
   disabled = false,
+  showTierModes = true,
 }: TrackCountModeSelectorProps) {
   const trackCountOptions = [1, 2, 3, 5, 10];
 
@@ -48,82 +54,86 @@ export default function TrackCountModeSelector({
         {/* Mode Selection */}
         <div className="flex flex-col gap-3 mb-4">
           {/* Recommended (Tier-based) */}
-          <button
-            onClick={() => onModeChange('tier-based')}
-            disabled={disabled}
-            className={cn(
-              'p-4 rounded-lg transition-all duration-200',
-              'border-2 text-left',
-              mode === 'tier-based'
-                ? 'border-accent-500 bg-accent-500/10'
-                : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-              disabled && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                  mode === 'tier-based'
-                    ? 'border-accent-500 bg-accent-500'
-                    : 'border-dark-600 bg-dark-800'
-                )}
-              >
-                {mode === 'tier-based' && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-2.5 h-2.5 rounded-full bg-white"
-                  />
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-dark-100 mb-1">Recommended (Tier-based)</div>
-                <div className="text-sm text-dark-400">
-                  Headliners: 10 • Sub-headliners: 5 • Mid-tier: 3 • Undercard: 1
+          {showTierModes && (
+            <button
+              onClick={() => onModeChange('tier-based')}
+              disabled={disabled}
+              className={cn(
+                'p-4 rounded-lg transition-all duration-200',
+                'border-2 text-left',
+                mode === 'tier-based'
+                  ? 'border-accent-500 bg-accent-500/10'
+                  : 'border-dark-700 bg-dark-800 hover:border-dark-600',
+                disabled && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
+                    mode === 'tier-based'
+                      ? 'border-accent-500 bg-accent-500'
+                      : 'border-dark-600 bg-dark-800'
+                  )}
+                >
+                  {mode === 'tier-based' && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="w-2.5 h-2.5 rounded-full bg-white"
+                    />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-dark-100 mb-1">Recommended (Tier-based)</div>
+                  <div className="text-sm text-dark-400">
+                    Headliners: 10 • Sub-headliners: 5 • Mid-tier: 3 • Undercard: 1
+                  </div>
                 </div>
               </div>
-            </div>
-          </button>
+            </button>
+          )}
 
           {/* Custom Per Tier */}
-          <button
-            onClick={() => onModeChange('custom-per-tier')}
-            disabled={disabled}
-            className={cn(
-              'p-4 rounded-lg transition-all duration-200',
-              'border-2 text-left',
-              mode === 'custom-per-tier'
-                ? 'border-accent-500 bg-accent-500/10'
-                : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-              disabled && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                  mode === 'custom-per-tier'
-                    ? 'border-accent-500 bg-accent-500'
-                    : 'border-dark-600 bg-dark-800'
-                )}
-              >
-                {mode === 'custom-per-tier' && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-2.5 h-2.5 rounded-full bg-white"
-                  />
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-dark-100 mb-1">Custom Per Tier</div>
-                <div className="text-sm text-dark-400">
-                  Set different track counts for each tier
+          {showTierModes && (
+            <button
+              onClick={() => onModeChange('custom-per-tier')}
+              disabled={disabled}
+              className={cn(
+                'p-4 rounded-lg transition-all duration-200',
+                'border-2 text-left',
+                mode === 'custom-per-tier'
+                  ? 'border-accent-500 bg-accent-500/10'
+                  : 'border-dark-700 bg-dark-800 hover:border-dark-600',
+                disabled && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
+                    mode === 'custom-per-tier'
+                      ? 'border-accent-500 bg-accent-500'
+                      : 'border-dark-600 bg-dark-800'
+                  )}
+                >
+                  {mode === 'custom-per-tier' && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="w-2.5 h-2.5 rounded-full bg-white"
+                    />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-dark-100 mb-1">Custom Per Tier</div>
+                  <div className="text-sm text-dark-400">
+                    Set different track counts for each tier
+                  </div>
                 </div>
               </div>
-            </div>
-          </button>
+            </button>
+          )}
 
           {/* Per-Artist */}
           <button

@@ -3,10 +3,11 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Artist, AnalyzeResponse } from '@/types';
+import { Artist, AnalyzeResponse, ArtistInputSource } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
+import { ArtistTextParseResult } from '@/lib/artist-text';
 import PageLayout from '@/components/layout/PageLayout';
 import { AsymmetricSection } from '@/components/layout/Section';
 import Button from '@/components/ui/Button';
@@ -14,11 +15,81 @@ import Card from '@/components/ui/Card';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import UploadZone from '@/components/features/UploadZone';
+import ArtistTextInput from '@/components/features/ArtistTextInput';
 import ArtistList from '@/components/features/ArtistList';
 import TrackCountSelector, { TrackCountMode } from '@/components/features/TrackCountSelector';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import { fadeIn } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
+
+/** null = no choice made yet (poster/text chooser is shown). */
+type UploadInputMode = ArtistInputSource | null;
+
+/**
+ * sessionStorage keys owned by the upload → review flow. Cleared (never the
+ * whole store) when a new lineup starts so stale poster thumbnails, event
+ * names, tracks, and warnings can't leak across input modes. `returnAfterAuth`
+ * belongs to the auth flow and is deliberately excluded.
+ */
+const FLOW_SESSION_KEYS = [
+  'artists',
+  'analysisProvider',
+  'posterThumbnail',
+  'eventName',
+  'tracks',
+  'trackWarnings',
+  'inputSource',
+] as const;
+
+function clearFlowSessionState() {
+  if (typeof window === 'undefined') return;
+  FLOW_SESSION_KEYS.forEach((key) => sessionStorage.removeItem(key));
+}
+
+const STORAGE_UNAVAILABLE_ERROR: AppError = {
+  type: 'server',
+  title: 'Browser storage unavailable',
+  message:
+    'Your browser blocked session storage, so we cannot save this playlist. Enable browser storage and try again.',
+};
+
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function canUseSessionStorage(): boolean {
+  const storage = getSessionStorage();
+  if (!storage) return false;
+
+  const testKey = '__music_posters_storage_test__';
+
+  try {
+    storage.setItem(testKey, 'available');
+    const isAvailable = storage.getItem(testKey) === 'available';
+    storage.removeItem(testKey);
+    return isAvailable;
+  } catch {
+    try {
+      storage.removeItem(testKey);
+    } catch {
+      // Storage is unavailable; there is nothing more to recover here.
+    }
+    return false;
+  }
+}
+
+function writeAndVerifySessionValue(storage: Storage, key: string, value: string) {
+  storage.setItem(key, value);
+  if (storage.getItem(key) !== value) {
+    throw new Error(`sessionStorage verification failed for ${key}`);
+  }
+}
 
 export default function Upload() {
   const router = useRouter();
@@ -26,6 +97,7 @@ export default function Upload() {
 
   // Helper to get display name for music platform
   const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
+  const [inputMode, setInputMode] = useState<UploadInputMode>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -34,10 +106,13 @@ export default function Upload() {
   const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini' | 'hybrid'>(
     'vision'
   );
+  const [posterFlowStorageAvailable, setPosterFlowStorageAvailable] = useState(false);
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
   const [customTrackCount, setCustomTrackCount] = useState<number>(3);
+  // Raw manual-entry text; lifted here so the draft survives mode switches.
+  const [artistText, setArtistText] = useState('');
   // Track latest analysis request to prevent race conditions
   const latestAnalysisToken = useRef<Symbol | null>(null);
 
@@ -76,9 +151,22 @@ export default function Upload() {
     setError(null);
     setArtists([]);
 
-    // Clear stale eventName immediately when a new upload starts
+    // Clear stale results immediately when a new upload starts, then mark this
+    // run as poster input (overwrites any previous text-run marker).
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('eventName');
+      try {
+        clearFlowSessionState();
+        sessionStorage.setItem('inputSource', 'poster');
+      } catch (err) {
+        // Storage is only needed when advancing to review; don't prevent image
+        // analysis in browsers that restrict it.
+        console.warn('Could not update poster flow session state:', err);
+        try {
+          sessionStorage.removeItem('inputSource');
+        } catch {
+          // Best effort: a missing source is safely treated as poster input.
+        }
+      }
     }
 
     // Create a token for this analysis request to prevent race conditions
@@ -105,9 +193,20 @@ export default function Upload() {
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
 
-      // Store event name for playlist naming
-      if (typeof window !== 'undefined' && response.data.eventName?.trim()) {
-        sessionStorage.setItem('eventName', response.data.eventName.trim());
+      const storageAvailable = canUseSessionStorage();
+      setPosterFlowStorageAvailable(storageAvailable);
+
+      // Store poster metadata without letting restricted browser storage turn a
+      // successful analysis into an apparent API failure.
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('inputSource', 'poster');
+          if (response.data.eventName?.trim()) {
+            sessionStorage.setItem('eventName', response.data.eventName.trim());
+          }
+        } catch (err) {
+          console.warn('Could not store poster analysis metadata:', err);
+        }
       }
 
       if (response.data.artists.length === 0) {
@@ -115,6 +214,8 @@ export default function Upload() {
           type: 'validation',
           message: 'No artists found in the image. Try a different poster.',
         });
+      } else if (!storageAvailable) {
+        setError(STORAGE_UNAVAILABLE_ERROR);
       }
     } catch (err: any) {
       // Only show error if this is still the latest request
@@ -137,15 +238,96 @@ export default function Upload() {
     }
   };
 
+  /**
+   * Drop any poster-analysis state (in-flight and completed) when leaving
+   * poster input. Bumping the token means a late /api/analyze response can
+   * never repopulate state after the switch.
+   */
+  const resetPosterAnalysisState = () => {
+    latestAnalysisToken.current = Symbol('superseded');
+    setAnalyzing(false);
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setArtists([]);
+    setPosterThumbnail(null);
+    setError(null);
+  };
+
+  // Choose "Enter artists" on the chooser, or switch mid-flow.
+  const handleSwitchToText = () => {
+    resetPosterAnalysisState();
+    try {
+      clearFlowSessionState();
+    } catch (err) {
+      // Let the user enter a lineup. Submission performs the required writes
+      // and surfaces a recoverable error if storage is still unavailable.
+      console.warn('Could not clear previous flow session state:', err);
+    }
+    setInputMode('text');
+  };
+
+  // Back to poster input; the manual text draft is kept, poster behavior is
+  // fully restored (handleFileSelect re-marks inputSource on upload).
+  const handleSwitchToPoster = () => {
+    setError(null);
+    setInputMode('poster');
+  };
+
+  const handleSubmitArtistText = (result: ArtistTextParseResult) => {
+    if (result.errorCode || result.invalidNames.length > 0 || result.artists.length === 0) return;
+    if (result.artists.length > MAX_ARTISTS_PER_SEARCH) return; // guarded by parser
+
+    resetPosterAnalysisState();
+
+    if (typeof window !== 'undefined') {
+      try {
+        // Clear previous result state (poster or text) before storing the new
+        // lineup so stale thumbnails, event names, tracks, and warnings die here.
+        clearFlowSessionState();
+        const artistsJson = JSON.stringify(result.artists);
+        sessionStorage.setItem('artists', artistsJson);
+        sessionStorage.setItem('inputSource', 'text');
+        // Verify the write — never navigate with incomplete state.
+        if (
+          sessionStorage.getItem('artists') !== artistsJson ||
+          sessionStorage.getItem('inputSource') !== 'text'
+        ) {
+          throw new Error('sessionStorage verification failed');
+        }
+      } catch (err) {
+        console.error('Failed to store manually entered lineup:', err);
+        try {
+          clearFlowSessionState();
+        } catch {
+          // Best-effort cleanup only; preserve the recoverable UI below.
+        }
+        setError({
+          type: 'server',
+          title: 'Could not save your lineup',
+          message:
+            'Your browser blocked local storage, so the lineup could not be saved. Try again, or upload a poster instead.',
+        });
+        return;
+      }
+    }
+
+    router.push('/review-artists');
+  };
+
   const handleCreatePlaylist = async () => {
     if (artists.length === 0) return;
-
     if (artists.length > MAX_ARTISTS_PER_SEARCH) {
       setError({
         type: 'validation',
         title: 'Too many artists',
         message: `You have ${artists.length} artists but the maximum is ${MAX_ARTISTS_PER_SEARCH}. Please use "Customize Artists" to remove some before continuing.`,
       });
+      return;
+    }
+
+    if (!canUseSessionStorage()) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
       return;
     }
 
@@ -165,15 +347,42 @@ export default function Upload() {
 
       const response = await apiClient.post('/api/search-tracks', requestBody);
 
-      // Store tracks and poster thumbnail for review page
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('tracks', JSON.stringify(response.data.tracks));
+      // Store and verify the review state before navigating. Storage errors are
+      // distinct from track-search errors, so the user can recover without
+      // mistaking a blocked browser storage area for an API failure.
+      const storage = getSessionStorage();
+      if (!storage) {
+        setPosterFlowStorageAvailable(false);
+        setError(STORAGE_UNAVAILABLE_ERROR);
+        setCreating(false);
+        return;
+      }
+
+      try {
+        writeAndVerifySessionValue(storage, 'tracks', JSON.stringify(response.data.tracks));
         if (response.data.warnings?.length) {
-          sessionStorage.setItem('trackWarnings', JSON.stringify(response.data.warnings));
+          writeAndVerifySessionValue(
+            storage,
+            'trackWarnings',
+            JSON.stringify(response.data.warnings)
+          );
         }
         if (posterThumbnail) {
-          sessionStorage.setItem('posterThumbnail', posterThumbnail);
+          writeAndVerifySessionValue(storage, 'posterThumbnail', posterThumbnail);
         }
+      } catch (storageError) {
+        console.error('Failed to store quick-create review state:', storageError);
+        try {
+          storage.removeItem('tracks');
+          storage.removeItem('trackWarnings');
+          storage.removeItem('posterThumbnail');
+        } catch {
+          // Best-effort cleanup only; the storage error is shown below.
+        }
+        setPosterFlowStorageAvailable(false);
+        setError(STORAGE_UNAVAILABLE_ERROR);
+        setCreating(false);
+        return;
       }
 
       router.push('/review-tracks');
@@ -186,6 +395,43 @@ export default function Upload() {
       setError(appError);
       setCreating(false);
     }
+  };
+
+  const handleCustomizeArtists = () => {
+    if (!canUseSessionStorage()) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    const storage = getSessionStorage();
+    if (!storage) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    try {
+      writeAndVerifySessionValue(storage, 'artists', JSON.stringify(artists));
+      writeAndVerifySessionValue(storage, 'analysisProvider', analysisProvider);
+      if (posterThumbnail) {
+        writeAndVerifySessionValue(storage, 'posterThumbnail', posterThumbnail);
+      }
+    } catch (storageError) {
+      console.error('Failed to store artist review state:', storageError);
+      try {
+        storage.removeItem('artists');
+        storage.removeItem('analysisProvider');
+        storage.removeItem('posterThumbnail');
+      } catch {
+        // Best-effort cleanup only; the storage error is shown below.
+      }
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    router.push('/review-artists');
   };
 
   if (authLoading) {
@@ -237,8 +483,54 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Empty state - no poster uploaded */}
-          {!selectedFile && !previewUrl && (
+          {/* Empty state - choose how to start */}
+          {!selectedFile && !previewUrl && inputMode === null && (
+            <motion.div
+              className="container mx-auto px-4 py-12"
+              variants={fadeIn}
+              initial="hidden"
+              animate="visible"
+            >
+              <div className="max-w-3xl mx-auto text-center mb-8">
+                <h2 className="text-3xl font-bold text-dark-50 mb-3">Start Your Playlist</h2>
+                <p className="text-dark-400">
+                  Upload a festival poster for us to analyze, or type the artists yourself.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                {/* Upload a poster */}
+                <button
+                  onClick={() => setInputMode('poster')}
+                  className="p-8 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group"
+                >
+                  <div className="text-5xl mb-4">🎸</div>
+                  <div className="text-lg font-semibold text-dark-100 mb-2 group-hover:text-accent-400 transition-colors">
+                    Upload a Poster
+                  </div>
+                  <p className="text-sm text-dark-400">
+                    We&apos;ll read the lineup from a festival or concert poster image.
+                  </p>
+                </button>
+
+                {/* Enter artists */}
+                <button
+                  onClick={() => handleSwitchToText()}
+                  className="p-8 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group"
+                >
+                  <div className="text-5xl mb-4">✍️</div>
+                  <div className="text-lg font-semibold text-dark-100 mb-2 group-hover:text-accent-400 transition-colors">
+                    Enter Artists
+                  </div>
+                  <p className="text-sm text-dark-400">
+                    Type the artists you want, one per line — no poster needed.
+                  </p>
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Poster mode - upload zone */}
+          {!selectedFile && !previewUrl && inputMode === 'poster' && (
             <motion.div
               className="container mx-auto px-4 py-12"
               variants={fadeIn}
@@ -246,6 +538,35 @@ export default function Upload() {
               animate="visible"
             >
               <UploadZone onFileSelect={handleFileSelect} />
+              <div className="max-w-3xl mx-auto mt-6 text-center">
+                <Button variant="text" onClick={handleSwitchToText}>
+                  Or enter artists manually instead
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Text mode - manual artist entry */}
+          {!selectedFile && !previewUrl && inputMode === 'text' && (
+            <motion.div
+              className="container mx-auto px-4 py-12"
+              variants={fadeIn}
+              initial="hidden"
+              animate="visible"
+            >
+              <div className="max-w-3xl mx-auto">
+                <ArtistTextInput
+                  value={artistText}
+                  onChange={setArtistText}
+                  onSubmit={handleSubmitArtistText}
+                  disabled={creating || analyzing}
+                />
+                <div className="mt-6 text-center">
+                  <Button variant="text" onClick={handleSwitchToPoster}>
+                    Or upload a poster instead
+                  </Button>
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -302,7 +623,7 @@ export default function Upload() {
                       {/* Quick Create */}
                       <button
                         onClick={handleCreatePlaylist}
-                        disabled={creating}
+                        disabled={creating || !posterFlowStorageAvailable}
                         className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">
@@ -334,18 +655,8 @@ export default function Upload() {
 
                       {/* Customize Artists */}
                       <button
-                        onClick={() => {
-                          // Store artists in sessionStorage for review-artists page
-                          if (typeof window !== 'undefined') {
-                            sessionStorage.setItem('artists', JSON.stringify(artists));
-                            sessionStorage.setItem('analysisProvider', analysisProvider);
-                            if (posterThumbnail) {
-                              sessionStorage.setItem('posterThumbnail', posterThumbnail);
-                            }
-                          }
-                          router.push('/review-artists');
-                        }}
-                        disabled={creating}
+                        onClick={handleCustomizeArtists}
+                        disabled={creating || !posterFlowStorageAvailable}
                         className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">

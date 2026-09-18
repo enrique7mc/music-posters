@@ -133,6 +133,17 @@ describe('validation.ts', () => {
 
       expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
     });
+
+    it('preserves artist count keys that collide with object prototype names', () => {
+      const request = JSON.parse(
+        '{"artists":[{"name":"__proto__"}],"trackCountMode":"per-artist","perArtistCounts":{"__proto__":5}}'
+      );
+
+      const result = searchTracksSchema.parse(request);
+
+      expect(Object.hasOwn(result.perArtistCounts!, '__proto__')).toBe(true);
+      expect(result.perArtistCounts!.__proto__).toBe(5);
+    });
   });
 
   describe('personalizeSchema', () => {

@@ -190,6 +190,10 @@ export default function ReviewTracks() {
         if (normalizedEventName) {
           setPlaylistName(normalizedEventName);
         }
+      } else if (sessionStorage.getItem('inputSource') === 'text') {
+        // Manually entered lineups have no event name — use a neutral,
+        // editable default instead of the poster-flavored one.
+        setPlaylistName('Artist Mix');
       }
     }
 
