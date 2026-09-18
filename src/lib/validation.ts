@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { FileTypeResult, fromBuffer } from 'file-type';
-import { MAX_ARTISTS_PER_SEARCH } from './constants';
+import { MAX_ARTISTS_PER_SEARCH, MAX_ARTIST_NAME_LENGTH } from './constants';
 
 /**
  * Validation schemas for API endpoints using Zod.
@@ -23,7 +23,7 @@ export const artistSchema = z.object({
   name: z
     .string()
     .min(1, 'Artist name must not be empty')
-    .max(100, 'Artist name must not exceed 100 characters')
+    .max(MAX_ARTIST_NAME_LENGTH, `Artist name must not exceed ${MAX_ARTIST_NAME_LENGTH} characters`)
     .trim()
     .refine((name) => name.length > 0, {
       message: 'Artist name must not be empty after trimming',
@@ -57,6 +57,25 @@ export const searchArtistSchema = artistSchema.extend({
   affinity: z.enum(['loved', 'gem']).optional(),
 });
 
+// z.record rebuilds objects and drops an own `__proto__` key. Artist names are
+// user input, so validate the original JSON object in place and preserve every
+// valid own key for per-artist count lookup.
+const perArtistCountsSchema = z.custom<Record<string, number>>(
+  (counts) =>
+    typeof counts === 'object' &&
+    counts !== null &&
+    !Array.isArray(counts) &&
+    Object.entries(counts).every(
+      ([artistName, count]) =>
+        artistName.trim().length > 0 &&
+        typeof count === 'number' &&
+        Number.isInteger(count) &&
+        count >= 1 &&
+        count <= 50
+    ),
+  { message: 'Per-artist counts must use non-empty names and integer values from 1 to 50' }
+);
+
 export const searchTracksSchema = z.object({
   artists: z
     .array(searchArtistSchema)
@@ -76,19 +95,7 @@ export const searchTracksSchema = z.object({
       undercard: z.number().int().min(1).max(50),
     })
     .optional(),
-  perArtistCounts: z
-    .record(z.string(), z.number().int().min(1).max(50))
-    .optional()
-    .refine(
-      (counts) => {
-        if (!counts) return true;
-        // Ensure all keys are valid non-empty strings
-        return Object.keys(counts).every((key) => key.trim().length > 0);
-      },
-      {
-        message: 'All artist names in perArtistCounts must be non-empty strings',
-      }
-    ),
+  perArtistCounts: perArtistCountsSchema.optional(),
   trackSelectionMode: z.enum(['popular', 'balanced', 'deep-cuts']).optional(),
 });
 

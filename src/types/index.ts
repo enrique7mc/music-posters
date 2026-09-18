@@ -25,6 +25,18 @@ export interface PlatformUser {
  */
 export type Affinity = 'loved' | 'gem';
 
+/**
+ * How the artist lineup entered the flow.
+ * - 'poster': extracted from an uploaded poster image via /api/analyze
+ * - 'text':   typed manually on /upload (one artist per line)
+ *
+ * Stored alongside the lineup in sessionStorage (`inputSource`). Sessions
+ * without the field are treated as poster input. This is deliberately
+ * separate from `AnalyzeResponse.provider`, which only describes the
+ * image-analysis method and does not apply to text entry.
+ */
+export type ArtistInputSource = 'poster' | 'text';
+
 export interface Artist {
   name: string;
   weight?: number; // 1-10 prominence score (populated by Gemini, undefined for Vision)

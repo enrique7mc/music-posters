@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Artist, PersonalizeResponse, TrackSelectionMode } from '@/types';
+import { Artist, ArtistInputSource, PersonalizeResponse, TrackSelectionMode } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
+import { DEFAULT_TEXT_ARTIST_TRACK_COUNT } from '@/lib/artist-text';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -27,6 +28,10 @@ import PersonalizationHeader, {
 import { fadeIn, slideUp } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 
+function createArtistCountMap(): Record<string, number> {
+  return Object.create(null) as Record<string, number>;
+}
+
 export default function ReviewArtists() {
   const router = useRouter();
   const { user, loading: authLoading, platform } = useAuth();
@@ -43,11 +48,15 @@ export default function ReviewArtists() {
     'vision'
   );
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
+  // How the lineup entered the flow. Sessions without the stored field are
+  // poster runs (pre-dates text input), so 'poster' is the default.
+  const [inputSource, setInputSource] = useState<ArtistInputSource>('poster');
 
   // Track count configuration
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
   const [tierCounts, setTierCounts] = useState<TierCounts>(DEFAULT_TIER_COUNTS);
-  const [perArtistCounts, setPerArtistCounts] = useState<Record<string, number>>({});
+  const [perArtistCounts, setPerArtistCounts] =
+    useState<Record<string, number>>(createArtistCountMap);
 
   // Track selection mode
   const [trackSelectionMode, setTrackSelectionMode] = useState<TrackSelectionMode>('popular');
@@ -85,6 +94,9 @@ export default function ReviewArtists() {
       const storedArtists = sessionStorage.getItem('artists');
       const storedProvider = sessionStorage.getItem('analysisProvider');
       const storedThumbnail = sessionStorage.getItem('posterThumbnail');
+      // Missing/unknown values fall back to 'poster' (backward compatible).
+      const storedInputSource: ArtistInputSource =
+        sessionStorage.getItem('inputSource') === 'text' ? 'text' : 'poster';
 
       if (!storedArtists) {
         // No artists in session, redirect to upload
@@ -97,11 +109,16 @@ export default function ReviewArtists() {
         setArtists(parsedArtists);
         setAnalysisProvider((storedProvider as 'vision' | 'gemini' | 'hybrid') || 'vision');
         setPosterThumbnail(storedThumbnail);
+        setInputSource(storedInputSource);
 
-        // Initialize per-artist counts with defaults
-        const initialCounts: Record<string, number> = {};
+        // Manual lineups have no tiers: per-artist mode with 5 tracks each.
+        // Poster lineups keep the tier-based default and tier/fallback counts.
+        setTrackCountMode(storedInputSource === 'text' ? 'per-artist' : 'tier-based');
+        const initialCounts = createArtistCountMap();
         parsedArtists.forEach((artist) => {
-          if (artist.tier) {
+          if (storedInputSource === 'text') {
+            initialCounts[artist.name] = DEFAULT_TEXT_ARTIST_TRACK_COUNT;
+          } else if (artist.tier) {
             initialCounts[artist.name] = DEFAULT_TIER_COUNTS[artist.tier];
           } else {
             initialCounts[artist.name] = 3;
@@ -226,10 +243,22 @@ export default function ReviewArtists() {
 
   // Reset to recommended tier-based counts
   const handleResetToRecommended = () => {
+    if (inputSource === 'text') {
+      // Manual lineups have no tiers — restore the text-entry defaults:
+      // per-artist mode with 5 tracks for every artist.
+      setTrackCountMode('per-artist');
+      const resetCounts = createArtistCountMap();
+      artists.forEach((artist) => {
+        resetCounts[artist.name] = DEFAULT_TEXT_ARTIST_TRACK_COUNT;
+      });
+      setPerArtistCounts(resetCounts);
+      return;
+    }
+
     setTrackCountMode('tier-based');
     setTierCounts(DEFAULT_TIER_COUNTS);
     // Reset per-artist counts to defaults
-    const resetCounts: Record<string, number> = {};
+    const resetCounts = createArtistCountMap();
     artists.forEach((artist) => {
       if (artist.tier) {
         resetCounts[artist.name] = DEFAULT_TIER_COUNTS[artist.tier];
@@ -276,7 +305,10 @@ export default function ReviewArtists() {
     if (artists.length === 0) {
       setError({
         type: 'validation',
-        message: 'No artists to search. Please upload a new poster.',
+        message:
+          inputSource === 'text'
+            ? 'No artists to search. Go back and enter some artists.'
+            : 'No artists to search. Please upload a new poster.',
       });
       return;
     }
@@ -440,6 +472,7 @@ export default function ReviewArtists() {
                   onToggleSelection={handleToggleSelection}
                   onRemoveArtist={handleRemoveArtist}
                   onPerArtistCountChange={handlePerArtistCountChange}
+                  inputSource={inputSource}
                 />
               </div>
 
@@ -460,6 +493,7 @@ export default function ReviewArtists() {
                     onModeChange={setTrackCountMode}
                     onTierCountChange={handleTierCountChange}
                     disabled={searching}
+                    showTierModes={inputSource !== 'text'}
                   />
 
                   {/* Playlist Summary Preview */}
