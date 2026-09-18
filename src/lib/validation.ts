@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { FileTypeResult, fromBuffer } from 'file-type';
-import { MAX_ARTISTS_PER_SEARCH, MAX_ARTIST_NAME_LENGTH } from './constants';
+import {
+  MAX_ARTISTS_PER_SEARCH,
+  MAX_ARTIST_NAME_LENGTH,
+  MIN_TRACKS_PER_ARTIST,
+  MAX_TRACKS_PER_ARTIST,
+} from './constants';
 
 /**
  * Validation schemas for API endpoints using Zod.
@@ -70,11 +75,16 @@ const perArtistCountsSchema = z.custom<Record<string, number>>(
         artistName.trim().length > 0 &&
         typeof count === 'number' &&
         Number.isInteger(count) &&
-        count >= 1 &&
-        count <= 50
+        count >= MIN_TRACKS_PER_ARTIST &&
+        count <= MAX_TRACKS_PER_ARTIST
     ),
-  { message: 'Per-artist counts must use non-empty names and integer values from 1 to 50' }
+  {
+    message: `Per-artist counts must use non-empty names and integer values from ${MIN_TRACKS_PER_ARTIST} to ${MAX_TRACKS_PER_ARTIST}`,
+  }
 );
+
+// Whole-number track counts shared by every count form below (1–25).
+const trackCountSchema = z.number().int().min(MIN_TRACKS_PER_ARTIST).max(MAX_TRACKS_PER_ARTIST);
 
 export const searchTracksSchema = z.object({
   artists: z
@@ -86,13 +96,13 @@ export const searchTracksSchema = z.object({
     ),
   platform: z.enum(['spotify', 'apple-music']).optional(), // Optional for backward compatibility
   trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
-  customTrackCount: z.number().int().min(1).max(50).optional(),
+  customTrackCount: trackCountSchema.optional(),
   tierCounts: z
     .object({
-      headliner: z.number().int().min(1).max(50),
-      'sub-headliner': z.number().int().min(1).max(50),
-      'mid-tier': z.number().int().min(1).max(50),
-      undercard: z.number().int().min(1).max(50),
+      headliner: trackCountSchema,
+      'sub-headliner': trackCountSchema,
+      'mid-tier': trackCountSchema,
+      undercard: trackCountSchema,
     })
     .optional(),
   perArtistCounts: perArtistCountsSchema.optional(),

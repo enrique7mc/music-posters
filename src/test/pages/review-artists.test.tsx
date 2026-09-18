@@ -65,7 +65,7 @@ function seedPosterSession() {
 }
 
 const countSelect = (artistName: string) =>
-  screen.getByLabelText(`Track count for ${artistName}`) as HTMLSelectElement;
+  screen.getByLabelText(`Track count for ${artistName}`) as HTMLInputElement;
 
 /** Stub /api/personalize + /api/search-tracks responses. */
 function stubApi() {
@@ -148,6 +148,53 @@ describe('review-artists with a manually entered (text) lineup', () => {
     expect(countSelect('The Beths').value).toBe('5');
     expect(countSelect('Men I Trust').value).toBe('5');
     expect(screen.getByText('~20')).toBeInTheDocument(); // 10 + 5 + 5
+  });
+
+  it('accepts per-artist counts across the 1–25 range (17 and 25)', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '17' } });
+    fireEvent.change(countSelect('The Beths'), { target: { value: '25' } });
+
+    expect(countSelect('Alvvays').value).toBe('17');
+    expect(countSelect('The Beths').value).toBe('25');
+    expect(countSelect('Men I Trust').value).toBe('5');
+    expect(screen.getByText('~47')).toBeInTheDocument(); // 17 + 25 + 5
+  });
+
+  it('shows a range message for out-of-range values without committing them', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '26' } });
+
+    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    // Nothing invalid enters application state: the estimate keeps the last
+    // committed count (5 + 5 + 5).
+    expect(screen.getByText('~15')).toBeInTheDocument();
+
+    // Blurring reverts the field to the last committed value and clears the message.
+    fireEvent.blur(countSelect('Alvvays'));
+    expect(countSelect('Alvvays').value).toBe('5');
+    expect(screen.queryByText('Enter a whole number from 1 to 25.')).not.toBeInTheDocument();
+  });
+
+  it('treats zero and fractions as invalid editing states, not values', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    fireEvent.change(countSelect('The Beths'), { target: { value: '0' } });
+    expect(countSelect('The Beths').value).toBe('0'); // temporary editing state
+    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('~15')).toBeInTheDocument();
+    fireEvent.blur(countSelect('The Beths'));
+    expect(countSelect('The Beths').value).toBe('5');
+
+    fireEvent.change(countSelect('The Beths'), { target: { value: '2.5' } });
+    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    fireEvent.blur(countSelect('The Beths'));
+    expect(countSelect('The Beths').value).toBe('5');
   });
 
   it('reset restores 5 tracks each for text input', async () => {
@@ -260,5 +307,65 @@ describe('review-artists with a poster lineup (regression guard)', () => {
 
     expect(screen.queryByText('✍️ Entered manually')).not.toBeInTheDocument();
     expect(screen.getByText('Recommended (Tier-based)')).toBeInTheDocument();
+  });
+
+  it('custom-per-tier counts appear in the estimate and the API payload', async () => {
+    seedPosterSession();
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /custom per tier/i }));
+
+    const headlinerInput = screen.getByLabelText('Headliners track count') as HTMLInputElement;
+    expect(headlinerInput.value).toBe('10'); // tier default
+    expect(screen.getByText('~10')).toBeInTheDocument(); // single headliner artist
+
+    fireEvent.change(headlinerInput, { target: { value: '17' } });
+
+    expect(headlinerInput.value).toBe('17');
+    expect(screen.getByText('~17')).toBeInTheDocument(); // estimate follows the tier override
+
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/review-tracks');
+    });
+
+    const searchCall = mockPost.mock.calls.find(([url]) => url === '/api/search-tracks');
+    expect(searchCall![1].trackCountMode).toBe('custom-per-tier');
+    expect(searchCall![1].tierCounts.headliner).toBe(17);
+  });
+
+  it('bulk tier application supports arbitrary values (17) via explicit Apply', async () => {
+    seedPosterSession();
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+
+    // Bulk bar shows one row per available tier, seeded with the tier default.
+    const bulkInput = screen.getByLabelText('Track count for Headliners tier');
+    expect((bulkInput as HTMLInputElement).value).toBe('10');
+
+    fireEvent.change(bulkInput, { target: { value: '17' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply track count to Headliners' }));
+
+    // Every headliner's per-artist input and the estimate pick up 17.
+    expect(countSelect('Alvvays').value).toBe('17');
+    expect(screen.getByText('~17')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/review-tracks');
+    });
+
+    const searchCall = mockPost.mock.calls.find(([url]) => url === '/api/search-tracks');
+    expect(searchCall![1].trackCountMode).toBe('per-artist');
+    expect(searchCall![1].perArtistCounts).toEqual({ Alvvays: 17 });
   });
 });

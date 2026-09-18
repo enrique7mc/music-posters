@@ -6,6 +6,7 @@ import {
   searchArtistSchema,
   MAX_ARTISTS_PER_SEARCH,
 } from '../validation';
+import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '../constants';
 
 describe('validation.ts', () => {
   describe('MAX_ARTISTS_PER_SEARCH', () => {
@@ -128,10 +129,83 @@ describe('validation.ts', () => {
     it('should reject invalid customTrackCount', () => {
       const invalidRequest = {
         artists: [{ name: 'Taylor Swift' }],
-        customTrackCount: 51,
+        customTrackCount: 26,
       };
 
       expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
+    });
+
+    describe('track count range (1–25)', () => {
+      const baseRequest = { artists: [{ name: 'Taylor Swift' }] };
+
+      it.each([MIN_TRACKS_PER_ARTIST, 7, 17, MAX_TRACKS_PER_ARTIST])(
+        'accepts customTrackCount %i',
+        (customTrackCount) => {
+          expect(() =>
+            searchTracksSchema.parse({ ...baseRequest, trackCountMode: 'custom', customTrackCount })
+          ).not.toThrow();
+        }
+      );
+
+      it.each([0, -1, 26, 51, 1.5, '5'])('rejects customTrackCount %p', (customTrackCount) => {
+        expect(() =>
+          searchTracksSchema.parse({ ...baseRequest, trackCountMode: 'custom', customTrackCount })
+        ).toThrow();
+      });
+
+      it('accepts tierCounts at the boundaries and between them', () => {
+        const validRequest = {
+          ...baseRequest,
+          trackCountMode: 'custom-per-tier' as const,
+          tierCounts: {
+            headliner: MAX_TRACKS_PER_ARTIST,
+            'sub-headliner': 17,
+            'mid-tier': MIN_TRACKS_PER_ARTIST,
+            undercard: 5,
+          },
+        };
+
+        expect(() => searchTracksSchema.parse(validRequest)).not.toThrow();
+      });
+
+      it.each([0, 26, 2.5, '3'])('rejects tierCounts when any tier is %p', (undercard) => {
+        const invalidRequest = {
+          ...baseRequest,
+          trackCountMode: 'custom-per-tier' as const,
+          tierCounts: {
+            headliner: 10,
+            'sub-headliner': 5,
+            'mid-tier': 3,
+            undercard,
+          },
+        };
+
+        expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
+      });
+
+      it('accepts per-artist counts across the range', () => {
+        const validRequest = {
+          ...baseRequest,
+          trackCountMode: 'per-artist' as const,
+          perArtistCounts: {
+            Phoenix: MIN_TRACKS_PER_ARTIST,
+            Alvvays: 17,
+            'Men I Trust': MAX_TRACKS_PER_ARTIST,
+          },
+        };
+
+        expect(() => searchTracksSchema.parse(validRequest)).not.toThrow();
+      });
+
+      it.each([0, 26, 1.5, '3'])('rejects per-artist count %p', (badCount) => {
+        const invalidRequest = {
+          ...baseRequest,
+          trackCountMode: 'per-artist' as const,
+          perArtistCounts: { Phoenix: 5, Alvvays: badCount },
+        };
+
+        expect(() => searchTracksSchema.parse(invalidRequest)).toThrow();
+      });
     });
 
     it('preserves artist count keys that collide with object prototype names', () => {

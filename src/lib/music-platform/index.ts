@@ -2,6 +2,7 @@ import { MusicPlatform, Artist, Track, TrackSelectionMode } from '@/types';
 import { MusicPlatformService, TrackCountOptions } from './types';
 import { spotifyPlatform, SpotifyPlatformService } from './spotify-platform';
 import { appleMusicPlatform, AppleMusicPlatformService } from './apple-music-platform';
+import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '@/lib/constants';
 
 // Re-export types
 export * from './types';
@@ -68,13 +69,13 @@ function getTrackCountForTier(tier?: string, options?: TrackCountOptions): numbe
     const tierKey = tier as keyof typeof options.tierCounts;
     const override = options.tierCounts[tierKey];
     if (override !== undefined) {
-      return Math.max(1, Math.min(10, override));
+      return Math.max(MIN_TRACKS_PER_ARTIST, Math.min(MAX_TRACKS_PER_ARTIST, override));
     }
   }
 
   // Check for custom mode (same count for all artists)
   if (options?.mode === 'custom' && options.customCount !== undefined) {
-    return Math.max(1, Math.min(10, options.customCount));
+    return Math.max(MIN_TRACKS_PER_ARTIST, Math.min(MAX_TRACKS_PER_ARTIST, options.customCount));
   }
 
   // Default to tier-based
@@ -204,8 +205,11 @@ export async function searchAndGetTopTracks(
         trackCountOptions.perArtistCounts[pair.originalArtist.name] !== undefined
       ) {
         trackCount = Math.max(
-          1,
-          Math.min(10, trackCountOptions.perArtistCounts[pair.originalArtist.name])
+          MIN_TRACKS_PER_ARTIST,
+          Math.min(
+            MAX_TRACKS_PER_ARTIST,
+            trackCountOptions.perArtistCounts[pair.originalArtist.name]
+          )
         );
       } else {
         trackCount = getTrackCountForTier(pair.originalArtist.tier, trackCountOptions);

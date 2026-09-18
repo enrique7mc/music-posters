@@ -186,6 +186,40 @@ describe('AppleMusicPlatformService.searchArtist', () => {
   });
 });
 
+describe('AppleMusicPlatformService.getArtistTopTracks', () => {
+  let service: AppleMusicPlatformService;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+  });
+
+  const TOP_SONGS_URL = 'https://api.music.apple.com/v1/catalog/us/artists/artist-1/view/top-songs';
+
+  it('serves a request for 25 tracks from a single top-songs request (limit 25)', async () => {
+    const requestedLimits: string[] = [];
+    server.use(
+      http.get(TOP_SONGS_URL, ({ request }) => {
+        requestedLimits.push(new URL(request.url).searchParams.get('limit') ?? '');
+        return HttpResponse.json({
+          data: Array.from({ length: 25 }, (_, i) => ({
+            id: `t-${i}`,
+            attributes: { name: `Track ${i}`, artistName: 'Phoenix', albumName: 'Album' },
+          })),
+        });
+      })
+    );
+
+    const tracks = await service.getArtistTopTracks('artist-1', 'user-token', 25);
+
+    // One top-songs request with limit 25 — the whole 1–25 range is served from
+    // that pool with no extra calls (no rate-limit change needed).
+    expect(requestedLimits).toEqual(['25']);
+    expect(tracks).toHaveLength(25);
+    expect(tracks.every((t) => t.platform === 'apple-music')).toBe(true);
+  });
+});
+
 describe('AppleMusicPlatformService error redaction (errMessage)', () => {
   const SECRET = 'SUPERSECRET_DEV_TOKEN_do_not_log';
   let service: AppleMusicPlatformService;
