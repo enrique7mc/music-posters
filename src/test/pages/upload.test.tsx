@@ -160,4 +160,76 @@ describe('upload manual artist entry', () => {
     expect(sessionStorage.getItem('inputSource')).toBe('poster');
     expect(sessionStorage.getItem('returnAfterAuth')).toBe('keep-auth-state');
   });
+
+  it('disables poster completion actions and shows a recoverable error when storage is unavailable', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'SecurityError');
+    });
+    mockAxiosPost.mockResolvedValue({
+      data: { artists: [{ name: 'Alvvays' }], rawText: '', provider: 'vision' },
+    });
+    render(<Upload />);
+
+    fireEvent.click(screen.getByRole('button', { name: /upload a poster/i }));
+    fireEvent.click(screen.getByRole('button', { name: /select test poster/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Browser storage unavailable')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /quick create playlist/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /customize artists/i })).toBeDisabled();
+  });
+
+  it('does not report a blocked tracks write as a track-search failure', async () => {
+    const user = userEvent.setup();
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (key === 'tracks') throw new DOMException('Storage blocked', 'SecurityError');
+      return originalSetItem.call(this, key, value);
+    });
+    mockAxiosPost.mockResolvedValue({
+      data: { artists: [{ name: 'Alvvays' }], rawText: '', provider: 'vision' },
+    });
+    mockApiPost.mockResolvedValue({ data: { tracks: [] } });
+    render(<Upload />);
+
+    fireEvent.click(screen.getByRole('button', { name: /upload a poster/i }));
+    fireEvent.click(screen.getByRole('button', { name: /select test poster/i }));
+
+    await user.click(await screen.findByRole('button', { name: /quick create playlist/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Browser storage unavailable')).toBeInTheDocument();
+    });
+    expect(mockApiPost).toHaveBeenCalledWith('/api/search-tracks', {
+      artists: [{ name: 'Alvvays' }],
+      trackCountMode: 'tier-based',
+    });
+    expect(mockPush).not.toHaveBeenCalledWith('/review-tracks');
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+  });
+
+  it('does not navigate to artist review when storing the provider fails', async () => {
+    const user = userEvent.setup();
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (key === 'analysisProvider') throw new DOMException('Storage blocked', 'SecurityError');
+      return originalSetItem.call(this, key, value);
+    });
+    mockAxiosPost.mockResolvedValue({
+      data: { artists: [{ name: 'Alvvays' }], rawText: '', provider: 'gemini' },
+    });
+    render(<Upload />);
+
+    fireEvent.click(screen.getByRole('button', { name: /upload a poster/i }));
+    fireEvent.click(screen.getByRole('button', { name: /select test poster/i }));
+
+    await user.click(await screen.findByRole('button', { name: /customize artists/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Browser storage unavailable')).toBeInTheDocument();
+    });
+    expect(sessionStorage.getItem('artists')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalledWith('/review-artists');
+  });
 });

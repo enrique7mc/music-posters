@@ -46,6 +46,51 @@ function clearFlowSessionState() {
   FLOW_SESSION_KEYS.forEach((key) => sessionStorage.removeItem(key));
 }
 
+const STORAGE_UNAVAILABLE_ERROR: AppError = {
+  type: 'server',
+  title: 'Browser storage unavailable',
+  message:
+    'Your browser blocked session storage, so we cannot save this playlist. Enable browser storage and try again.',
+};
+
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function canUseSessionStorage(): boolean {
+  const storage = getSessionStorage();
+  if (!storage) return false;
+
+  const testKey = '__music_posters_storage_test__';
+
+  try {
+    storage.setItem(testKey, 'available');
+    const isAvailable = storage.getItem(testKey) === 'available';
+    storage.removeItem(testKey);
+    return isAvailable;
+  } catch {
+    try {
+      storage.removeItem(testKey);
+    } catch {
+      // Storage is unavailable; there is nothing more to recover here.
+    }
+    return false;
+  }
+}
+
+function writeAndVerifySessionValue(storage: Storage, key: string, value: string) {
+  storage.setItem(key, value);
+  if (storage.getItem(key) !== value) {
+    throw new Error(`sessionStorage verification failed for ${key}`);
+  }
+}
+
 export default function Upload() {
   const router = useRouter();
   const { user, loading: authLoading, platform } = useAuth();
@@ -61,6 +106,7 @@ export default function Upload() {
   const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini' | 'hybrid'>(
     'vision'
   );
+  const [posterFlowStorageAvailable, setPosterFlowStorageAvailable] = useState(false);
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
@@ -147,6 +193,9 @@ export default function Upload() {
       setAnalysisProvider(response.data.provider);
       setPosterThumbnail(response.data.posterThumbnail || null);
 
+      const storageAvailable = canUseSessionStorage();
+      setPosterFlowStorageAvailable(storageAvailable);
+
       // Store poster metadata without letting restricted browser storage turn a
       // successful analysis into an apparent API failure.
       if (typeof window !== 'undefined') {
@@ -165,6 +214,8 @@ export default function Upload() {
           type: 'validation',
           message: 'No artists found in the image. Try a different poster.',
         });
+      } else if (!storageAvailable) {
+        setError(STORAGE_UNAVAILABLE_ERROR);
       }
     } catch (err: any) {
       // Only show error if this is still the latest request
@@ -274,6 +325,12 @@ export default function Upload() {
       return;
     }
 
+    if (!canUseSessionStorage()) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
     setCreating(true);
     setError(null);
 
@@ -290,15 +347,42 @@ export default function Upload() {
 
       const response = await apiClient.post('/api/search-tracks', requestBody);
 
-      // Store tracks and poster thumbnail for review page
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('tracks', JSON.stringify(response.data.tracks));
+      // Store and verify the review state before navigating. Storage errors are
+      // distinct from track-search errors, so the user can recover without
+      // mistaking a blocked browser storage area for an API failure.
+      const storage = getSessionStorage();
+      if (!storage) {
+        setPosterFlowStorageAvailable(false);
+        setError(STORAGE_UNAVAILABLE_ERROR);
+        setCreating(false);
+        return;
+      }
+
+      try {
+        writeAndVerifySessionValue(storage, 'tracks', JSON.stringify(response.data.tracks));
         if (response.data.warnings?.length) {
-          sessionStorage.setItem('trackWarnings', JSON.stringify(response.data.warnings));
+          writeAndVerifySessionValue(
+            storage,
+            'trackWarnings',
+            JSON.stringify(response.data.warnings)
+          );
         }
         if (posterThumbnail) {
-          sessionStorage.setItem('posterThumbnail', posterThumbnail);
+          writeAndVerifySessionValue(storage, 'posterThumbnail', posterThumbnail);
         }
+      } catch (storageError) {
+        console.error('Failed to store quick-create review state:', storageError);
+        try {
+          storage.removeItem('tracks');
+          storage.removeItem('trackWarnings');
+          storage.removeItem('posterThumbnail');
+        } catch {
+          // Best-effort cleanup only; the storage error is shown below.
+        }
+        setPosterFlowStorageAvailable(false);
+        setError(STORAGE_UNAVAILABLE_ERROR);
+        setCreating(false);
+        return;
       }
 
       router.push('/review-tracks');
@@ -311,6 +395,43 @@ export default function Upload() {
       setError(appError);
       setCreating(false);
     }
+  };
+
+  const handleCustomizeArtists = () => {
+    if (!canUseSessionStorage()) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    const storage = getSessionStorage();
+    if (!storage) {
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    try {
+      writeAndVerifySessionValue(storage, 'artists', JSON.stringify(artists));
+      writeAndVerifySessionValue(storage, 'analysisProvider', analysisProvider);
+      if (posterThumbnail) {
+        writeAndVerifySessionValue(storage, 'posterThumbnail', posterThumbnail);
+      }
+    } catch (storageError) {
+      console.error('Failed to store artist review state:', storageError);
+      try {
+        storage.removeItem('artists');
+        storage.removeItem('analysisProvider');
+        storage.removeItem('posterThumbnail');
+      } catch {
+        // Best-effort cleanup only; the storage error is shown below.
+      }
+      setPosterFlowStorageAvailable(false);
+      setError(STORAGE_UNAVAILABLE_ERROR);
+      return;
+    }
+
+    router.push('/review-artists');
   };
 
   if (authLoading) {
@@ -502,7 +623,7 @@ export default function Upload() {
                       {/* Quick Create */}
                       <button
                         onClick={handleCreatePlaylist}
-                        disabled={creating}
+                        disabled={creating || !posterFlowStorageAvailable}
                         className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">
@@ -534,18 +655,8 @@ export default function Upload() {
 
                       {/* Customize Artists */}
                       <button
-                        onClick={() => {
-                          // Store artists in sessionStorage for review-artists page
-                          if (typeof window !== 'undefined') {
-                            sessionStorage.setItem('artists', JSON.stringify(artists));
-                            sessionStorage.setItem('analysisProvider', analysisProvider);
-                            if (posterThumbnail) {
-                              sessionStorage.setItem('posterThumbnail', posterThumbnail);
-                            }
-                          }
-                          router.push('/review-artists');
-                        }}
-                        disabled={creating}
+                        onClick={handleCustomizeArtists}
+                        disabled={creating || !posterFlowStorageAvailable}
                         className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-start gap-3">
