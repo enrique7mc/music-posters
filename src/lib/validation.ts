@@ -5,6 +5,7 @@ import {
   MAX_ARTIST_NAME_LENGTH,
   MIN_TRACKS_PER_ARTIST,
   MAX_TRACKS_PER_ARTIST,
+  MAX_PLAYLIST_TRACKS,
 } from './constants';
 
 /**
@@ -187,12 +188,12 @@ export const createPlaylistSchema = z
     trackUris: z
       .array(spotifyTrackUriSchema)
       .min(1, 'At least one track URI must be provided')
-      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .max(MAX_PLAYLIST_TRACKS, `Maximum ${MAX_PLAYLIST_TRACKS} tracks allowed per playlist`)
       .optional(),
     trackIds: z
       .array(trackIdSchema)
       .min(1, 'At least one track ID must be provided')
-      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .max(MAX_PLAYLIST_TRACKS, `Maximum ${MAX_PLAYLIST_TRACKS} tracks allowed per playlist`)
       .optional(),
     platform: musicPlatformSchema.optional(),
     playlistName: z

@@ -21,6 +21,17 @@ All notable changes to this project are documented here. The format is based on
   Vercel production-logs section moved to `SETUP.md`. All hard-rule claims are
   verified against the code.
 
+### Fixed
+
+- **Playlist size cap (#49).** Track totals are now capped at 2,000 per playlist
+  (shared `MAX_PLAYLIST_TRACKS` constant): the estimate on the artist review
+  screen warns when a selection exceeds the cap, the create button on the track
+  review screen is disabled with the overage spelled out, and
+  `/api/create-playlist` rejects larger payloads with a 400. Worst-case Apple
+  Music population (20 chunked requests plus mandatory delays) now fits the
+  route's 30s budget, so partial playlists after timeout are no longer possible.
+  The resumable/async population path is deferred indefinitely.
+
 ## [0.2.0] - 2026-06-14
 
 ### Added
