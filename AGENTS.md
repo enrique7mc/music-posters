@@ -31,8 +31,9 @@ pre-commit hook formats staged files.
   `IMAGE_ANALYSIS_PROVIDER` = `vision` | `gemini` | `hybrid`); `dev-mode.ts` (mocks)
 - `src/components/`, `src/contexts/`, `src/hooks/` — frontend
 - `src/types/index.ts` — shared interfaces
-- Tests: `__tests__/` directories next to the code; setup in `src/test/`
-  (Vitest + Testing Library + MSW)
+- Tests: `__tests__/` directories next to the code; page tests in
+  `src/test/pages/` (never under `src/pages/` — Next.js routes them); setup in
+  `src/test/` (Vitest + Testing Library + MSW)
 
 Flow: auth → upload → `/api/analyze` (extract + rank artists) → artist
 review → `/api/search-tracks` → track review → `/api/create-playlist`.

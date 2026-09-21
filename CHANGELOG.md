@@ -40,6 +40,11 @@ All notable changes to this project are documented here. The format is based on
   artist review screen now uses the same amber treatment as the track review
   screen's blocked-create banner, instead of sharing the red styling of the
   advisory "Very Large Playlist" warning.
+- **Reset stale bulk tier counts (#50).** "Reset to Recommended" on the artist
+  review screen now also resets the bulk tier inputs to their recommended
+  defaults. Previously a custom count applied to a tier survived the reset in
+  the bulk bar, so returning to per-artist mode showed the stale value and
+  clicking Apply silently restored the old count.
 
 ## [0.2.0] - 2026-06-14
 
