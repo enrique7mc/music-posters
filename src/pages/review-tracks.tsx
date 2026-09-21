@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Track } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
+import { MAX_PLAYLIST_TRACKS } from '@/lib/constants';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -228,6 +229,14 @@ export default function ReviewTracks() {
       return;
     }
 
+    if (selectedTracks.size > MAX_PLAYLIST_TRACKS) {
+      setError({
+        type: 'validation',
+        message: `Too many tracks selected (${selectedTracks.size}). The maximum is ${MAX_PLAYLIST_TRACKS} — deselect some tracks to continue.`,
+      });
+      return;
+    }
+
     if (!playlistName.trim()) {
       setError({ type: 'validation', message: 'Please enter a playlist name' });
       return;
@@ -282,6 +291,8 @@ export default function ReviewTracks() {
 
   const selectedCount = selectedTracks.size;
   const totalCount = tracks.length;
+  const overTrackLimit = selectedCount > MAX_PLAYLIST_TRACKS;
+  const excessTracks = selectedCount - MAX_PLAYLIST_TRACKS;
 
   return (
     <PageLayout showNav>
@@ -777,6 +788,14 @@ export default function ReviewTracks() {
           <motion.div variants={slideUp} className="sticky bottom-4 z-20">
             <Card variant="glass" className="shadow-hard">
               <CardContent className="p-4">
+                {overTrackLimit && (
+                  <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/50 p-3">
+                    <p className="text-sm text-amber-200">
+                      Too many tracks selected ({selectedCount}/{MAX_PLAYLIST_TRACKS}). Deselect{' '}
+                      {excessTracks} track{excessTracks !== 1 ? 's' : ''} to create the playlist.
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-4 justify-between flex-wrap items-center">
                   <Button
                     variant="secondary"
@@ -812,7 +831,7 @@ export default function ReviewTracks() {
                       variant="primary"
                       size="lg"
                       onClick={handleCreatePlaylist}
-                      disabled={selectedCount === 0}
+                      disabled={selectedCount === 0 || overTrackLimit}
                       className="flex-1 max-w-md"
                     >
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">

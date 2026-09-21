@@ -4,9 +4,10 @@ import {
   searchTracksSchema,
   personalizeSchema,
   searchArtistSchema,
+  createPlaylistSchema,
   MAX_ARTISTS_PER_SEARCH,
 } from '../validation';
-import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '../constants';
+import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST, MAX_PLAYLIST_TRACKS } from '../constants';
 
 describe('validation.ts', () => {
   describe('MAX_ARTISTS_PER_SEARCH', () => {
@@ -217,6 +218,77 @@ describe('validation.ts', () => {
 
       expect(Object.hasOwn(result.perArtistCounts!, '__proto__')).toBe(true);
       expect(result.perArtistCounts!.__proto__).toBe(5);
+    });
+  });
+
+  describe('createPlaylistSchema — playlist size cap (issue #49)', () => {
+    // Base-36 digits padded to 22 chars → matches the raw Spotify ID format.
+    const rawTrackId = (i: number) => i.toString(36).padStart(22, '0');
+
+    it('accepts exactly MAX_PLAYLIST_TRACKS trackIds', () => {
+      const trackIds = Array.from({ length: MAX_PLAYLIST_TRACKS }, (_, i) => rawTrackId(i));
+      expect(trackIds).toHaveLength(MAX_PLAYLIST_TRACKS);
+
+      expect(() =>
+        createPlaylistSchema.parse({ trackIds, playlistName: 'Cap boundary' })
+      ).not.toThrow();
+    });
+
+    it('rejects MAX_PLAYLIST_TRACKS + 1 trackIds', () => {
+      const trackIds = Array.from({ length: MAX_PLAYLIST_TRACKS + 1 }, (_, i) => rawTrackId(i));
+
+      let error: any;
+      try {
+        createPlaylistSchema.parse({ trackIds, playlistName: 'Over cap' });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeDefined();
+      expect(error.issues[0].message).toBe(
+        `Maximum ${MAX_PLAYLIST_TRACKS} tracks allowed per playlist`
+      );
+    });
+
+    it('rejects over-cap trackUris arrays with the same bound', () => {
+      const trackUris = Array.from(
+        { length: MAX_PLAYLIST_TRACKS + 1 },
+        (_, i) => `spotify:track:${rawTrackId(i)}`
+      );
+
+      expect(() => createPlaylistSchema.parse({ trackUris })).toThrow();
+    });
+  });
+
+  describe('createPlaylistSchema — identifier exclusivity', () => {
+    const rawTrackId = (i: number) => i.toString(36).padStart(22, '0');
+
+    it('rejects requests that supply both trackIds and trackUris', () => {
+      let error: any;
+      try {
+        createPlaylistSchema.parse({
+          trackIds: [rawTrackId(1)],
+          trackUris: [`spotify:track:${rawTrackId(2)}`],
+          playlistName: 'Both arrays',
+        });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeDefined();
+      expect(error.issues[0].message).toBe('Provide either trackUris or trackIds, not both');
+    });
+
+    it('still accepts trackIds alone', () => {
+      expect(() =>
+        createPlaylistSchema.parse({ trackIds: [rawTrackId(1)], playlistName: 'IDs only' })
+      ).not.toThrow();
+    });
+
+    it('still accepts trackUris alone', () => {
+      expect(() =>
+        createPlaylistSchema.parse({ trackUris: [`spotify:track:${rawTrackId(1)}`] })
+      ).not.toThrow();
     });
   });
 

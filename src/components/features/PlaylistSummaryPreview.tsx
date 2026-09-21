@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Artist } from '@/types';
 import Card from '../ui/Card';
 import { fadeIn } from '@/lib/animations';
+import { MAX_PLAYLIST_TRACKS } from '@/lib/constants';
 import type { TrackCountMode, TierCounts } from './TrackCountModeSelector';
 import { DEFAULT_TIER_COUNTS } from './TrackCountModeSelector';
 
@@ -66,6 +67,7 @@ export default function PlaylistSummaryPreview({
   const avgTracksPerArtist = artists.length > 0 ? (estimatedTracks / artists.length).toFixed(1) : 0;
 
   // Warning thresholds
+  const exceedsCap = estimatedTracks > MAX_PLAYLIST_TRACKS;
   const isLarge = estimatedTracks > 150;
   const isVeryLarge = estimatedTracks > 300;
 
@@ -120,7 +122,39 @@ export default function PlaylistSummaryPreview({
           </div>
 
           {/* Warnings */}
-          {isVeryLarge && (
+          {exceedsCap && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 bg-amber-950/50 border border-amber-600/50 rounded-lg"
+            >
+              <div className="flex items-start gap-2 text-sm text-amber-200">
+                <svg
+                  className="w-5 h-5 flex-shrink-0 mt-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <div>
+                  <div className="font-semibold text-amber-100">Too Many Tracks</div>
+                  <div className="text-xs mt-1">
+                    Your selection adds up to ~{estimatedTracks} tracks, over the{' '}
+                    {MAX_PLAYLIST_TRACKS}-track limit. Playlist creation will be blocked until you
+                    reduce track counts or remove artists.
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {isVeryLarge && !exceedsCap && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}

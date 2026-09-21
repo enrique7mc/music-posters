@@ -5,6 +5,7 @@ import {
   MAX_ARTIST_NAME_LENGTH,
   MIN_TRACKS_PER_ARTIST,
   MAX_TRACKS_PER_ARTIST,
+  MAX_PLAYLIST_TRACKS,
 } from './constants';
 
 /**
@@ -183,16 +184,17 @@ const trackIdSchema = z.string().refine(
  */
 export const createPlaylistSchema = z
   .object({
-    // Platform-agnostic: accepts either trackUris (Spotify) or trackIds (both platforms)
+    // Platform-agnostic: accepts either trackUris (Spotify) or trackIds (both
+    // platforms) — exactly one, enforced by the refines below
     trackUris: z
       .array(spotifyTrackUriSchema)
       .min(1, 'At least one track URI must be provided')
-      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .max(MAX_PLAYLIST_TRACKS, `Maximum ${MAX_PLAYLIST_TRACKS} tracks allowed per playlist`)
       .optional(),
     trackIds: z
       .array(trackIdSchema)
       .min(1, 'At least one track ID must be provided')
-      .max(10000, 'Maximum 10,000 tracks allowed per playlist')
+      .max(MAX_PLAYLIST_TRACKS, `Maximum ${MAX_PLAYLIST_TRACKS} tracks allowed per playlist`)
       .optional(),
     platform: musicPlatformSchema.optional(),
     playlistName: z
@@ -220,6 +222,11 @@ export const createPlaylistSchema = z
   })
   .refine((data) => data.trackUris || data.trackIds, {
     message: 'Either trackUris or trackIds must be provided',
+  })
+  // Exactly one identifier array: when both were accepted, the route populated
+  // from trackUris on Spotify but reported tracksAdded from trackIds.
+  .refine((data) => !(data.trackUris && data.trackIds), {
+    message: 'Provide either trackUris or trackIds, not both',
   });
 
 // ============================================================================
