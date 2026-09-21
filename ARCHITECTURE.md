@@ -284,8 +284,11 @@ for very large posters.
 ## Testing
 
 Vitest unit + integration tests live under `src/**/__tests__/` and
-`src/pages/api/**/__tests__/` (MSW mocks external HTTP). Coverage includes the
-matching primitives, the personalization engine and its hardening, affinity →
-track-mode selection, validation schemas, auth, and the API routes. Run with
-`npm run test` (watch) or `npm run test:run` (once). See [TESTING.md](TESTING.md)
-for the manual checklist.
+`src/pages/api/**/__tests__/` (MSW mocks external HTTP); screen-level page
+tests live in `src/test/pages/`, outside `src/pages/` so Next.js never treats
+them as routable modules. Coverage includes the matching primitives, the
+personalization engine and its hardening, affinity → track-mode selection,
+validation schemas, auth, the API routes, and the page flows (upload,
+review-artists, review-tracks). Run with `npm run test` (watch) or
+`npm run test:run` (once). See [TESTING.md](TESTING.md) for the manual
+checklist.
