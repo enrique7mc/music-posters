@@ -31,6 +31,15 @@ All notable changes to this project are documented here. The format is based on
   Music population (20 chunked requests plus mandatory delays) now fits the
   route's 30s budget, so partial playlists after timeout are no longer possible.
   The resumable/async population path is deferred indefinitely.
+- **Create-playlist payload strictness.** `/api/create-playlist` now rejects
+  requests that supply both `trackUris` and `trackIds` with a 400 (provide
+  exactly one; the UI only ever sends `trackIds`). Previously a request with
+  both could populate the playlist from one array while reporting
+  `tracksAdded` from the other.
+- **Over-cap warning styling.** The blocking "Too Many Tracks" warning on the
+  artist review screen now uses the same amber treatment as the track review
+  screen's blocked-create banner, instead of sharing the red styling of the
+  advisory "Very Large Playlist" warning.
 
 ## [0.2.0] - 2026-06-14
 

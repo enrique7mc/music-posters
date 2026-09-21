@@ -184,7 +184,8 @@ const trackIdSchema = z.string().refine(
  */
 export const createPlaylistSchema = z
   .object({
-    // Platform-agnostic: accepts either trackUris (Spotify) or trackIds (both platforms)
+    // Platform-agnostic: accepts either trackUris (Spotify) or trackIds (both
+    // platforms) — exactly one, enforced by the refines below
     trackUris: z
       .array(spotifyTrackUriSchema)
       .min(1, 'At least one track URI must be provided')
@@ -221,6 +222,11 @@ export const createPlaylistSchema = z
   })
   .refine((data) => data.trackUris || data.trackIds, {
     message: 'Either trackUris or trackIds must be provided',
+  })
+  // Exactly one identifier array: when both were accepted, the route populated
+  // from trackUris on Spotify but reported tracksAdded from trackIds.
+  .refine((data) => !(data.trackUris && data.trackIds), {
+    message: 'Provide either trackUris or trackIds, not both',
   });
 
 // ============================================================================

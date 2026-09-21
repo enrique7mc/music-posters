@@ -260,6 +260,38 @@ describe('validation.ts', () => {
     });
   });
 
+  describe('createPlaylistSchema — identifier exclusivity', () => {
+    const rawTrackId = (i: number) => i.toString(36).padStart(22, '0');
+
+    it('rejects requests that supply both trackIds and trackUris', () => {
+      let error: any;
+      try {
+        createPlaylistSchema.parse({
+          trackIds: [rawTrackId(1)],
+          trackUris: [`spotify:track:${rawTrackId(2)}`],
+          playlistName: 'Both arrays',
+        });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeDefined();
+      expect(error.issues[0].message).toBe('Provide either trackUris or trackIds, not both');
+    });
+
+    it('still accepts trackIds alone', () => {
+      expect(() =>
+        createPlaylistSchema.parse({ trackIds: [rawTrackId(1)], playlistName: 'IDs only' })
+      ).not.toThrow();
+    });
+
+    it('still accepts trackUris alone', () => {
+      expect(() =>
+        createPlaylistSchema.parse({ trackUris: [`spotify:track:${rawTrackId(1)}`] })
+      ).not.toThrow();
+    });
+  });
+
   describe('personalizeSchema', () => {
     it('should validate a minimal valid request', () => {
       expect(() =>

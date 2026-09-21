@@ -126,9 +126,9 @@ export default function PlaylistSummaryPreview({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg"
+              className="p-3 bg-amber-950/50 border border-amber-600/50 rounded-lg"
             >
-              <div className="flex items-start gap-2 text-sm text-red-400">
+              <div className="flex items-start gap-2 text-sm text-amber-200">
                 <svg
                   className="w-5 h-5 flex-shrink-0 mt-0.5"
                   fill="none"
@@ -143,7 +143,7 @@ export default function PlaylistSummaryPreview({
                   />
                 </svg>
                 <div>
-                  <div className="font-semibold">Too Many Tracks</div>
+                  <div className="font-semibold text-amber-100">Too Many Tracks</div>
                   <div className="text-xs mt-1">
                     Your selection adds up to ~{estimatedTracks} tracks, over the{' '}
                     {MAX_PLAYLIST_TRACKS}-track limit. Playlist creation will be blocked until you
