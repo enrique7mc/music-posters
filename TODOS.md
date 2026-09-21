@@ -3,6 +3,7 @@
 ## Backlog
 
 - [ ] **SSE progress indicator for track search** — Show "Searching artist 47 of 150..." instead of static spinner during 30-70s track search operations. Pairs with partial success warnings. Priority: P2. Effort: M (CC: ~30min).
+- [ ] **Memoize review-artists against per-keystroke full-page re-renders** — Typing any track-count input (per-artist or bulk tier) sets page-level state, so up to 150 un-memoized `motion` artist rows re-render on every keystroke. Wrap `EditableArtistList` in `React.memo` and stabilize its callback props with `useCallback`. **Why:** visible input lag on large lineups; surfaced when the #50 fix lifted bulk-tier staging onto page state (matching the cost per-artist edits already paid). Priority: P2. (`src/pages/review-artists.tsx`, `src/components/features/EditableArtistList.tsx`)
 
 ### Deferred from User-Aware Recommendations eng review (2026-06-02)
 
