@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Artist } from '@/types';
 import Button from '../ui/Button';
@@ -14,6 +13,13 @@ interface BulkActionsBarProps {
   onResetToRecommended: () => void;
   onRemoveSelected: () => void;
   onApplyToTier: (tier: string, count: number) => void;
+  /**
+   * Bulk tier counts staged since the last Reset to Recommended. Held by the
+   * page so Reset can clear them alongside the lineup counts; tiers without
+   * an entry show (and Apply) their recommended default.
+   */
+  stagedTierCounts: Partial<TierCounts>;
+  onStagedTierCountChange: (tier: keyof TierCounts, count: number) => void;
 }
 
 export default function BulkActionsBar({
@@ -23,20 +29,13 @@ export default function BulkActionsBar({
   onResetToRecommended,
   onRemoveSelected,
   onApplyToTier,
+  stagedTierCounts,
+  onStagedTierCountChange,
 }: BulkActionsBarProps) {
   // Calculate available tiers
   const availableTiers = Array.from(new Set(artists.filter((a) => a.tier).map((a) => a.tier)));
 
   const hasRanking = availableTiers.length > 0;
-
-  // Staged counts per tier, applied to the lineup only via the explicit
-  // Apply action. Seeded with the tier defaults so Apply can also restore a
-  // tier to its recommended count (TrackCountInput commits typed values here).
-  const [stagedTierCounts, setStagedTierCounts] = useState<Record<string, number>>(() =>
-    Object.fromEntries(
-      availableTiers.map((tier) => [tier, DEFAULT_TIER_COUNTS[tier as keyof TierCounts]])
-    )
-  );
 
   return (
     <Card variant="glass" className="overflow-hidden">
@@ -110,8 +109,7 @@ export default function BulkActionsBar({
 
               const tierLabel = tierLabels[tier as keyof typeof tierLabels];
               const artistCount = artists.filter((a) => a.tier === tier).length;
-              const stagedCount =
-                stagedTierCounts[tier] ?? DEFAULT_TIER_COUNTS[tier as keyof TierCounts];
+              const stagedCount = stagedTierCounts[tier] ?? DEFAULT_TIER_COUNTS[tier];
 
               return (
                 <div key={tier} className="flex items-center gap-3 p-2 bg-dark-800/50 rounded">
@@ -123,9 +121,7 @@ export default function BulkActionsBar({
 
                   <TrackCountInput
                     value={stagedCount}
-                    onCommit={(count) =>
-                      setStagedTierCounts((prev) => ({ ...prev, [tier]: count }))
-                    }
+                    onCommit={(count) => onStagedTierCountChange(tier, count)}
                     label={`Track count for ${tierLabel} tier`}
                     className="w-20"
                   />

@@ -57,6 +57,10 @@ export default function ReviewArtists() {
   const [tierCounts, setTierCounts] = useState<TierCounts>(DEFAULT_TIER_COUNTS);
   const [perArtistCounts, setPerArtistCounts] =
     useState<Record<string, number>>(createArtistCountMap);
+  // Bulk tier counts staged in the bulk bar. Only holds explicit edits; tiers
+  // without an entry fall back to their recommended default, so clearing this
+  // restores the staged inputs to the defaults.
+  const [stagedTierCounts, setStagedTierCounts] = useState<Partial<TierCounts>>({});
 
   // Track selection mode
   const [trackSelectionMode, setTrackSelectionMode] = useState<TrackSelectionMode>('popular');
@@ -243,6 +247,10 @@ export default function ReviewArtists() {
 
   // Reset to recommended tier-based counts
   const handleResetToRecommended = () => {
+    // Reset the staged bulk tier inputs too — otherwise their pre-reset values
+    // survive in the bulk bar and a later Apply would restore them.
+    setStagedTierCounts({});
+
     if (inputSource === 'text') {
       // Manual lineups have no tiers — restore the text-entry defaults:
       // per-artist mode with 5 tracks for every artist.
@@ -280,6 +288,12 @@ export default function ReviewArtists() {
       });
       return updated;
     });
+  };
+
+  // Stage a bulk tier count edit; reaches the lineup only via the explicit
+  // Apply action in the bulk bar.
+  const handleStagedTierCountChange = (tier: keyof TierCounts, count: number) => {
+    setStagedTierCounts((prev) => ({ ...prev, [tier]: count }));
   };
 
   // Update per-artist track count
@@ -460,6 +474,8 @@ export default function ReviewArtists() {
                   onResetToRecommended={handleResetToRecommended}
                   onRemoveSelected={handleRemoveSelected}
                   onApplyToTier={handleApplyToTier}
+                  stagedTierCounts={stagedTierCounts}
+                  onStagedTierCountChange={handleStagedTierCountChange}
                 />
 
                 {/* Editable Artist List */}

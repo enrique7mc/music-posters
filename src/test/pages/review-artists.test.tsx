@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import ReviewArtists from '../../pages/review-artists';
 
 // --- Module mocks (hoisted) -------------------------------------------------
@@ -58,10 +58,24 @@ function seedTextSession(artists = TEXT_LINEUP) {
   sessionStorage.setItem('inputSource', 'text');
 }
 
-function seedPosterSession() {
-  sessionStorage.setItem('artists', JSON.stringify([{ name: 'Alvvays', tier: 'headliner' }]));
+function seedPosterSession(
+  artists: { name: string; tier: string }[] = [{ name: 'Alvvays', tier: 'headliner' }]
+) {
+  sessionStorage.setItem('artists', JSON.stringify(artists));
   sessionStorage.setItem('analysisProvider', 'gemini');
   sessionStorage.setItem('inputSource', 'poster');
+}
+
+/** Seed a poster session and render until Continue is ready. */
+async function renderPosterReviewArtists(
+  artists: { name: string; tier: string }[] = [{ name: 'Alvvays', tier: 'headliner' }]
+) {
+  seedPosterSession(artists);
+  const view = render(<ReviewArtists />);
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+  });
+  return view;
 }
 
 const countSelect = (artistName: string) =>
@@ -251,6 +265,19 @@ describe('review-artists with a manually entered (text) lineup', () => {
     expect(countSelect('Men I Trust').value).toBe('5');
   });
 
+  it('shows no bulk tier controls for manually entered lineups', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    // No tiers exist, so the bulk bar hides its apply-to-tier section entirely.
+    expect(
+      screen.queryByText(/apply a track count \(1–25\) to all artists in a tier/i)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Track count for Headliners tier')).not.toBeInTheDocument();
+    // The text-lineup reset (per-artist defaults) remains available.
+    expect(screen.getByRole('button', { name: /reset to recommended/i })).toBeInTheDocument();
+  });
+
   it('supports artist names that collide with object prototype keys', async () => {
     seedTextSession([{ name: '__proto__' }]);
     render(<ReviewArtists />);
@@ -310,12 +337,7 @@ describe('review-artists with a poster lineup (regression guard)', () => {
   });
 
   it('custom-per-tier counts appear in the estimate and the API payload', async () => {
-    seedPosterSession();
-    render(<ReviewArtists />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
-    });
+    await renderPosterReviewArtists();
 
     fireEvent.click(screen.getByRole('button', { name: /custom per tier/i }));
 
@@ -339,12 +361,7 @@ describe('review-artists with a poster lineup (regression guard)', () => {
   });
 
   it('bulk tier application supports arbitrary values (17) via explicit Apply', async () => {
-    seedPosterSession();
-    render(<ReviewArtists />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
-    });
+    await renderPosterReviewArtists();
 
     fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
 
@@ -367,5 +384,207 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     const searchCall = mockPost.mock.calls.find(([url]) => url === '/api/search-tracks');
     expect(searchCall![1].trackCountMode).toBe('per-artist');
     expect(searchCall![1].perArtistCounts).toEqual({ Alvvays: 17 });
+  });
+
+  it('reset also clears the staged bulk tier inputs, not just the lineup counts', async () => {
+    await renderPosterReviewArtists();
+
+    // Apply a custom bulk count of 17 to the headliner tier.
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInput = screen.getByLabelText('Track count for Headliners tier');
+    fireEvent.change(bulkInput, { target: { value: '17' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply track count to Headliners' }));
+    expect(countSelect('Alvvays').value).toBe('17');
+
+    // Reset to Recommended restores the lineup defaults and drops the mode
+    // back to tier-based.
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+    expect(screen.getByText('~10')).toBeInTheDocument(); // tier default for the headliner
+
+    // Returning to per-artist mode must show the recommended default in the
+    // staged input — not the stale 17 from before the reset.
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInputAfterReset = screen.getByLabelText('Track count for Headliners tier');
+    expect((bulkInputAfterReset as HTMLInputElement).value).toBe('10');
+
+    // Applying again keeps the recommended count; the pre-reset 17 is gone.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply track count to Headliners' }));
+    expect(countSelect('Alvvays').value).toBe('10');
+    expect(screen.getByText('~10')).toBeInTheDocument();
+  });
+
+  it('hides Reset to Recommended while in tier-based mode', async () => {
+    await renderPosterReviewArtists();
+
+    // Tier-based mode IS the recommended state — nothing to reset.
+    expect(screen.queryByRole('button', { name: /reset to recommended/i })).not.toBeInTheDocument();
+
+    // Leaving tier-based mode reveals the reset action again.
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    expect(screen.getByRole('button', { name: /reset to recommended/i })).toBeInTheDocument();
+  });
+
+  it('keeps a staged (unapplied) tier count across mode switches until reset', async () => {
+    await renderPosterReviewArtists();
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInput = screen.getByLabelText('Track count for Headliners tier');
+    fireEvent.change(bulkInput, { target: { value: '17' } }); // staged, not applied
+
+    // Staging is reset-scoped, not mode-scoped: leaving and returning keeps 17.
+    fireEvent.click(screen.getByRole('button', { name: /recommended \(tier-based\)/i }));
+    expect(screen.queryByLabelText('Track count for Headliners tier')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInputAfterSwitch = screen.getByLabelText('Track count for Headliners tier');
+    expect((bulkInputAfterSwitch as HTMLInputElement).value).toBe('17');
+
+    // Reset is the one action that clears it.
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    expect(
+      (screen.getByLabelText('Track count for Headliners tier') as HTMLInputElement).value
+    ).toBe('10');
+  });
+
+  it('reset restores the custom-per-tier selector inputs to recommended defaults', async () => {
+    await renderPosterReviewArtists();
+
+    fireEvent.click(screen.getByRole('button', { name: /custom per tier/i }));
+    const tierInput = screen.getByLabelText('Headliners track count');
+    expect((tierInput as HTMLInputElement).value).toBe('10');
+    fireEvent.change(tierInput, { target: { value: '17' } });
+    expect(screen.getByText('~17')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+    expect(screen.getByText('~10')).toBeInTheDocument();
+
+    // Re-entering custom-per-tier shows the recommended default, not the 17.
+    fireEvent.click(screen.getByRole('button', { name: /custom per tier/i }));
+    expect((screen.getByLabelText('Headliners track count') as HTMLInputElement).value).toBe('10');
+  });
+
+  it('rejects invalid drafts in the bulk tier input without committing them', async () => {
+    await renderPosterReviewArtists();
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInput = screen.getByLabelText('Track count for Headliners tier');
+    fireEvent.change(bulkInput, { target: { value: '26' } });
+
+    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('~10')).toBeInTheDocument(); // estimate keeps the last committed count
+
+    // Apply uses the last committed value (10), never the invalid draft.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply track count to Headliners' }));
+    expect(countSelect('Alvvays').value).toBe('10');
+
+    // Blurring reverts the field to the committed value and clears the message.
+    fireEvent.blur(bulkInput);
+    expect((bulkInput as HTMLInputElement).value).toBe('10');
+    expect(screen.queryByText('Enter a whole number from 1 to 25.')).not.toBeInTheDocument();
+  });
+
+  it('Remove Selected drops artists from the lineup, counts, and search payload', async () => {
+    await renderPosterReviewArtists([
+      { name: 'Alvvays', tier: 'headliner' },
+      { name: 'The Beths', tier: 'mid-tier' },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '17' } });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alvvays' }));
+    fireEvent.click(screen.getByRole('button', { name: /remove selected \(1\)/i }));
+
+    expect(screen.getByText('Review Artists (1)')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Track count for Alvvays')).not.toBeInTheDocument();
+    expect(countSelect('The Beths').value).toBe('3'); // mid-tier default, untouched
+
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/review-tracks');
+    });
+
+    const searchCall = mockPost.mock.calls.find(([url]) => url === '/api/search-tracks');
+    expect(searchCall![1].artists.map((a: { name: string }) => a.name)).toEqual(['The Beths']);
+    expect(searchCall![1].perArtistCounts).toEqual({ 'The Beths': 3 });
+  });
+
+  it('preserves independent staged overrides for multiple tiers until reset', async () => {
+    await renderPosterReviewArtists([
+      { name: 'Alvvays', tier: 'headliner' },
+      { name: 'Men I Trust', tier: 'mid-tier' },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+
+    // Staging one tier must not clobber the other's staged override.
+    fireEvent.change(screen.getByLabelText('Track count for Headliners tier'), {
+      target: { value: '17' },
+    });
+    fireEvent.change(screen.getByLabelText('Track count for Mid-Tier tier'), {
+      target: { value: '8' },
+    });
+    expect(
+      (screen.getByLabelText('Track count for Headliners tier') as HTMLInputElement).value
+    ).toBe('17');
+    expect((screen.getByLabelText('Track count for Mid-Tier tier') as HTMLInputElement).value).toBe(
+      '8'
+    );
+
+    // Reset clears every tier's staged override back to its own default.
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    expect(
+      (screen.getByLabelText('Track count for Headliners tier') as HTMLInputElement).value
+    ).toBe('10');
+    expect((screen.getByLabelText('Track count for Mid-Tier tier') as HTMLInputElement).value).toBe(
+      '3'
+    );
+  });
+
+  it('personalization merging does not disturb staged or applied bulk counts', async () => {
+    seedPosterSession();
+    let resolvePersonalize!: (value: unknown) => void;
+    mockPost.mockImplementation((url: string) => {
+      if (url === '/api/personalize') {
+        return new Promise((resolve) => {
+          resolvePersonalize = resolve;
+        });
+      }
+      return Promise.resolve({ data: { tracks: [], artistsSearched: 1, tracksFound: 0 } });
+    });
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Review Artists (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    const bulkInput = screen.getByLabelText('Track count for Headliners tier');
+    fireEvent.change(bulkInput, { target: { value: '17' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply track count to Headliners' }));
+    expect(countSelect('Alvvays').value).toBe('17');
+
+    // Personalization lands mid-session: the affinity merge re-renders the
+    // lineup but must not clobber staged or applied counts.
+    await act(async () => {
+      resolvePersonalize({
+        data: {
+          artists: [{ name: 'Alvvays', affinity: 'loved', affinityConfidence: 0.97 }],
+          lovedCount: 1,
+          gemCount: 0,
+          degraded: false,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+    expect(
+      (screen.getByLabelText('Track count for Headliners tier') as HTMLInputElement).value
+    ).toBe('17');
+    expect(countSelect('Alvvays').value).toBe('17');
+    expect(screen.getByText('~17')).toBeInTheDocument();
   });
 });
