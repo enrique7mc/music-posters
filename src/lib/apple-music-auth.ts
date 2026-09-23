@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { parse, serialize } from 'cookie';
+import { createHmac } from 'crypto';
 import jwt from 'jsonwebtoken';
 
 const COOKIE_OPTIONS = {
@@ -12,6 +13,32 @@ const COOKIE_OPTIONS = {
 // Cache for developer token (valid for 6 months, but we refresh more often)
 let cachedDeveloperToken: string | null = null;
 let cachedTokenExpiry: number = 0;
+
+/**
+ * Derive an opaque, account-specific draft owner from the Music User Token.
+ * Apple Music exposes a storefront rather than a unique profile ID, so the
+ * storefront must never be used as an ownership boundary. The raw credential
+ * is never returned to the browser or stored in the playlist draft.
+ *
+ * A dedicated secret keeps this identifier independent of Apple's signing
+ * key. Existing deployments remain safe before adding it because the already
+ * required Apple private key is used as a stable server-only fallback.
+ */
+export function deriveAppleMusicDraftOwnerId(musicUserToken: string): string {
+  const secret = process.env.DRAFT_OWNER_SECRET || process.env.APPLE_MUSIC_PRIVATE_KEY;
+  if (!secret) {
+    throw new Error(
+      'DRAFT_OWNER_SECRET or APPLE_MUSIC_PRIVATE_KEY environment variable is not set'
+    );
+  }
+
+  const digest = createHmac('sha256', secret)
+    .update('playlistd:apple-music-draft-owner:v1\0')
+    .update(musicUserToken)
+    .digest('base64url');
+
+  return `apple-music:${digest}`;
+}
 
 /**
  * Generates a developer token (JWT) for Apple Music API.

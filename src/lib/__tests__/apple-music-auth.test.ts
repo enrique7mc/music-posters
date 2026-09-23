@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextApiResponse } from 'next';
 import {
+  deriveAppleMusicDraftOwnerId,
   isValidAppleMusicToken,
   setAppleMusicCookies,
   getAppleMusicToken,
@@ -8,6 +9,17 @@ import {
 } from '../apple-music-auth';
 
 describe('apple-music-auth.ts', () => {
+  describe('deriveAppleMusicDraftOwnerId', () => {
+    it('is stable for one credential and distinct across credentials', () => {
+      const first = deriveAppleMusicDraftOwnerId('first-user-token');
+
+      expect(deriveAppleMusicDraftOwnerId('first-user-token')).toBe(first);
+      expect(deriveAppleMusicDraftOwnerId('second-user-token')).not.toBe(first);
+      expect(first).toMatch(/^apple-music:/);
+      expect(first).not.toContain('first-user-token');
+    });
+  });
+
   describe('isValidAppleMusicToken', () => {
     it('should reject empty or non-string tokens', () => {
       expect(isValidAppleMusicToken('')).toBe(false);

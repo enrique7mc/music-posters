@@ -36,7 +36,12 @@ describe('AuthContext playlist draft lifecycle', () => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockGet.mockResolvedValue({
-      data: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+      data: {
+        id: 'us',
+        draftOwnerId: 'u1',
+        displayName: 'Test User',
+        platform: 'apple-music',
+      },
     });
   });
 

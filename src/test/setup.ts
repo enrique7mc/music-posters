@@ -25,6 +25,7 @@ process.env.SPOTIFY_CLIENT_SECRET = 'test_client_secret';
 process.env.SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:3000/api/auth/callback';
 process.env.NEXTAUTH_SECRET = 'test_secret';
 process.env.NEXTAUTH_URL = 'http://127.0.0.1:3000';
+process.env.DRAFT_OWNER_SECRET = 'test_draft_owner_secret';
 process.env.IMAGE_ANALYSIS_PROVIDER = 'vision';
 process.env.GEMINI_API_KEY = 'test_gemini_key';
 

@@ -7,7 +7,7 @@ import {
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getCurrentUser as getSpotifyUser } from '@/lib/spotify';
 import { getMusicPlatform } from '@/lib/music-platform';
-import { generateDeveloperToken } from '@/lib/apple-music-auth';
+import { deriveAppleMusicDraftOwnerId, generateDeveloperToken } from '@/lib/apple-music-auth';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { errDetail } from '@/lib/safe-log';
@@ -22,8 +22,8 @@ import { PlatformUser } from '@/types';
  * GET /api/auth/me
  *
  * Response:
- * - Spotify: { id, display_name, email, platform: 'spotify' }
- * - Apple Music: { id, displayName, platform: 'apple-music' }
+ * - Spotify: { id, display_name, email, platform, draftOwnerId }
+ * - Apple Music: { id, displayName, platform, draftOwnerId }
  * - Not authenticated: 401
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         displayName: 'Dev Mode User',
         display_name: 'Dev Mode User',
         platform: devConfig.fakePlatform,
+        draftOwnerId: `dev-user:${devConfig.fakePlatform}`,
       });
     }
   }
@@ -87,6 +88,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Return user with platform info
     res.status(200).json({
       ...user,
+      // Spotify exposes a stable account ID. Apple Music does not, so bind
+      // drafts to an opaque fingerprint of its user-specific credential rather
+      // than the shared storefront returned as user.id.
+      draftOwnerId:
+        platform === 'apple-music' ? deriveAppleMusicDraftOwnerId(accessToken) : user.id,
       // Include legacy fields for backward compatibility
       display_name: user.displayName,
     });

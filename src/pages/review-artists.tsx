@@ -105,7 +105,7 @@ export default function ReviewArtists() {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
 
-    const draft = readPlaylistDraftForUser(user.id, platform);
+    const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
     if (!draft || draft.artistReview.artists.length === 0) {
       router.push('/upload');
       return;
@@ -116,7 +116,10 @@ export default function ReviewArtists() {
     setInputSource(draft.source.kind);
 
     // Defensive fill: guarantee every restored artist has a per-artist count.
-    const perArtistCounts = { ...draft.artistReview.perArtistCounts };
+    const perArtistCounts: Record<string, number> = Object.assign(
+      Object.create(null),
+      draft.artistReview.perArtistCounts
+    );
     draft.artistReview.artists.forEach((artist) => {
       if (typeof perArtistCounts[artist.name] !== 'number') {
         perArtistCounts[artist.name] = recommendedCount(artist, draft.source.kind);
@@ -277,7 +280,7 @@ export default function ReviewArtists() {
   const handleResetToRecommended = () => {
     const current = reviewRef.current;
     if (!current) return;
-    const perArtistCounts: Record<string, number> = {};
+    const perArtistCounts: Record<string, number> = Object.create(null);
     current.artists.forEach((artist) => {
       perArtistCounts[artist.name] = recommendedCount(artist, inputSource);
     });
@@ -382,7 +385,7 @@ export default function ReviewArtists() {
       perArtistCounts: current.perArtistCounts,
     });
 
-    const draft = readPlaylistDraftForUser(user.id, platform);
+    const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
     if (!draft) {
       // Prerequisites vanished (cleared draft / owner change) — restart the flow.
       router.push('/upload');

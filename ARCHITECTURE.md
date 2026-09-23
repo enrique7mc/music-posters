@@ -101,9 +101,11 @@ survives page remounts, browser Back/Forward, and refreshes in the same tab.
   `analysisProvider`, `posterThumbnail`, `eventName`, `tracks`,
   `trackWarnings`, `inputSource`) are obsolete; they are removed by the
   draft's clear/save paths and read nowhere else.
-- **Ownership:** the draft records `owner.userId` + `owner.platform`. A draft
-  belonging to a different user/platform is cleared on read, never shown.
-  OAuth tokens stay in httpOnly cookies and are never part of the draft.
+- **Ownership:** the draft records `owner.userId` + `owner.platform`. For Apple
+  Music, `owner.userId` is an opaque server-derived HMAC of the Music User Token,
+  never the shared storefront returned by the profile adapter. A draft belonging
+  to a different credential/platform is cleared on read, never shown. OAuth
+  tokens stay in httpOnly cookies and are never part of the draft.
 - **Validation:** parsed JSON, the version, and required nested values are
   validated before use; a malformed or unknown-version draft is cleared and
   treated as absent. Writes are verified by read-back and return typed
@@ -231,6 +233,7 @@ review-tracks (edit) → POST /api/create-playlist (trackIds/URIs + name + cover
 | `APPLE_MUSIC_TEAM_ID`                         | Apple Developer Team ID              | Apple Music              |
 | `APPLE_MUSIC_KEY_ID`                          | MusicKit private key ID              | Apple Music              |
 | `APPLE_MUSIC_PRIVATE_KEY`                     | PEM private key (`\n`-escaped)       | Apple Music              |
+| `DRAFT_OWNER_SECRET`                          | playlist-draft HMAC secret           | Apple Music drafts       |
 | `IMAGE_ANALYSIS_PROVIDER`                     | `vision` \| `gemini` \| `hybrid`     | image analysis           |
 | `GOOGLE_APPLICATION_CREDENTIALS`              | path to Vision service-account JSON  | `vision`, `hybrid`       |
 | `GEMINI_API_KEY`                              | Google AI Studio key                 | `gemini`, `hybrid`, gems |

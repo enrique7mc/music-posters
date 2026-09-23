@@ -22,7 +22,12 @@ const { mockPush, mockReplace, mockRouter } = vi.hoisted(() => {
 const mockAxiosPost = vi.hoisted(() => vi.fn());
 const mockApiPost = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
-  user: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+  user: {
+    id: 'us',
+    draftOwnerId: 'u1',
+    displayName: 'Test User',
+    platform: 'apple-music',
+  },
   loading: false,
   platform: 'apple-music',
   logout: vi.fn(),

@@ -38,5 +38,6 @@ describe('/api/auth/me (dev mode)', () => {
     expect(data.id).toBe('dev-user');
     expect(data.displayName).toBe('Dev Mode User');
     expect(data.platform).toBe('spotify');
+    expect(data.draftOwnerId).toBe('dev-user:spotify');
   });
 });

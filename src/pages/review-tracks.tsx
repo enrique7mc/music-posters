@@ -157,7 +157,7 @@ export default function ReviewTracks() {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
 
-    const draft = platform ? readPlaylistDraftForUser(user.id, platform) : null;
+    const draft = platform ? readPlaylistDraftForUser(user.draftOwnerId, platform) : null;
 
     if (!draft?.trackReview || draft.trackReview.tracks.length === 0) {
       // Missing prerequisites: route to the nearest page that still has data.

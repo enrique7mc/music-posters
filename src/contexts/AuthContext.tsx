@@ -27,6 +27,8 @@ declare global {
 }
 
 interface User extends PlatformUser {
+  /** Opaque identity used only to scope the client-side playlist draft. */
+  draftOwnerId: string;
   display_name?: string; // Legacy field for backward compatibility
 }
 

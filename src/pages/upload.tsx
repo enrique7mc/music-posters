@@ -121,7 +121,7 @@ export default function Upload() {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
 
-    const draft = readPlaylistDraftForUser(user.id, platform);
+    const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
     setDraft(draft);
     setStorageAvailable(isSessionStorageAvailable());
 
@@ -242,7 +242,7 @@ export default function Upload() {
       // result visible but blocks advancing (storage error shown).
       if (user && platform) {
         const draft = createPosterDraft({
-          owner: { userId: user.id, platform },
+          owner: { userId: user.draftOwnerId, platform },
           artists: response.data.artists,
           analysisProvider: response.data.provider,
           posterThumbnail: response.data.posterThumbnail ?? null,
@@ -319,7 +319,7 @@ export default function Upload() {
       } else if (!draft && value.length > 0) {
         if (user && platform) {
           const write = savePlaylistDraft(
-            createTextDraft({ owner: { userId: user.id, platform }, manualText: value })
+            createTextDraft({ owner: { userId: user.draftOwnerId, platform }, manualText: value })
           );
           if (write.ok) setDraft(write.draft);
         }
@@ -333,7 +333,7 @@ export default function Upload() {
     if (result.artists.length > MAX_ARTISTS_PER_SEARCH) return; // guarded by parser
     if (!user || !platform) return;
 
-    const existing = readPlaylistDraftForUser(user.id, platform);
+    const existing = readPlaylistDraftForUser(user.draftOwnerId, platform);
 
     // Re-submitting the same lineup is a Back-then-Continue round trip: keep
     // artist-review edits and stored track results untouched.
@@ -366,7 +366,11 @@ export default function Upload() {
     }
 
     const base =
-      existing ?? createTextDraft({ owner: { userId: user.id, platform }, manualText: artistText });
+      existing ??
+      createTextDraft({
+        owner: { userId: user.draftOwnerId, platform },
+        manualText: artistText,
+      });
     const write = savePlaylistDraft(applyTextLineup(base, artistText, result.artists));
     if (!write.ok) {
       setDraft(existing);
@@ -399,7 +403,7 @@ export default function Upload() {
     setError(null);
 
     try {
-      const owner = { userId: user.id, platform };
+      const owner = { userId: user.draftOwnerId, platform };
       // Quick Create explicitly uses recommended defaults; initializing the
       // same complete artistReview here gives Review Tracks a valid Review
       // Artists destination (including drafts that skipped customization).
@@ -485,13 +489,13 @@ export default function Upload() {
       return;
     }
 
-    const existing = readPlaylistDraftForUser(user.id, platform);
+    const existing = readPlaylistDraftForUser(user.draftOwnerId, platform);
 
     if (!existing) {
       // The analysis-time write failed; rebuild the draft before navigating.
       const write = savePlaylistDraft(
         createPosterDraft({
-          owner: { userId: user.id, platform },
+          owner: { userId: user.draftOwnerId, platform },
           artists,
           analysisProvider,
           posterThumbnail,
@@ -663,6 +667,7 @@ export default function Upload() {
                   <div className="flex justify-end mb-2">
                     <StartOverButton
                       onDiscard={() => {
+                        setDraft(null);
                         resetFlowState();
                         setInputMode(null);
                       }}
@@ -720,6 +725,7 @@ export default function Upload() {
                   <StartOverButton
                     className="w-full"
                     onDiscard={() => {
+                      setDraft(null);
                       resetFlowState();
                       setInputMode(null);
                     }}

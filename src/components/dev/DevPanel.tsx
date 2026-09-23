@@ -67,9 +67,9 @@ export default function DevPanel() {
       if (!res.ok || !meRes.ok) return;
       const data = await res.json();
       const me = await meRes.json();
-      if (!me?.id || !me?.platform) return;
+      if (!me?.draftOwnerId || !me?.platform) return;
 
-      const owner = { userId: me.id as string, platform: me.platform };
+      const owner = { userId: me.draftOwnerId as string, platform: me.platform };
 
       // Seed a valid versioned draft so each shortcut page hydrates exactly
       // like a real flow would (dev shortcuts must stay directly testable).

@@ -49,6 +49,7 @@ export const LEGACY_FLOW_SESSION_KEYS = [
 export type AnalysisProvider = 'vision' | 'gemini' | 'hybrid';
 
 export interface PlaylistDraftOwner {
+  /** Stable draft owner ID; an opaque credential fingerprint for Apple Music. */
   userId: string;
   platform: MusicPlatform;
 }
@@ -349,12 +350,12 @@ export function readPlaylistDraft(): PlaylistDraft | null {
  * another's in-progress work in the same tab.
  */
 export function readPlaylistDraftForUser(
-  userId: string,
+  ownerId: string,
   platform: MusicPlatform
 ): PlaylistDraft | null {
   const draft = readPlaylistDraft();
   if (!draft) return null;
-  if (draft.owner.userId !== userId || draft.owner.platform !== platform) {
+  if (draft.owner.userId !== ownerId || draft.owner.platform !== platform) {
     clearPlaylistDraft();
     return null;
   }

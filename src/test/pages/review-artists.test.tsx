@@ -19,7 +19,12 @@ const { mockPush, mockReplace, mockRouter } = vi.hoisted(() => {
 });
 const mockPost = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
-  user: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+  user: {
+    id: 'us',
+    draftOwnerId: 'u1',
+    displayName: 'Test User',
+    platform: 'apple-music',
+  },
   loading: false,
   platform: 'apple-music',
   logout: vi.fn(),
@@ -333,6 +338,15 @@ describe('review-artists with a manually entered (text) lineup', () => {
     await waitFor(() => {
       expect(countSelect('__proto__').value).toBe('5');
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+
+    expect(countSelect('__proto__').value).toBe('5');
+    const stored = readStoredDraft();
+    expect(
+      Object.prototype.hasOwnProperty.call(stored?.artistReview.perArtistCounts, '__proto__')
+    ).toBe(true);
+    expect(stored?.artistReview.perArtistCounts['__proto__']).toBe(5);
   });
 });
 

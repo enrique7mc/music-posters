@@ -20,7 +20,12 @@ const { mockPush, mockReplace, mockRouter } = vi.hoisted(() => {
 const mockAxiosPost = vi.hoisted(() => vi.fn());
 const mockApiPost = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
-  user: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+  user: {
+    id: 'us',
+    draftOwnerId: 'u1',
+    displayName: 'Test User',
+    platform: 'apple-music',
+  },
   loading: false,
   platform: 'apple-music',
   logout: vi.fn(),
@@ -517,6 +522,12 @@ describe('upload manual artist entry', () => {
     expect(mockReplace).toHaveBeenCalledWith('/upload');
     expect(await screen.findByText(/start your playlist/i)).toBeInTheDocument();
     expect(screen.queryByText('Alvvays')).not.toBeInTheDocument();
+
+    // The in-memory draft mirror was cleared too, so beginning the next flow
+    // does not ask the user to confirm the same discard a second time.
+    await user.click(screen.getByRole('button', { name: /enter artists/i }));
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText(/artists, one per line/i)).toBeInTheDocument();
   });
 
   it('clears another user’s draft instead of showing it', () => {

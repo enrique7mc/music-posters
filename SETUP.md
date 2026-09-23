@@ -76,11 +76,17 @@ APPLE_MUSIC_TEAM_ID=your_apple_team_id
 APPLE_MUSIC_KEY_ID=your_apple_music_key_id
 # Paste the full PEM contents of the .p8 file, with literal \n for newlines:
 APPLE_MUSIC_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIGT...\n-----END PRIVATE KEY-----"
+# Generate with: openssl rand -hex 32
+DRAFT_OWNER_SECRET=replace_with_a_random_64_character_hex_value
 ```
 
 The server signs a short-lived **developer token** (ES256 JWT) from these. The
 **Music User Token** is obtained in the browser via MusicKit JS when the user
-connects, and stored in an httpOnly cookie — no extra config needed.
+connects, and stored in an httpOnly cookie. `DRAFT_OWNER_SECRET` creates an
+opaque, account-specific fingerprint for client-side playlist drafts because
+Apple Music exposes a storefront rather than a unique profile ID. If omitted,
+the server safely falls back to the already-required Apple private key; a
+dedicated random value is recommended so the two secrets can rotate independently.
 
 > Apple Music authorization requires the browser host to match `NEXTAUTH_URL`.
 > Use `127.0.0.1`, not `localhost`, or `store-token` returns `403 Invalid origin`.
@@ -165,6 +171,7 @@ A complete `.env` for the recommended (Apple Music + hybrid) setup:
 APPLE_MUSIC_TEAM_ID=your_apple_team_id
 APPLE_MUSIC_KEY_ID=your_apple_music_key_id
 APPLE_MUSIC_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+DRAFT_OWNER_SECRET=replace_with_a_random_64_character_hex_value
 
 # Image analysis: 'vision' | 'gemini' | 'hybrid'
 IMAGE_ANALYSIS_PROVIDER=hybrid
@@ -198,6 +205,7 @@ DEV_MODE=false
 For the recommended setup, confirm:
 
 - ✅ MusicKit key created; `APPLE_MUSIC_TEAM_ID` / `KEY_ID` / `PRIVATE_KEY` set
+- ✅ `DRAFT_OWNER_SECRET` set to an independent random value (recommended)
 - ✅ `GEMINI_API_KEY` set and `IMAGE_ANALYSIS_PROVIDER` chosen
 - ✅ `google-credentials.json` in the project root, **or** `GOOGLE_CREDENTIALS_JSON`
   set inline (if using `vision`/`hybrid`)

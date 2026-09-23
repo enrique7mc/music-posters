@@ -119,6 +119,7 @@ interface PlaylistDraftV1 {
   version: 1;
   updatedAt: number;
   owner: {
+    // Opaque credential fingerprint for Apple Music; never a storefront ID.
     userId: string;
     platform: MusicPlatform;
   };
@@ -409,4 +410,6 @@ or developer shortcuts cause broader test changes.
 - Back navigation never clears draft state.
 - Start over, success, logout, and owner mismatch are the only normal lifecycle
   paths that clear the aggregate draft.
+- Apple Music ownership uses a server-derived credential fingerprint because
+  the platform adapter exposes a shared storefront instead of an account ID.
 - Lint, typecheck, targeted tests, and the manual Apple Music walkthrough pass.

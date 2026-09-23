@@ -20,7 +20,12 @@ vi.mock('next/router', () => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+    user: {
+      id: 'us',
+      draftOwnerId: 'u1',
+      displayName: 'Test User',
+      platform: 'apple-music',
+    },
     platform: 'apple-music',
     loading: false,
   }),
