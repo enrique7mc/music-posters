@@ -234,6 +234,10 @@ describe('review-tracks hydration from the playlist draft', () => {
     confirmSpy.mockRestore();
   });
 
+  // Rendering 2001 track cards in jsdom is inherently slow: ~3s locally and
+  // ~11s on CI runners, well over vitest's 5s default timeout. The fixture
+  // cannot shrink — going over the real MAX_PLAYLIST_TRACKS (2000) is the
+  // regression under test — so give this test room to complete instead.
   it('enforces the playlist track cap on restored selections', async () => {
     const manyTracks = Array.from({ length: 2001 }, (_, i) => ({
       ...TRACKS[0],
@@ -253,7 +257,7 @@ describe('review-tracks hydration from the playlist draft', () => {
       screen.getByRole('button', { name: /create playlist with 2001 tracks/i })
     ).toBeDisabled();
     expect(mockApiPost).not.toHaveBeenCalled();
-  });
+  }, 30_000);
 
   it('renders completed stepper steps as links to earlier flow pages', async () => {
     seedTrackReviewDraft();
