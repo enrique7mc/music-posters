@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import { MusicPlatform, PlatformUser } from '@/types';
+import { clearPlaylistDraft } from '@/lib/playlist-draft';
 
 // Extend Window interface for MusicKit
 declare global {
@@ -262,7 +263,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Apple Music login failed:', error);
       throw error;
     }
-  }, [checkAuth, router, initMusicKit]);
+  }, [checkAuth, handlePostAuthRedirect, router, initMusicKit]);
 
   const logout = useCallback(async () => {
     try {
@@ -276,6 +277,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } catch {
           /* ignore */
         }
+        // Clear the playlist draft so another account signing in on this tab
+        // cannot inherit the previous user's in-progress playlist.
+        clearPlaylistDraft();
       }
       router.push('/');
     } catch (error) {

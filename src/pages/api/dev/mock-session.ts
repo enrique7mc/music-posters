@@ -26,8 +26,13 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
     case 'review-tracks':
+      // Artists ride along so the dev panel can seed a complete, valid draft
+      // (Review Tracks needs a restorable Review Artists destination).
       return res.status(200).json({
         tracks: mockTracks,
+        artists: mockGeminiArtists,
+        analysisProvider: 'hybrid',
+        posterThumbnail: null,
       });
 
     case 'success':

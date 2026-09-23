@@ -85,9 +85,57 @@ Provider configuration is documented in [SETUP.md](SETUP.md); implementation
 details live in `src/lib/ocr.ts`, `src/lib/gemini.ts`, and
 `src/lib/hybrid-analyzer.ts`. Manual entry is parsed by
 `src/lib/artist-text.ts`; it reuses the existing review and track-search flow
-and adds no API endpoint. The `inputSource` sessionStorage key distinguishes
-`poster` and `text` runs; missing or unknown values are treated as `poster` for
-backward compatibility.
+and adds no API endpoint. How the lineup entered the flow is recorded in the
+playlist draft (below).
+
+### 2b. Playlist draft (single-tab progress persistence)
+
+In-progress work — the source lineup, artist-review edits, and track-review
+state — is persisted client-side so Upload → Review Artists → Review Tracks
+survives page remounts, browser Back/Forward, and refreshes in the same tab.
+`src/lib/playlist-draft.ts` owns the whole contract:
+
+- **Storage:** one versioned key, `playlistd:playlist-draft:v1`, in
+  `sessionStorage` only. No database, no server-side draft, no persistence
+  after the tab closes. The legacy per-key flow values (`artists`,
+  `analysisProvider`, `posterThumbnail`, `eventName`, `tracks`,
+  `trackWarnings`, `inputSource`) are obsolete; they are removed by the
+  draft's clear/save paths and read nowhere else.
+- **Ownership:** the draft records `owner.userId` + `owner.platform`. A draft
+  belonging to a different user/platform is cleared on read, never shown.
+  OAuth tokens stay in httpOnly cookies and are never part of the draft.
+- **Validation:** parsed JSON, the version, and required nested values are
+  validated before use; a malformed or unknown-version draft is cleared and
+  treated as absent. Writes are verified by read-back and return typed
+  results; a failed navigation-gating write blocks the navigation with the
+  browser-storage error.
+- **Restoration:** Upload restores the manual text or the analyzed poster
+  result (thumbnail or placeholder — never a re-analysis and never the
+  original `File`); Review Artists restores the working list, removals,
+  affinity annotations, count modes, staged bulk inputs, and selection mode;
+  Review Tracks restores tracks, exact selected IDs, warnings, and the
+  playlist name. Card/list view is a `localStorage` preference, not draft
+  state. All pages wait for auth + hydration before redirecting for missing
+  prerequisites.
+- **Personalization:** a completed or degraded result is stored on the draft
+  and restored without another `/api/personalize` call; an interrupted
+  (in-flight/failed) request is not persisted and retries on return.
+- **Track-result reuse:** `/api/search-tracks` inputs (ordered artists incl.
+  affinity, count mode, selection mode, active count map) are hashed into a
+  deterministic fingerprint stored with the results. Continue reuses stored
+  results when the fingerprint matches — no new API call — and preserves
+  selections, warnings, and the user-edited playlist name. Any material
+  change performs one new search, selects all returned tracks, and keeps the
+  edited name. Upstream edits never eagerly delete downstream results.
+- **Reset lifecycle:** the aggregate draft is cleared only by Start over
+  (user-confirmed, `router.replace('/upload')`, clears flow keys but never
+  auth cookies, `returnAfterAuth`, theme, or `trackViewMode`), by `/success`
+  on mount, by successful logout, and by owner mismatch / malformed payloads.
+  Destructive source changes on Upload (new poster, replacing an analyzed
+  poster, switching away from a populated input method) use the same
+  confirmation. Completed stepper steps link back to their pages; future
+  steps stay non-interactive. Back navigation is navigation-only and never
+  clears draft state.
 
 ### 3. Personalization — loved + hidden gems (Apple Music)
 
@@ -217,6 +265,7 @@ src/
 │   ├── auth.ts, apple-music-auth.ts        # cookies + Apple developer token
 │   ├── ocr.ts, gemini.ts, gemini-parser.ts, hybrid-analyzer.ts  # image analysis
 │   ├── artist-text.ts                         # browser-safe manual-lineup parser
+│   ├── playlist-draft.ts, track-counts.ts   # session draft + shared count types
 │   ├── personalize.ts, artist-match.ts     # loved + gems engine
 │   ├── music-platform/                     # platform abstraction
 │   │   ├── types.ts, index.ts              # MusicPlatformService + orchestration
@@ -254,7 +303,10 @@ src/
 
 - **No database, no persistence, no analytics.** Uploaded images are deleted after
   processing. The library scan and Gemini calls happen per-request and nothing is
-  stored.
+  stored server-side. The only client-side state is the single-tab playlist draft
+  (`sessionStorage`, `playlistd:playlist-draft:v1`), which holds lineup/review
+  data only — never OAuth tokens (those stay in httpOnly cookies) — and dies with
+  the tab.
 
 ### Input validation
 
@@ -288,7 +340,7 @@ Vitest unit + integration tests live under `src/**/__tests__/` and
 tests live in `src/test/pages/`, outside `src/pages/` so Next.js never treats
 them as routable modules. Coverage includes the matching primitives, the
 personalization engine and its hardening, affinity → track-mode selection,
-validation schemas, auth, the API routes, and the page flows (upload,
-review-artists, review-tracks). Run with `npm run test` (watch) or
-`npm run test:run` (once). See [TESTING.md](TESTING.md) for the manual
-checklist.
+the playlist-draft storage module, validation schemas, auth, the API routes,
+and the page flows (upload, review-artists, review-tracks). Run with
+`npm run test` (watch) or `npm run test:run` (once). See [TESTING.md](TESTING.md)
+for the manual checklist.

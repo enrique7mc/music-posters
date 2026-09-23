@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { clearPlaylistDraft } from '@/lib/playlist-draft';
 import { scaleIn, slideUp } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -27,13 +28,12 @@ export default function Success() {
     }
   }, [authLoading, user, router]);
 
-  // Clear sessionStorage and set up component
+  // Clear the complete playlist draft now that we've successfully navigated
+  // here (aggregate key plus legacy flow keys). "Create another" then opens a
+  // clean Upload chooser; auth and preference keys are untouched.
   useEffect(() => {
-    // Clear sessionStorage now that we've successfully navigated here
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('tracks');
-      sessionStorage.removeItem('posterThumbnail');
-      sessionStorage.removeItem('eventName');
+      clearPlaylistDraft();
     }
   }, []);
 
