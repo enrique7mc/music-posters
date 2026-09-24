@@ -42,7 +42,7 @@ export function TierBadge({ tier }: { tier: string }) {
     'sub-headliner': {
       label: 'Sub-Headliner',
       variant: 'sub-headliner' as const,
-      icon: '⭐',
+      icon: '☆',
     },
     'mid-tier': {
       label: 'Mid-Tier',

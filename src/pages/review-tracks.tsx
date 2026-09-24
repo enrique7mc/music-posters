@@ -14,6 +14,7 @@ import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import ProgressStepper from '@/components/ui/ProgressStepper';
+import Illustration from '@/components/ui/Illustration';
 import StartOverButton from '@/components/features/StartOverButton';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
@@ -546,7 +547,7 @@ export default function ReviewTracks() {
                             />
                           ) : (
                             <div className="w-full h-48 bg-gradient-to-br from-dark-700 to-dark-800 flex items-center justify-center">
-                              <span className="text-6xl">🎵</span>
+                              <Illustration name="tracks" size={96} />
                             </div>
                           )}
 
@@ -640,7 +641,7 @@ export default function ReviewTracks() {
                               />
                             ) : (
                               <div className="w-14 h-14 bg-gradient-to-br from-dark-700 to-dark-800 rounded-lg flex items-center justify-center">
-                                <span className="text-2xl">🎵</span>
+                                <Illustration name="tracks" size={48} />
                               </div>
                             )}
                           </div>
@@ -735,7 +736,7 @@ export default function ReviewTracks() {
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-dark-800 to-dark-900">
                           <div className="text-center px-4">
-                            <div className="text-4xl mb-2">🎵</div>
+                            <Illustration name="cover" size={72} className="mx-auto mb-2" />
                             <p className="text-xs text-dark-400">Cover preview</p>
                           </div>
                         </div>

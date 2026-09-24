@@ -194,10 +194,10 @@ describe('review-artists with a manually entered (text) lineup', () => {
     seedTextSession();
     await renderReviewArtists();
 
-    expect(screen.getByText('✍️ Entered manually')).toBeInTheDocument();
-    expect(screen.queryByText('🤖 Gemini AI')).not.toBeInTheDocument();
-    expect(screen.queryByText('👁️ Vision API')).not.toBeInTheDocument();
-    expect(screen.queryByText('🔄 Hybrid AI')).not.toBeInTheDocument();
+    expect(screen.getByText('Entered manually')).toBeInTheDocument();
+    expect(screen.queryByText('Gemini AI')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vision API')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hybrid AI')).not.toBeInTheDocument();
 
     // Tier-based modes are irrelevant for text lists and must be hidden.
     expect(screen.queryByText('Recommended (Tier-based)')).not.toBeInTheDocument();
@@ -390,8 +390,8 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     // Tier mode remains available and per-artist count uses the tier default (10).
     expect(screen.getByText('Recommended (Tier-based)')).toBeInTheDocument();
     expect(screen.getByText('Custom Per Tier')).toBeInTheDocument();
-    expect(screen.getByText('🤖 Gemini AI')).toBeInTheDocument();
-    expect(screen.queryByText('✍️ Entered manually')).not.toBeInTheDocument();
+    expect(screen.getByText('Gemini AI')).toBeInTheDocument();
+    expect(screen.queryByText('Entered manually')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();

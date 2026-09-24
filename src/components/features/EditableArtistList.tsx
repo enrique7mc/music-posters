@@ -54,12 +54,12 @@ export default function EditableArtistList({
         <h3 className="text-2xl font-bold text-dark-50">Review Artists ({artists.length})</h3>
         <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
           {isManual
-            ? '✍️ Entered manually'
+            ? 'Entered manually'
             : provider === 'hybrid'
-              ? '🔄 Hybrid AI'
+              ? 'Hybrid AI'
               : provider === 'gemini'
-                ? '🤖 Gemini AI'
-                : '👁️ Vision API'}
+                ? 'Gemini AI'
+                : 'Vision API'}
         </span>
       </div>
 
@@ -73,7 +73,7 @@ export default function EditableArtistList({
         >
           {[
             { tier: 'headliner', label: 'Headliners', icon: '★' },
-            { tier: 'sub-headliner', label: 'Sub-Headliners', icon: '⭐' },
+            { tier: 'sub-headliner', label: 'Sub-Headliners', icon: '☆' },
             { tier: 'mid-tier', label: 'Mid-Tier', icon: '•' },
             { tier: 'undercard', label: 'Undercard', icon: '·' },
           ].map(({ tier, label, icon }) => (
@@ -196,10 +196,10 @@ export default function EditableArtistList({
         <div className="mt-6 p-4 bg-dark-900/50 rounded-lg border border-dark-800">
           <p className="text-sm text-dark-400">
             {isManual
-              ? '✍️ You entered these artists manually. Adjust track counts or remove artists before continuing.'
+              ? 'You entered these artists manually. Adjust track counts or remove artists before continuing.'
               : hasRanking
-                ? '✨ Artists are ranked by visual prominence. Remove unwanted artists or adjust track counts before continuing.'
-                : '📋 Review the extracted artists. Remove any incorrect detections before continuing.'}
+                ? 'Artists are ranked by visual prominence. Remove unwanted artists or adjust track counts before continuing.'
+                : 'Review the extracted artists. Remove any incorrect detections before continuing.'}
           </p>
         </div>
       )}

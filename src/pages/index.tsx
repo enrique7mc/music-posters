@@ -10,6 +10,7 @@ import ErrorMessage from '@/components/ui/ErrorMessage';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 import { MusicPlatform } from '@/types';
+import Illustration, { IllustrationName } from '@/components/ui/Illustration';
 
 export default function Home() {
   const router = useRouter();
@@ -363,17 +364,17 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               {[
                 {
-                  icon: '⚡',
+                  icon: 'speed' as IllustrationName,
                   title: 'Lightning Fast',
                   description: 'From poster to playlist in under 60 seconds',
                 },
                 {
-                  icon: '🎯',
+                  icon: 'ranking' as IllustrationName,
                   title: 'Artist Ranking',
                   description: 'Headliners first, undercard last - naturally ordered',
                 },
                 {
-                  icon: '🎵',
+                  icon: 'tracks' as IllustrationName,
                   title: 'Top Tracks',
                   description: "Curated with each artist's most popular song",
                 },
@@ -386,7 +387,7 @@ export default function Home() {
                   transition={{ delay: index * 0.1, duration: 0.5 }}
                 >
                   <Card hover className="p-6 text-center h-full">
-                    <div className="text-4xl mb-4">{feature.icon}</div>
+                    <Illustration name={feature.icon} size={48} className="mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-dark-50 mb-2">{feature.title}</h3>
                     <p className="text-sm text-dark-400">{feature.description}</p>
                   </Card>

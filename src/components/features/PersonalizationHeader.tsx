@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Artist } from '@/types';
 import Card from '../ui/Card';
 import LoadingSpinner from '../ui/LoadingSpinner';
+import Illustration from '../ui/Illustration';
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/animations';
 
 /** Summary of the personalize pass, surfaced to the user. */
@@ -86,9 +87,7 @@ export default function PersonalizationHeader({
         <div className="p-6 space-y-5">
           {/* Title + summary */}
           <div className="flex items-start gap-3">
-            <span className="text-2xl leading-none" aria-hidden>
-              ✨
-            </span>
+            <Illustration name="ranking" size={32} />
             <div>
               <h3 className="text-xl font-bold text-dark-50">Personalized for you</h3>
               <p className="text-sm text-dark-400 mt-1">

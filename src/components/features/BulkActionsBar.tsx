@@ -102,7 +102,7 @@ export default function BulkActionsBar({
 
               const tierIcons = {
                 headliner: '★',
-                'sub-headliner': '⭐',
+                'sub-headliner': '☆',
                 'mid-tier': '•',
                 undercard: '·',
               };

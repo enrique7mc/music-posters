@@ -88,7 +88,7 @@ export default function TrackSelectionModeSelector({
 
         <div className="mt-4 p-3 bg-dark-800/50 rounded-lg border border-dark-700">
           <p className="text-xs text-dark-400">
-            💡 Tip: Different modes help create unique playlists even with the same artists
+            Tip: Different modes help create unique playlists even with the same artists
           </p>
         </div>
       </CardContent>

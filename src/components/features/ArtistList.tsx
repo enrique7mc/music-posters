@@ -29,11 +29,7 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-bold text-dark-50">Extracted Artists ({artists.length})</h3>
         <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
-          {provider === 'hybrid'
-            ? '🔄 Hybrid AI'
-            : provider === 'gemini'
-              ? '🤖 Gemini AI'
-              : '👁️ Vision API'}
+          {provider === 'hybrid' ? 'Hybrid AI' : provider === 'gemini' ? 'Gemini AI' : 'Vision API'}
         </span>
       </div>
 
@@ -47,7 +43,7 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
         >
           {[
             { tier: 'headliner', label: 'Headliners', icon: '★' },
-            { tier: 'sub-headliner', label: 'Sub-Headliners', icon: '⭐' },
+            { tier: 'sub-headliner', label: 'Sub-Headliners', icon: '☆' },
             { tier: 'mid-tier', label: 'Mid-Tier', icon: '•' },
             { tier: 'undercard', label: 'Undercard', icon: '·' },
           ].map(({ tier, label, icon }) => (
@@ -112,8 +108,8 @@ export default function ArtistList({ artists, provider }: ArtistListProps) {
       <div className="mt-6 p-4 bg-dark-900/50 rounded-lg border border-dark-800">
         <p className="text-sm text-dark-400">
           {hasRanking
-            ? '✨ Artists are ranked by visual prominence on the poster. Headliners get more tracks in your playlist.'
-            : '📋 All artists extracted from the poster. Review and create your playlist below.'}
+            ? 'Artists are ranked by visual prominence on the poster. Headliners get more tracks in your playlist.'
+            : 'All artists extracted from the poster. Review and create your playlist below.'}
         </p>
       </div>
     </div>
