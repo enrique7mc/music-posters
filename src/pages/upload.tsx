@@ -36,6 +36,7 @@ import UploadZone from '@/components/features/UploadZone';
 import ArtistTextInput from '@/components/features/ArtistTextInput';
 import ArtistList from '@/components/features/ArtistList';
 import ProgressStepper from '@/components/ui/ProgressStepper';
+import Illustration from '@/components/ui/Illustration';
 import StartOverButton, { confirmStartOver } from '@/components/features/StartOverButton';
 import { fadeIn } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -609,10 +610,12 @@ export default function Upload() {
                     resetFlowState();
                     setInputMode('poster');
                   }}
-                  className="p-8 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group"
+                  className="group flex h-full flex-col items-center rounded-lg border-2 border-dark-700 bg-dark-800 p-8 text-center transition-all hover:border-accent-500 hover:bg-accent-500/10"
                 >
-                  <div className="text-5xl mb-4">🎸</div>
-                  <div className="text-lg font-semibold text-dark-100 mb-2 group-hover:text-accent-400 transition-colors">
+                  <div className="mb-6 flex h-40 w-40 items-center justify-center rounded-xl bg-dark-950 ring-1 ring-dark-700 transition-colors group-hover:ring-accent-500/50">
+                    <Illustration name="poster" size={144} />
+                  </div>
+                  <div className="mb-2 text-xl font-semibold text-dark-100 transition-colors group-hover:text-accent-400">
                     Upload a Poster
                   </div>
                   <p className="text-sm text-dark-400">
@@ -623,10 +626,12 @@ export default function Upload() {
                 {/* Enter artists */}
                 <button
                   onClick={handleSwitchToText}
-                  className="p-8 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group"
+                  className="group flex h-full flex-col items-center rounded-lg border-2 border-dark-700 bg-dark-800 p-8 text-center transition-all hover:border-accent-500 hover:bg-accent-500/10"
                 >
-                  <div className="text-5xl mb-4">✍️</div>
-                  <div className="text-lg font-semibold text-dark-100 mb-2 group-hover:text-accent-400 transition-colors">
+                  <div className="mb-6 flex h-40 w-40 items-center justify-center rounded-xl bg-dark-950 ring-1 ring-dark-700 transition-colors group-hover:ring-accent-500/50">
+                    <Illustration name="manual" size={144} />
+                  </div>
+                  <div className="mb-2 text-xl font-semibold text-dark-100 transition-colors group-hover:text-accent-400">
                     Enter Artists
                   </div>
                   <p className="text-sm text-dark-400">
@@ -708,9 +713,7 @@ export default function Upload() {
                         />
                       ) : (
                         <div className="w-full aspect-square flex flex-col items-center justify-center text-dark-500">
-                          <span className="text-5xl mb-3" aria-hidden="true">
-                            🖼️
-                          </span>
+                          <Illustration name="poster" size={64} className="mb-3" />
                           <span className="text-sm">Poster preview unavailable</span>
                         </div>
                       )}
