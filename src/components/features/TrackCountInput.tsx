@@ -19,7 +19,7 @@ interface TrackCountInputProps {
 }
 
 /**
- * Shared numeric track-count field (whole numbers, 1–25).
+ * Shared track-count stepper (whole numbers, 1–25).
  *
  * The input keeps a local draft while the user types: invalid values (empty,
  * fractional, or outside 1–25) show a range message instead of entering
@@ -68,36 +68,73 @@ export default function TrackCountInput({
     setDraft(null);
   };
 
+  const handleStep = (change: number) => {
+    const next = Math.min(MAX_TRACKS_PER_ARTIST, Math.max(MIN_TRACKS_PER_ARTIST, value + change));
+    if (next === value) return;
+    setDraft(null);
+    setCommitted(next);
+    onCommit(next);
+  };
+
   const showRangeError = draft !== null && !isValid(draft);
 
   return (
-    <span className="inline-flex flex-col">
-      <input
-        id={inputId}
-        type="number"
-        inputMode="numeric"
-        min={MIN_TRACKS_PER_ARTIST}
-        max={MAX_TRACKS_PER_ARTIST}
-        step={1}
-        value={draft ?? String(value)}
-        onChange={(e) => handleChange(e.target.value)}
-        onBlur={handleBlur}
-        disabled={disabled}
-        aria-label={label}
-        aria-invalid={showRangeError}
-        aria-describedby={showRangeError ? errorId : undefined}
+    <span className={cn('inline-flex w-32 flex-col items-center', className)}>
+      <span
         className={cn(
-          'px-3 py-2 bg-dark-800 border rounded text-sm text-dark-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50',
-          showRangeError ? 'border-red-500/60' : 'border-dark-700 focus:border-accent-500',
-          disabled && 'opacity-50 cursor-not-allowed',
-          className
+          'inline-flex h-10 items-center rounded-full border bg-dark-800 focus-within:ring-2 focus-within:ring-accent-500/50',
+          showRangeError ? 'border-red-500/60' : 'border-dark-700',
+          disabled && 'opacity-50'
         )}
-      />
+      >
+        <button
+          type="button"
+          onClick={() => handleStep(-1)}
+          disabled={disabled || value <= MIN_TRACKS_PER_ARTIST}
+          aria-label={`Decrease ${label}`}
+          className="flex h-full w-9 items-center justify-center rounded-l-full text-lg text-dark-200 hover:bg-dark-700 hover:text-accent-300 focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          −
+        </button>
+        <input
+          id={inputId}
+          type="text"
+          role="spinbutton"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={draft ?? String(value)}
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              handleStep(e.key === 'ArrowUp' ? 1 : -1);
+            }
+          }}
+          disabled={disabled}
+          aria-label={label}
+          aria-valuemin={MIN_TRACKS_PER_ARTIST}
+          aria-valuemax={MAX_TRACKS_PER_ARTIST}
+          aria-valuenow={showRangeError ? undefined : value}
+          aria-invalid={showRangeError}
+          aria-describedby={showRangeError ? errorId : undefined}
+          className="h-8 w-10 rounded-full bg-accent-500/10 text-center text-sm font-semibold tabular-nums text-accent-300 outline-none focus:bg-accent-500/20 disabled:cursor-not-allowed"
+        />
+        <button
+          type="button"
+          onClick={() => handleStep(1)}
+          disabled={disabled || value >= MAX_TRACKS_PER_ARTIST}
+          aria-label={`Increase ${label}`}
+          className="flex h-full w-9 items-center justify-center rounded-r-full text-lg text-dark-200 hover:bg-dark-700 hover:text-accent-300 focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          +
+        </button>
+      </span>
       {showRangeError && (
         <span
           id={errorId}
-          className="text-xs text-red-400 mt-1"
-        >{`Enter a whole number from ${MIN_TRACKS_PER_ARTIST} to ${MAX_TRACKS_PER_ARTIST}.`}</span>
+          className="mt-1 w-full whitespace-nowrap text-center text-xs leading-4 text-red-400"
+        >{`Whole numbers ${MIN_TRACKS_PER_ARTIST}–${MAX_TRACKS_PER_ARTIST}`}</span>
       )}
     </span>
   );
