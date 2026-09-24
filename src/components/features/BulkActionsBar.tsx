@@ -112,7 +112,10 @@ export default function BulkActionsBar({
               const stagedCount = stagedTierCounts[tier] ?? DEFAULT_TIER_COUNTS[tier];
 
               return (
-                <div key={tier} className="flex items-center gap-3 p-2 bg-dark-800/50 rounded">
+                <div
+                  key={tier}
+                  className="flex flex-wrap items-center gap-3 p-2 bg-dark-800/50 rounded"
+                >
                   <div className="flex-1 flex items-center gap-2">
                     <span className="text-lg">{tierIcons[tier as keyof typeof tierIcons]}</span>
                     <span className="text-sm text-dark-200">{tierLabel}</span>
@@ -123,7 +126,6 @@ export default function BulkActionsBar({
                     value={stagedCount}
                     onCommit={(count) => onStagedTierCountChange(tier, count)}
                     label={`Track count for ${tierLabel} tier`}
-                    className="w-20"
                   />
 
                   <Button

@@ -218,7 +218,6 @@ export default function TrackCountModeSelector({
                     onCommit={(count) => onTierCountChange(tier, count)}
                     label={inputLabel}
                     disabled={disabled}
-                    className="w-24"
                   />
                 </div>
               ))}

@@ -217,6 +217,26 @@ describe('review-artists with a manually entered (text) lineup', () => {
     expect(screen.getByText('~20')).toBeInTheDocument(); // 10 + 5 + 5
   });
 
+  it('adjusts counts with the stepper and stops at the 1–25 limits', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    const decrease = screen.getByRole('button', { name: 'Decrease Track count for Alvvays' });
+    const increase = screen.getByRole('button', { name: 'Increase Track count for Alvvays' });
+
+    fireEvent.click(increase);
+    expect(countSelect('Alvvays').value).toBe('6');
+    expect(screen.getByText('~16')).toBeInTheDocument();
+
+    fireEvent.keyDown(countSelect('Alvvays'), { key: 'ArrowDown' });
+    expect(countSelect('Alvvays').value).toBe('5');
+
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '1' } });
+    expect(decrease).toBeDisabled();
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '25' } });
+    expect(increase).toBeDisabled();
+  });
+
   it('accepts per-artist counts across the 1–25 range (17 and 25)', async () => {
     seedTextSession();
     await renderReviewArtists();
@@ -236,7 +256,7 @@ describe('review-artists with a manually entered (text) lineup', () => {
 
     fireEvent.change(countSelect('Alvvays'), { target: { value: '26' } });
 
-    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('Whole numbers 1–25')).toBeInTheDocument();
     // Nothing invalid enters application state: the estimate keeps the last
     // committed count (5 + 5 + 5).
     expect(screen.getByText('~15')).toBeInTheDocument();
@@ -244,7 +264,7 @@ describe('review-artists with a manually entered (text) lineup', () => {
     // Blurring reverts the field to the last committed value and clears the message.
     fireEvent.blur(countSelect('Alvvays'));
     expect(countSelect('Alvvays').value).toBe('5');
-    expect(screen.queryByText('Enter a whole number from 1 to 25.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Whole numbers 1–25')).not.toBeInTheDocument();
   });
 
   it('treats zero and fractions as invalid editing states, not values', async () => {
@@ -253,13 +273,13 @@ describe('review-artists with a manually entered (text) lineup', () => {
 
     fireEvent.change(countSelect('The Beths'), { target: { value: '0' } });
     expect(countSelect('The Beths').value).toBe('0'); // temporary editing state
-    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('Whole numbers 1–25')).toBeInTheDocument();
     expect(screen.getByText('~15')).toBeInTheDocument();
     fireEvent.blur(countSelect('The Beths'));
     expect(countSelect('The Beths').value).toBe('5');
 
     fireEvent.change(countSelect('The Beths'), { target: { value: '2.5' } });
-    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('Whole numbers 1–25')).toBeInTheDocument();
     fireEvent.blur(countSelect('The Beths'));
     expect(countSelect('The Beths').value).toBe('5');
   });
@@ -541,7 +561,7 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     const bulkInput = screen.getByLabelText('Track count for Headliners tier');
     fireEvent.change(bulkInput, { target: { value: '26' } });
 
-    expect(screen.getByText('Enter a whole number from 1 to 25.')).toBeInTheDocument();
+    expect(screen.getByText('Whole numbers 1–25')).toBeInTheDocument();
     expect(screen.getByText('~10')).toBeInTheDocument(); // estimate keeps the last committed count
 
     // Apply uses the last committed value (10), never the invalid draft.
@@ -551,7 +571,7 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     // Blurring reverts the field to the committed value and clears the message.
     fireEvent.blur(bulkInput);
     expect((bulkInput as HTMLInputElement).value).toBe('10');
-    expect(screen.queryByText('Enter a whole number from 1 to 25.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Whole numbers 1–25')).not.toBeInTheDocument();
   });
 
   it('Remove Selected drops artists from the lineup, counts, and search payload', async () => {

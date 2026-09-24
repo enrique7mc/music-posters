@@ -140,7 +140,6 @@ export default function EditableArtistList({
                     value={perArtistCounts[artist.name] ?? 3}
                     onCommit={(count) => onPerArtistCountChange(artist.name, count)}
                     label={`Track count for ${artist.name}`}
-                    className="w-20"
                   />
                 </div>
               )}
