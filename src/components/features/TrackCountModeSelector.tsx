@@ -2,15 +2,13 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Card, { CardContent } from '@/components/ui/Card';
 import TrackCountInput from './TrackCountInput';
+import { DEFAULT_TIER_COUNTS } from '@/lib/track-counts';
+import type { TierCounts, TrackCountMode } from '@/lib/track-counts';
 
-export type TrackCountMode = 'tier-based' | 'custom-per-tier' | 'per-artist';
-
-export interface TierCounts {
-  headliner: number;
-  'sub-headliner': number;
-  'mid-tier': number;
-  undercard: number;
-}
+// Shared with src/lib (draft persistence); re-exported here for the pages and
+// tests that already import them from this component.
+export { DEFAULT_TIER_COUNTS } from '@/lib/track-counts';
+export type { TierCounts, TrackCountMode } from '@/lib/track-counts';
 
 interface TrackCountModeSelectorProps {
   mode: TrackCountMode;
@@ -24,14 +22,6 @@ interface TrackCountModeSelectorProps {
    */
   showTierModes?: boolean;
 }
-
-export const DEFAULT_TIER_COUNTS: TierCounts & { default: number } = {
-  headliner: 10,
-  'sub-headliner': 5,
-  'mid-tier': 3,
-  undercard: 1,
-  default: 3, // For Vision API (no tier)
-};
 
 /**
  * Component for selecting track count mode on the Review Artists page.

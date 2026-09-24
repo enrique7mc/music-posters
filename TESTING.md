@@ -110,6 +110,32 @@ Use these search terms to find good test images:
 1. [ ] Manually edit the request (use browser dev tools) to send empty artists array
 2. [ ] Verify error message appears
 
+### Test Case: Draft Progress Persistence (Apple Music)
+
+Run on `http://127.0.0.1:3000` — the draft lives in `sessionStorage`
+(`playlistd:playlist-draft:v1`) for the current tab only:
+
+1. [ ] Authenticate with Apple Music, enter a manual lineup, edit artist
+       counts, search, deselect tracks, and rename the playlist
+2. [ ] Use both in-app Back buttons and the browser Back/Forward controls;
+       each page must restore the exact prior values (Back from Review Tracks
+       lands on Review Artists)
+3. [ ] Refresh on Review Artists and Review Tracks; no progress is lost and
+       no premature redirect to Upload fires during hydration
+4. [ ] Return to Review Artists and Continue without changes; no new
+       `/api/search-tracks` request occurs (check the network tab). Change a
+       material option (counts, selection mode, artist list) and Continue; a new
+       search replaces the tracks while the edited playlist name remains
+5. [ ] Repeat with a poster: after returning to Upload, the restored page
+       shows the stored thumbnail (or a neutral placeholder) and never
+       re-analyzes automatically
+6. [ ] Start over: cancel once (nothing changes), then confirm — the flow
+       returns to the empty Upload chooser, while auth and UI preferences
+       (theme, track view mode) remain
+7. [ ] Create a playlist successfully; "Create another" starts clean
+8. [ ] Log out and back in as another account in the same tab; the previous
+       account's draft is not visible
+
 ## 5. Edge Cases
 
 ### Test Case: Large Image (10MB+)

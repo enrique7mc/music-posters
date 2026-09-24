@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useDevMode } from '@/hooks/useDevMode';
 import { useRouter } from 'next/router';
+import {
+  PlaylistDraft,
+  computeSearchFingerprint,
+  createPosterDraft,
+  createRecommendedArtistReview,
+  defaultPlaylistName,
+  savePlaylistDraft,
+} from '@/lib/playlist-draft';
+import { Artist, Track } from '@/types';
 
 function Toggle({
   label,
@@ -51,27 +60,55 @@ export default function DevPanel() {
 
   const handleShortcut = async (page: string) => {
     try {
-      const res = await fetch(`/api/dev/mock-session?page=${page}`);
-      if (!res.ok) return;
+      const [res, meRes] = await Promise.all([
+        fetch(`/api/dev/mock-session?page=${page}`),
+        fetch('/api/auth/me'),
+      ]);
+      if (!res.ok || !meRes.ok) return;
       const data = await res.json();
+      const me = await meRes.json();
+      if (!me?.draftOwnerId || !me?.platform) return;
 
-      // Store in sessionStorage using the keys each page actually reads
+      const owner = { userId: me.draftOwnerId as string, platform: me.platform };
+
+      // Seed a valid versioned draft so each shortcut page hydrates exactly
+      // like a real flow would (dev shortcuts must stay directly testable).
       if (page === 'review-artists') {
-        sessionStorage.setItem('artists', JSON.stringify(data.artists));
-        sessionStorage.setItem('analysisProvider', data.analysisProvider || 'hybrid');
-        if (data.posterThumbnail) {
-          sessionStorage.setItem('posterThumbnail', data.posterThumbnail);
-        } else {
-          sessionStorage.removeItem('posterThumbnail');
-        }
+        const draft = createPosterDraft({
+          owner,
+          artists: data.artists as Artist[],
+          analysisProvider: data.analysisProvider || 'hybrid',
+          posterThumbnail: data.posterThumbnail ?? null,
+        });
+        if (!savePlaylistDraft(draft).ok) return;
         router.push('/review-artists');
       } else if (page === 'review-tracks') {
-        sessionStorage.setItem('tracks', JSON.stringify(data.tracks));
-        if (data.posterThumbnail) {
-          sessionStorage.setItem('posterThumbnail', data.posterThumbnail);
-        } else {
-          sessionStorage.removeItem('posterThumbnail');
-        }
+        const artists = (data.artists as Artist[]) ?? [];
+        const tracks = (data.tracks as Track[]) ?? [];
+        const artistReview = createRecommendedArtistReview(artists, 'poster');
+        const base: PlaylistDraft = {
+          ...createPosterDraft({
+            owner,
+            artists,
+            analysisProvider: data.analysisProvider || 'hybrid',
+            posterThumbnail: data.posterThumbnail ?? null,
+          }),
+          artistReview,
+        };
+        base.trackReview = {
+          searchFingerprint: computeSearchFingerprint({
+            artists: artistReview.artists,
+            trackCountMode: artistReview.trackCountMode,
+            trackSelectionMode: artistReview.trackSelectionMode,
+            tierCounts: artistReview.tierCounts,
+            perArtistCounts: artistReview.perArtistCounts,
+          }),
+          tracks,
+          selectedTrackIds: tracks.map((t) => t.id),
+          warnings: [],
+          playlistName: defaultPlaylistName(base.source),
+        };
+        if (!savePlaylistDraft(base).ok) return;
         router.push('/review-tracks');
       } else if (page === 'success') {
         router.push({ pathname: '/success', query: { playlistUrl: data.playlistUrl } });

@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fadeIn } from '@/lib/animations';
 
 export interface Step {
   label: string;
+  /** When set on a completed step, it renders as a real accessible link. */
   href?: string;
 }
 
@@ -25,51 +27,70 @@ const ProgressStepper = ({ steps, currentStep, className }: ProgressStepperProps
         const isCompleted = index < currentStep;
         const isCurrent = index === currentStep;
         const isFuture = index > currentStep;
+        // Only completed steps may navigate, and only when a destination with
+        // the required draft data was supplied. Current/future steps stay
+        // non-interactive progress indicators.
+        const stepHref = isCompleted && step.href ? step.href : null;
+
+        const indicator = (
+          <>
+            <motion.div
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-colors',
+                isCompleted && 'bg-accent-500 text-white',
+                isCurrent && 'bg-accent-500 text-white ring-4 ring-accent-500/20',
+                isFuture && 'bg-dark-800 text-dark-400 border border-dark-700',
+                stepHref && 'cursor-pointer'
+              )}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              {isCompleted ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              ) : (
+                <span>{index + 1}</span>
+              )}
+            </motion.div>
+
+            {/* Step label - hidden on small screens */}
+            <motion.span
+              className={cn(
+                'hidden sm:inline-block text-sm font-medium transition-colors whitespace-nowrap',
+                isCompleted && (stepHref ? 'text-dark-200 hover:text-dark-50' : 'text-dark-300'),
+                isCurrent && 'text-accent-400',
+                isFuture && 'text-dark-500'
+              )}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 + 0.1 }}
+            >
+              {step.label}
+            </motion.span>
+          </>
+        );
 
         return (
           <div key={index} className="flex items-center gap-2 sm:gap-4">
             {/* Step indicator */}
-            <div className="flex items-center gap-2">
-              <motion.div
-                className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-colors',
-                  isCompleted && 'bg-accent-500 text-white',
-                  isCurrent && 'bg-accent-500 text-white ring-4 ring-accent-500/20',
-                  isFuture && 'bg-dark-800 text-dark-400 border border-dark-700'
-                )}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: index * 0.1 }}
+            {stepHref ? (
+              <Link
+                href={stepHref}
+                aria-label={`Back to ${step.label}`}
+                className="flex items-center gap-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500/50 px-1"
               >
-                {isCompleted ? (
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                ) : (
-                  <span>{index + 1}</span>
-                )}
-              </motion.div>
-
-              {/* Step label - hidden on small screens */}
-              <motion.span
-                className={cn(
-                  'hidden sm:inline-block text-sm font-medium transition-colors whitespace-nowrap',
-                  isCompleted && 'text-dark-300',
-                  isCurrent && 'text-accent-400',
-                  isFuture && 'text-dark-500'
-                )}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 + 0.1 }}
-              >
-                {step.label}
-              </motion.span>
-            </div>
+                {indicator}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2">{indicator}</div>
+            )}
 
             {/* Connector line */}
             {index < steps.length - 1 && (

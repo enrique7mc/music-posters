@@ -4,6 +4,15 @@ import handler from '../me';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 
+vi.mock('@/lib/apple-music-auth', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/apple-music-auth')>('@/lib/apple-music-auth');
+  return {
+    ...actual,
+    generateDeveloperToken: vi.fn(() => 'mock_developer_token'),
+  };
+});
+
 // Mock rate limit module to avoid rate limiting in tests
 vi.mock('@/lib/rate-limit', () => ({
   applyRateLimit: vi.fn(() => false),
@@ -54,7 +63,43 @@ describe('/api/auth/me', () => {
       display_name: 'Mock User', // legacy field
       email: 'mock@example.com',
       platform: 'spotify',
+      draftOwnerId: 'mock_user_id',
     });
+  });
+
+  it('returns distinct opaque draft owners for Apple users in the same storefront', async () => {
+    server.use(
+      http.get('https://api.music.apple.com/v1/me/storefront', () =>
+        HttpResponse.json({ data: [{ id: 'us', type: 'storefronts' }] })
+      )
+    );
+
+    const firstToken = 'a'.repeat(120);
+    const secondToken = 'b'.repeat(120);
+    const requestFor = (token: string) =>
+      createMocks({
+        method: 'GET',
+        headers: {
+          cookie: `apple_music_user_token=${token}; music_platform=apple-music`,
+        },
+      });
+
+    const first = requestFor(firstToken);
+    await handler(first.req, first.res);
+    const firstData = JSON.parse(first.res._getData());
+
+    const second = requestFor(secondToken);
+    await handler(second.req, second.res);
+    const secondData = JSON.parse(second.res._getData());
+
+    expect(first.res._getStatusCode()).toBe(200);
+    expect(second.res._getStatusCode()).toBe(200);
+    expect(firstData.id).toBe('us');
+    expect(secondData.id).toBe('us');
+    expect(firstData.draftOwnerId).toMatch(/^apple-music:/);
+    expect(secondData.draftOwnerId).toMatch(/^apple-music:/);
+    expect(firstData.draftOwnerId).not.toBe(secondData.draftOwnerId);
+    expect(firstData.draftOwnerId).not.toContain(firstToken);
   });
 
   // Dev mode test for /api/auth/me is in src/lib/__tests__/api-dev/me-dev.test.ts

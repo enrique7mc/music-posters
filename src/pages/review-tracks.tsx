@@ -7,12 +7,14 @@ import { Track } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_PLAYLIST_TRACKS } from '@/lib/constants';
+import { readPlaylistDraftForUser, updatePlaylistDraft } from '@/lib/playlist-draft';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import ProgressStepper from '@/components/ui/ProgressStepper';
+import StartOverButton from '@/components/features/StartOverButton';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +30,11 @@ type ViewMode = 'card' | 'list';
 
 /**
  * Page component that lets a user review, select, and create a playlist from a list of tracks.
+ *
+ * The available tracks, the exact selected-track IDs, warnings, and the playlist
+ * name are hydrated from — and persisted to — the session playlist draft, so
+ * refreshes and Back/Forward navigation lose nothing. Card/list view is an
+ * independent preference (localStorage) and is not part of the draft.
  */
 export default function ReviewTracks() {
   const router = useRouter();
@@ -49,9 +56,31 @@ export default function ReviewTracks() {
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
-  const hasLoadedTracks = useRef(false);
+  const didHydrateRef = useRef(false);
 
-  // Load view mode from localStorage
+  // Mirrors of the persisted track-review fields, updated synchronously by the
+  // mutation handlers so a fast click can never beat persistence.
+  const selectedRef = useRef<Set<string>>(new Set());
+  const playlistNameRef = useRef('');
+  const warningsRef = useRef<string[]>([]);
+
+  /** Write the current selection/name/warnings into the stored draft (best effort). */
+  const persistTrackReview = useCallback(() => {
+    updatePlaylistDraft((draft) => {
+      if (!draft.trackReview) return draft;
+      return {
+        ...draft,
+        trackReview: {
+          ...draft.trackReview,
+          selectedTrackIds: [...selectedRef.current],
+          playlistName: playlistNameRef.current,
+          warnings: [...warningsRef.current],
+        },
+      };
+    });
+  }, []);
+
+  // Load view mode from localStorage (user preference, independent of the draft)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedViewMode = localStorage.getItem('trackViewMode') as ViewMode | null;
@@ -69,7 +98,8 @@ export default function ReviewTracks() {
     }
   }, []);
 
-  // Generate cover preview whenever playlist name or poster thumbnail changes
+  // Generate cover preview whenever playlist name or poster thumbnail changes.
+  // The cover is derived data and may regenerate freely.
   useEffect(() => {
     // Track if this effect is still current to prevent race conditions
     let isCurrent = true;
@@ -118,110 +148,83 @@ export default function ReviewTracks() {
     };
   }, [playlistName, posterThumbnail]);
 
+  // Hydrate the exact track-review state from the draft. Waits for the router
+  // and auth so a refresh never triggers a premature missing-state redirect.
   useEffect(() => {
-    // Only run once when router is ready, auth is resolved, and we haven't loaded tracks yet
-    if (!router.isReady || authLoading || !user || hasLoadedTracks.current || tracks.length > 0) {
+    if (!router.isReady || authLoading || !user) {
+      return;
+    }
+    if (didHydrateRef.current) return;
+    didHydrateRef.current = true;
+
+    const draft = platform ? readPlaylistDraftForUser(user.draftOwnerId, platform) : null;
+
+    if (!draft?.trackReview || draft.trackReview.tracks.length === 0) {
+      // Missing prerequisites: route to the nearest page that still has data.
+      router.push(draft?.artistReview.artists.length ? '/review-artists' : '/upload');
       return;
     }
 
-    // Mark as loaded FIRST to prevent any race conditions
-    hasLoadedTracks.current = true;
-    console.log('[ReviewTracks] Loading tracks from storage...');
+    const { trackReview } = draft;
+    const trackIds = new Set(trackReview.tracks.map((t) => t.id));
+    // Drop stale selected IDs that no longer map to an available track.
+    const selected = new Set(trackReview.selectedTrackIds.filter((id) => trackIds.has(id)));
 
-    // Try to get tracks from router state first, fallback to sessionStorage
-    let routerTracks: Track[] | null = null;
-    if (router.query.tracks) {
-      const raw = Array.isArray(router.query.tracks) ? router.query.tracks[0] : router.query.tracks;
-      try {
-        routerTracks = JSON.parse(raw);
-        console.log('[ReviewTracks] Loaded tracks from router query:', routerTracks?.length ?? 0);
-      } catch (parseError) {
-        console.warn('[ReviewTracks] Invalid tracks payload in query parameter', parseError);
-      }
-    }
-
-    let storedTracks: Track[] = [];
-    if (routerTracks) {
-      storedTracks = routerTracks;
-    } else if (typeof window !== 'undefined') {
-      try {
-        const tracksJson = sessionStorage.getItem('tracks');
-        console.log('[ReviewTracks] sessionStorage tracks:', tracksJson ? 'found' : 'not found');
-        storedTracks = JSON.parse(tracksJson || '[]');
-        console.log('[ReviewTracks] Loaded tracks from sessionStorage:', storedTracks.length);
-      } catch (parseError) {
-        console.warn('[ReviewTracks] Invalid tracks in sessionStorage', parseError);
-      }
-    }
-
-    if (storedTracks.length === 0) {
-      console.warn('[ReviewTracks] No tracks found, redirecting to /upload');
-      // Reset the ref since we're redirecting
-      hasLoadedTracks.current = false;
-      // No tracks found, redirect back to upload
-      router.push('/upload');
-      return;
-    }
-
-    console.log('[ReviewTracks] Successfully loaded', storedTracks.length, 'tracks');
-    setTracks(storedTracks);
-    // Select all tracks by default
-    setSelectedTracks(new Set(storedTracks.map((t: Track) => t.id)));
-
-    // Load poster thumbnail and event name from sessionStorage (if available)
-    if (typeof window !== 'undefined') {
-      const storedThumbnail = sessionStorage.getItem('posterThumbnail');
-      if (storedThumbnail) {
-        setPosterThumbnail(storedThumbnail);
-      }
-
-      const storedWarnings = sessionStorage.getItem('trackWarnings');
-      if (storedWarnings) {
-        try {
-          setWarnings(JSON.parse(storedWarnings));
-        } catch {
-          /* ignore */
-        }
-        sessionStorage.removeItem('trackWarnings');
-      }
-
-      const storedEventName = sessionStorage.getItem('eventName');
-      if (storedEventName) {
-        const normalizedEventName = storedEventName.trim().slice(0, 100);
-        if (normalizedEventName) {
-          setPlaylistName(normalizedEventName);
-        }
-      } else if (sessionStorage.getItem('inputSource') === 'text') {
-        // Manually entered lineups have no event name — use a neutral,
-        // editable default instead of the poster-flavored one.
-        setPlaylistName('Artist Mix');
-      }
-    }
+    setTracks(trackReview.tracks);
+    selectedRef.current = selected;
+    setSelectedTracks(new Set(selected));
+    warningsRef.current = [...trackReview.warnings];
+    setWarnings([...trackReview.warnings]);
+    playlistNameRef.current = trackReview.playlistName;
+    setPlaylistName(trackReview.playlistName);
+    setPosterThumbnail(draft.source.posterThumbnail ?? null);
 
     setLoading(false);
-    console.log('[ReviewTracks] Page setup complete, rendering UI');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.isReady, authLoading, user]); // Wait for auth before loading tracks
+  }, [router.isReady, authLoading, user, platform, router]);
 
-  const handleToggleTrack = useCallback((trackId: string) => {
-    setSelectedTracks((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(trackId)) {
-        newSet.delete(trackId);
+  const handleToggleTrack = useCallback(
+    (trackId: string) => {
+      const next = new Set(selectedRef.current);
+      if (next.has(trackId)) {
+        next.delete(trackId);
       } else {
-        newSet.add(trackId);
+        next.add(trackId);
       }
-      return newSet;
-    });
-  }, []);
+      selectedRef.current = next;
+      setSelectedTracks(new Set(next));
+      persistTrackReview();
+    },
+    [persistTrackReview]
+  );
 
   const handleSelectAll = useCallback(() => {
-    setSelectedTracks(new Set(tracks.map((t) => t.id)));
-  }, [tracks]);
+    const next = new Set(tracks.map((t) => t.id));
+    selectedRef.current = next;
+    setSelectedTracks(new Set(next));
+    persistTrackReview();
+  }, [tracks, persistTrackReview]);
 
   const handleDeselectAll = useCallback(() => {
+    selectedRef.current = new Set();
     setSelectedTracks(new Set());
-  }, []);
+    persistTrackReview();
+  }, [persistTrackReview]);
+
+  const handlePlaylistNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      playlistNameRef.current = value;
+      setPlaylistName(value);
+      persistTrackReview();
+    },
+    [persistTrackReview]
+  );
+
+  const handleDismissWarnings = useCallback(() => {
+    warningsRef.current = [];
+    setWarnings([]);
+    persistTrackReview();
+  }, [persistTrackReview]);
 
   const handleCreatePlaylist = async () => {
     if (selectedTracks.size === 0) {
@@ -253,9 +256,9 @@ export default function ReviewTracks() {
         posterThumbnail: posterThumbnail || undefined,
       });
 
-      // DON'T clear sessionStorage here - it causes the component to re-render
-      // and redirect to /upload before navigation completes.
-      // The success page will clear it when it mounts.
+      // DON'T clear the draft here - it causes the component to re-render
+      // and redirect before navigation completes.
+      // The success page clears it when it mounts.
 
       // Redirect to success page
       router.push(`/success?playlistUrl=${encodeURIComponent(response.data.playlistUrl)}`);
@@ -270,8 +273,10 @@ export default function ReviewTracks() {
     }
   };
 
+  // Back goes to the immediately preceding step and never clears or rewrites
+  // the stored track selections.
   const handleBackToEdit = () => {
-    router.push('/upload');
+    router.push('/review-artists');
   };
 
   // Wait for auth to complete
@@ -311,8 +316,8 @@ export default function ReviewTracks() {
           <div className="mb-8">
             <ProgressStepper
               steps={[
-                { label: 'Upload' },
-                { label: 'Review Artists' },
+                { label: 'Upload', href: '/upload' },
+                { label: 'Review Artists', href: '/review-artists' },
                 { label: 'Review Tracks' },
                 { label: 'Done' },
               ]}
@@ -362,7 +367,7 @@ export default function ReviewTracks() {
                       </ul>
                     </div>
                     <button
-                      onClick={() => setWarnings([])}
+                      onClick={handleDismissWarnings}
                       className="text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
                       aria-label="Dismiss warnings"
                     >
@@ -750,7 +755,7 @@ export default function ReviewTracks() {
                       id="playlistName"
                       type="text"
                       value={playlistName}
-                      onChange={(e) => setPlaylistName(e.target.value)}
+                      onChange={handlePlaylistNameChange}
                       disabled={creating}
                       className={cn(
                         'w-full px-4 py-3 bg-dark-800 border border-dark-700 rounded-lg',
@@ -797,27 +802,30 @@ export default function ReviewTracks() {
                   </div>
                 )}
                 <div className="flex gap-4 justify-between flex-wrap items-center">
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    onClick={handleBackToEdit}
-                    disabled={creating}
-                  >
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      onClick={handleBackToEdit}
+                      disabled={creating}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                    Back to Edit
-                  </Button>
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                      Back to Edit
+                    </Button>
+                    <StartOverButton />
+                  </div>
 
                   {creating ? (
                     <div className="flex-1 max-w-md bg-gradient-to-r from-accent-500 to-accent-600 rounded-lg p-4 text-white flex items-center justify-center shadow-glow">

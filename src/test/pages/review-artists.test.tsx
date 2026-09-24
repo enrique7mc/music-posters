@@ -1,16 +1,30 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import ReviewArtists from '../../pages/review-artists';
+import {
+  PLAYLIST_DRAFT_STORAGE_KEY,
+  PlaylistDraft,
+  applyTextLineup,
+  computeSearchFingerprint,
+  createPosterDraft,
+  createTextDraft,
+} from '@/lib/playlist-draft';
 
 // --- Module mocks (hoisted) -------------------------------------------------
 
-const { mockPush, mockRouter } = vi.hoisted(() => {
+const { mockPush, mockReplace, mockRouter } = vi.hoisted(() => {
   const push = vi.fn();
-  return { mockPush: push, mockRouter: { push } };
+  const replace = vi.fn();
+  return { mockPush: push, mockReplace: replace, mockRouter: { push, replace } };
 });
 const mockPost = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
-  user: { id: 'u1', displayName: 'Test User', platform: 'apple-music' },
+  user: {
+    id: 'us',
+    draftOwnerId: 'u1',
+    displayName: 'Test User',
+    platform: 'apple-music',
+  },
   loading: false,
   platform: 'apple-music',
   logout: vi.fn(),
@@ -51,19 +65,57 @@ vi.mock('@/components/ui/LoadingSpinner', () => ({
 
 // --- Helpers ----------------------------------------------------------------
 
+const OWNER = { userId: 'u1', platform: 'apple-music' as const };
+
 const TEXT_LINEUP = [{ name: 'Alvvays' }, { name: 'The Beths' }, { name: 'Men I Trust' }];
 
+function makeTrack(id: string, name: string) {
+  return {
+    id,
+    name,
+    artist: 'Alvvays',
+    artistId: 'alvvays-id',
+    album: 'Test Album',
+    albumArtwork: null,
+    duration: 180_000,
+    previewUrl: null,
+    platformUrl: `https://music.apple.com/track/${id}`,
+    platform: 'apple-music' as const,
+  };
+}
+
+function storeDraft(draft: PlaylistDraft) {
+  sessionStorage.setItem(PLAYLIST_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+}
+
+function readStoredDraft(): PlaylistDraft | null {
+  const raw = sessionStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY);
+  return raw ? (JSON.parse(raw) as PlaylistDraft) : null;
+}
+
+function makeTextDraft(artists = TEXT_LINEUP) {
+  const manualText = artists.map((a) => a.name).join('\n');
+  return applyTextLineup(createTextDraft({ owner: OWNER, manualText }), manualText, artists);
+}
+
+function makePosterDraft(
+  artists: { name: string; tier: string }[] = [{ name: 'Alvvays', tier: 'headliner' }]
+) {
+  return createPosterDraft({
+    owner: OWNER,
+    artists: artists.map((a) => ({ name: a.name, tier: a.tier as never })) as never,
+    analysisProvider: 'gemini',
+  });
+}
+
 function seedTextSession(artists = TEXT_LINEUP) {
-  sessionStorage.setItem('artists', JSON.stringify(artists));
-  sessionStorage.setItem('inputSource', 'text');
+  storeDraft(makeTextDraft(artists));
 }
 
 function seedPosterSession(
   artists: { name: string; tier: string }[] = [{ name: 'Alvvays', tier: 'headliner' }]
 ) {
-  sessionStorage.setItem('artists', JSON.stringify(artists));
-  sessionStorage.setItem('analysisProvider', 'gemini');
-  sessionStorage.setItem('inputSource', 'poster');
+  storeDraft(makePosterDraft(artists));
 }
 
 /** Seed a poster session and render until Continue is ready. */
@@ -123,6 +175,7 @@ describe('review-artists with a manually entered (text) lineup', () => {
   beforeEach(() => {
     sessionStorage.clear();
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockPost.mockReset();
     stubApi();
   });
@@ -285,6 +338,15 @@ describe('review-artists with a manually entered (text) lineup', () => {
     await waitFor(() => {
       expect(countSelect('__proto__').value).toBe('5');
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /reset to recommended/i }));
+
+    expect(countSelect('__proto__').value).toBe('5');
+    const stored = readStoredDraft();
+    expect(
+      Object.prototype.hasOwnProperty.call(stored?.artistReview.perArtistCounts, '__proto__')
+    ).toBe(true);
+    expect(stored?.artistReview.perArtistCounts['__proto__']).toBe(5);
   });
 });
 
@@ -292,6 +354,7 @@ describe('review-artists with a poster lineup (regression guard)', () => {
   beforeEach(() => {
     sessionStorage.clear();
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockPost.mockReset();
     stubApi();
   });
@@ -323,17 +386,25 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     expect(searchCall![1].perArtistCounts).toBeUndefined();
   });
 
-  it('treats sessions without inputSource as poster input (backward compatible)', async () => {
-    sessionStorage.setItem('artists', JSON.stringify([{ name: 'Alvvays' }, { name: 'The Beths' }]));
-    // No inputSource key at all — older sessions.
+  it('redirects to /upload when no draft exists (instead of crashing on defaults)', async () => {
     render(<ReviewArtists />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+      expect(mockPush).toHaveBeenCalledWith('/upload');
     });
+  });
 
-    expect(screen.queryByText('✍️ Entered manually')).not.toBeInTheDocument();
-    expect(screen.getByText('Recommended (Tier-based)')).toBeInTheDocument();
+  it('redirects to /upload when the draft belongs to another user', async () => {
+    const draft = makePosterDraft();
+    draft.owner = { userId: 'someone-else', platform: 'apple-music' };
+    storeDraft(draft);
+
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/upload');
+    });
+    expect(sessionStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)).toBeNull();
   });
 
   it('custom-per-tier counts appear in the estimate and the API payload', async () => {
@@ -586,5 +657,267 @@ describe('review-artists with a poster lineup (regression guard)', () => {
     ).toBe('17');
     expect(countSelect('Alvvays').value).toBe('17');
     expect(screen.getByText('~17')).toBeInTheDocument();
+  });
+});
+
+describe('review-artists draft persistence', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    mockPush.mockReset();
+    mockPost.mockReset();
+    stubApi();
+  });
+
+  it('restores artist removals, counts, selection mode, and staged bulk edits', async () => {
+    const draft = makePosterDraft([
+      { name: 'Alvvays', tier: 'headliner' },
+      { name: 'The Beths', tier: 'mid-tier' },
+    ]);
+    draft.artistReview.artists = [{ name: 'Alvvays', tier: 'headliner' }]; // The Beths removed
+    draft.artistReview.trackCountMode = 'per-artist';
+    draft.artistReview.perArtistCounts = { Alvvays: 12 };
+    draft.artistReview.stagedTierCounts = { headliner: 9 };
+    draft.artistReview.trackSelectionMode = 'balanced';
+    storeDraft(draft);
+
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Review Artists (1)')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByLabelText('Track count for The Beths')).not.toBeInTheDocument();
+    expect(countSelect('Alvvays').value).toBe('12');
+    expect(screen.getByText('~12')).toBeInTheDocument();
+
+    // Staged bulk edits survive the remount.
+    const bulkInput = await screen.findByLabelText('Track count for Headliners tier');
+    expect((bulkInput as HTMLInputElement).value).toBe('9');
+  });
+
+  it('does not re-run personalization when a completed result is stored', async () => {
+    const draft = makePosterDraft([{ name: 'Alvvays', tier: 'headliner' }]);
+    draft.artistReview.artists = [{ name: 'Alvvays', tier: 'headliner', affinity: 'loved' }];
+    draft.artistReview.personalization = { status: 'complete', lovedCount: 1, gemCount: 0 };
+    storeDraft(draft);
+
+    render(<ReviewArtists />);
+
+    // Continue is enabled immediately (no personalize round trip to wait for).
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+
+    expect(mockPost).not.toHaveBeenCalledWith('/api/personalize', expect.anything());
+  });
+
+  it('persists a completed personalization result into the draft', async () => {
+    seedPosterSession();
+
+    let resolvePersonalize!: (value: unknown) => void;
+    mockPost.mockImplementation((url: string) => {
+      if (url === '/api/personalize') {
+        return new Promise((resolve) => {
+          resolvePersonalize = resolve;
+        });
+      }
+      return Promise.resolve({ data: { tracks: [], artistsSearched: 1, tracksFound: 0 } });
+    });
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Review Artists (1)')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      resolvePersonalize({
+        data: {
+          artists: [{ name: 'Alvvays', affinity: 'loved', affinityConfidence: 0.97 }],
+          lovedCount: 1,
+          gemCount: 0,
+          degraded: false,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      const stored = readStoredDraft();
+      expect(stored?.artistReview.personalization).toEqual({
+        status: 'complete',
+        lovedCount: 1,
+        gemCount: 0,
+      });
+      expect(stored?.artistReview.artists[0].affinity).toBe('loved');
+    });
+  });
+
+  it('Back to Upload navigates without clearing or rewriting the draft', async () => {
+    // Personalization is already stored, so nothing writes between mount and Back.
+    const draft = makePosterDraft();
+    draft.artistReview.personalization = { status: 'complete', lovedCount: 0, gemCount: 0 };
+    storeDraft(draft);
+
+    render(<ReviewArtists />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /back to upload/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /back to upload/i }));
+
+    expect(mockPush).toHaveBeenCalledWith('/upload');
+    expect(readStoredDraft()).toEqual(draft);
+  });
+
+  it('reuses stored track results when the fingerprint is unchanged (no new search)', async () => {
+    // The stored lineup already carries the personalization merge (affinity),
+    // which is part of the fingerprint — matching real post-personalize state.
+    const draft = makePosterDraft();
+    draft.artistReview.artists = [{ name: 'Alvvays', tier: 'headliner', affinity: 'loved' }];
+    draft.artistReview.personalization = { status: 'complete', lovedCount: 1, gemCount: 0 };
+    const fingerprint = computeSearchFingerprint({
+      artists: draft.artistReview.artists,
+      trackCountMode: 'tier-based',
+      trackSelectionMode: 'popular',
+    });
+    draft.trackReview = {
+      searchFingerprint: fingerprint,
+      tracks: [makeTrack('t1', 'Dreams Tonite')],
+      selectedTrackIds: ['t1'],
+      warnings: [],
+      playlistName: 'Edited Name',
+    };
+    storeDraft(draft);
+
+    render(<ReviewArtists />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/review-tracks');
+    });
+
+    const searchCalls = mockPost.mock.calls.filter(([url]) => url === '/api/search-tracks');
+    expect(searchCalls).toHaveLength(0);
+    // Stored selections and playlist name are preserved verbatim.
+    expect(readStoredDraft()?.trackReview?.playlistName).toBe('Edited Name');
+    expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual(['t1']);
+  });
+
+  it('a material change triggers exactly one new search and preserves the playlist name', async () => {
+    const draft = makePosterDraft([{ name: 'Alvvays', tier: 'headliner' }]);
+    draft.trackReview = {
+      searchFingerprint: 'stale-fingerprint',
+      tracks: [makeTrack('old-1', 'Old Track')],
+      selectedTrackIds: ['old-1'],
+      warnings: ['stale warning'],
+      playlistName: 'Edited Name',
+    };
+    storeDraft(draft);
+
+    mockPost.mockImplementation((url: string) => {
+      if (url === '/api/personalize') {
+        return Promise.resolve({
+          data: { artists: [], lovedCount: 0, gemCount: 0, degraded: false },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          tracks: [makeTrack('new-1', 'New Track'), makeTrack('new-2', 'Other Track')],
+          warnings: ['"X" was not found on Apple Music'],
+        },
+      });
+    });
+
+    render(<ReviewArtists />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+
+    // Material change: switch to per-artist mode with a custom count.
+    fireEvent.click(screen.getByRole('button', { name: /per-artist/i }));
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '7' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/review-tracks');
+    });
+
+    const searchCalls = mockPost.mock.calls.filter(([url]) => url === '/api/search-tracks');
+    expect(searchCalls).toHaveLength(1);
+    expect(searchCalls[0][1].trackCountMode).toBe('per-artist');
+    expect(searchCalls[0][1].perArtistCounts).toEqual({ Alvvays: 7 });
+
+    const stored = readStoredDraft();
+    expect(stored?.trackReview?.tracks.map((t) => t.id)).toEqual(['new-1', 'new-2']);
+    expect(stored?.trackReview?.selectedTrackIds).toEqual(['new-1', 'new-2']);
+    expect(stored?.trackReview?.warnings).toEqual(['"X" was not found on Apple Music']);
+    expect(stored?.trackReview?.playlistName).toBe('Edited Name');
+  });
+
+  it('persisting mutations to the draft (removals, counts, selection mode)', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+
+    fireEvent.change(countSelect('Alvvays'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select The Beths' }));
+    fireEvent.click(screen.getByRole('button', { name: /remove selected \(1\)/i }));
+
+    const stored = readStoredDraft();
+    expect(stored?.artistReview.artists.map((a) => a.name)).toEqual(['Alvvays', 'Men I Trust']);
+    expect(stored?.artistReview.perArtistCounts).toEqual({ Alvvays: 10, 'Men I Trust': 5 });
+    expect(stored?.artistReview.perArtistCounts['The Beths']).toBeUndefined();
+  });
+
+  it('blocks Continue with the storage error when the required write fails', async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key,
+      value
+    ) {
+      if (key === PLAYLIST_DRAFT_STORAGE_KEY && value.includes('"trackReview"')) {
+        throw new DOMException('Storage blocked', 'SecurityError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+    seedPosterSession();
+    mockPost.mockImplementation((url: string) => {
+      if (url === '/api/personalize') {
+        return Promise.resolve({
+          data: { artists: [], lovedCount: 0, gemCount: 0, degraded: false },
+        });
+      }
+      return Promise.resolve({ data: { tracks: [{ id: 't1', name: 'T', artist: 'A' }] } });
+    });
+
+    render(<ReviewArtists />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /search tracks & continue/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Browser storage unavailable')).toBeInTheDocument();
+    });
+    expect(mockPush).not.toHaveBeenCalledWith('/review-tracks');
+    setItemSpy.mockRestore();
+  });
+
+  it('start over clears the draft and replaces the route to upload', async () => {
+    seedPosterSession();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<ReviewArtists />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /start over/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /start over/i }));
+
+    expect(sessionStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith('/upload');
+    confirmSpy.mockRestore();
   });
 });

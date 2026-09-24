@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
@@ -7,6 +7,18 @@ import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_ARTISTS_PER_SEARCH } from '@/lib/constants';
 import { DEFAULT_TEXT_ARTIST_TRACK_COUNT } from '@/lib/artist-text';
+import {
+  PlaylistArtistReview,
+  PlaylistPersonalizationSummary,
+  PLAYLIST_DRAFT_STORAGE_ERROR,
+  computeSearchFingerprint,
+  defaultPlaylistName,
+  readPlaylistDraftForUser,
+  trackReviewMatches,
+  updatePlaylistDraft,
+} from '@/lib/playlist-draft';
+import { DEFAULT_TIER_COUNTS, withDefaultTierCounts } from '@/lib/track-counts';
+import type { TierCounts, TrackCountMode } from '@/lib/track-counts';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -14,22 +26,21 @@ import ErrorMessage from '@/components/ui/ErrorMessage';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import EditableArtistList from '@/components/features/EditableArtistList';
-import TrackCountModeSelector, {
-  TrackCountMode,
-  TierCounts,
-  DEFAULT_TIER_COUNTS,
-} from '@/components/features/TrackCountModeSelector';
+import TrackCountModeSelector from '@/components/features/TrackCountModeSelector';
 import TrackSelectionModeSelector from '@/components/features/TrackSelectionModeSelector';
 import BulkActionsBar from '@/components/features/BulkActionsBar';
 import PlaylistSummaryPreview from '@/components/features/PlaylistSummaryPreview';
 import PersonalizationHeader, {
   PersonalizationResult,
 } from '@/components/features/PersonalizationHeader';
+import StartOverButton from '@/components/features/StartOverButton';
 import { fadeIn, slideUp } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 
-function createArtistCountMap(): Record<string, number> {
-  return Object.create(null) as Record<string, number>;
+/** Recommended per-artist count for an artist (tier default, or text default). */
+function recommendedCount(artist: Artist, source: ArtistInputSource): number {
+  if (source === 'text') return DEFAULT_TEXT_ARTIST_TRACK_COUNT;
+  return artist.tier ? DEFAULT_TIER_COUNTS[artist.tier] : DEFAULT_TIER_COUNTS.default;
 }
 
 export default function ReviewArtists() {
@@ -42,34 +53,25 @@ export default function ReviewArtists() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
 
-  // Data from upload page
-  const [artists, setArtists] = useState<Artist[]>([]);
+  // Source metadata restored from the draft.
   const [analysisProvider, setAnalysisProvider] = useState<'vision' | 'gemini' | 'hybrid'>(
     'vision'
   );
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
-  // How the lineup entered the flow. Sessions without the stored field are
-  // poster runs (pre-dates text input), so 'poster' is the default.
   const [inputSource, setInputSource] = useState<ArtistInputSource>('poster');
 
-  // Track count configuration
-  const [trackCountMode, setTrackCountMode] = useState<TrackCountMode>('tier-based');
-  const [tierCounts, setTierCounts] = useState<TierCounts>(DEFAULT_TIER_COUNTS);
-  const [perArtistCounts, setPerArtistCounts] =
-    useState<Record<string, number>>(createArtistCountMap);
-  // Bulk tier counts staged in the bulk bar. Only holds explicit edits; tiers
-  // without an entry fall back to their recommended default, so clearing this
-  // restores the staged inputs to the defaults.
-  const [stagedTierCounts, setStagedTierCounts] = useState<Partial<TierCounts>>({});
+  // The whole artist-review state lives in one object so every mutation can
+  // be persisted to the draft atomically (list, counts, staged bulk inputs,
+  // selection mode, personalization).
+  const [review, setReview] = useState<PlaylistArtistReview | null>(null);
+  const reviewRef = useRef<PlaylistArtistReview | null>(null);
+  const didHydrateRef = useRef(false);
 
-  // Track selection mode
-  const [trackSelectionMode, setTrackSelectionMode] = useState<TrackSelectionMode>('popular');
-
-  // Selection state for bulk operations
+  // Selection state for bulk operations (ephemeral UI state, not part of the draft).
   const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
 
-  // Personalization (loved + hidden gems). Fires once after the lineup loads,
-  // merges affinity tags back into `artists` when the single (~10s) response lands.
+  // Personalization (loved + hidden gems). Restored from the draft when a
+  // completed/degraded result is already stored; otherwise fires once.
   const [personalizing, setPersonalizing] = useState(false);
   const [personalizeResult, setPersonalizeResult] = useState<PersonalizationResult | null>(null);
   // Guards a single fire (incl. React Strict-Mode double-mount, which preserves refs).
@@ -77,67 +79,73 @@ export default function ReviewArtists() {
   // True while this component instance is mounted; gates late/stale responses so a
   // navigation away (or Strict-Mode unmount/remount) can't merge into a dead screen.
   const activeRef = useRef(true);
-  // Mirror of the loaded lineup so the fire effect can read it without re-triggering.
-  const artistsRef = useRef<Artist[]>([]);
-  artistsRef.current = artists;
 
+  /**
+   * Apply the next artist-review state and persist it to the draft in the same
+   * breath. Mid-edit persistence is best-effort (a later verified write gates
+   * navigation); the ref update is synchronous so Back/Continue always see the
+   * values on screen.
+   */
+  const commitReview = useCallback((next: PlaylistArtistReview) => {
+    reviewRef.current = next;
+    setReview(next);
+    updatePlaylistDraft((draft) => ({ ...draft, artistReview: next }));
+  }, []);
+
+  // Hydrate the full artist review (and source metadata) from the draft. Do
+  // not overwrite restored values with text/poster defaults — the draft is
+  // authoritative once it exists. Wait for auth before redirecting so a
+  // refresh never bounces a valid user to Upload.
   useEffect(() => {
-    // Redirect if not authenticated
     if (!authLoading && !user) {
       router.push('/');
       return;
     }
+    if (authLoading || !user || !platform) return;
+    if (didHydrateRef.current) return;
+    didHydrateRef.current = true;
 
-    // Wait for auth to finish before loading data
-    if (authLoading) {
+    const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
+    if (!draft || draft.artistReview.artists.length === 0) {
+      router.push('/upload');
       return;
     }
 
-    // Load data from sessionStorage
-    if (typeof window !== 'undefined') {
-      const storedArtists = sessionStorage.getItem('artists');
-      const storedProvider = sessionStorage.getItem('analysisProvider');
-      const storedThumbnail = sessionStorage.getItem('posterThumbnail');
-      // Missing/unknown values fall back to 'poster' (backward compatible).
-      const storedInputSource: ArtistInputSource =
-        sessionStorage.getItem('inputSource') === 'text' ? 'text' : 'poster';
+    setAnalysisProvider(draft.source.analysisProvider ?? 'vision');
+    setPosterThumbnail(draft.source.posterThumbnail ?? null);
+    setInputSource(draft.source.kind);
 
-      if (!storedArtists) {
-        // No artists in session, redirect to upload
-        router.push('/upload');
-        return;
+    // Defensive fill: guarantee every restored artist has a per-artist count.
+    const perArtistCounts: Record<string, number> = Object.assign(
+      Object.create(null),
+      draft.artistReview.perArtistCounts
+    );
+    draft.artistReview.artists.forEach((artist) => {
+      if (typeof perArtistCounts[artist.name] !== 'number') {
+        perArtistCounts[artist.name] = recommendedCount(artist, draft.source.kind);
       }
+    });
 
-      try {
-        const parsedArtists: Artist[] = JSON.parse(storedArtists);
-        setArtists(parsedArtists);
-        setAnalysisProvider((storedProvider as 'vision' | 'gemini' | 'hybrid') || 'vision');
-        setPosterThumbnail(storedThumbnail);
-        setInputSource(storedInputSource);
+    const restored: PlaylistArtistReview = {
+      ...draft.artistReview,
+      tierCounts: withDefaultTierCounts(draft.artistReview.tierCounts),
+      perArtistCounts,
+    };
+    reviewRef.current = restored;
+    setReview(restored);
 
-        // Manual lineups have no tiers: per-artist mode with 5 tracks each.
-        // Poster lineups keep the tier-based default and tier/fallback counts.
-        setTrackCountMode(storedInputSource === 'text' ? 'per-artist' : 'tier-based');
-        const initialCounts = createArtistCountMap();
-        parsedArtists.forEach((artist) => {
-          if (storedInputSource === 'text') {
-            initialCounts[artist.name] = DEFAULT_TEXT_ARTIST_TRACK_COUNT;
-          } else if (artist.tier) {
-            initialCounts[artist.name] = DEFAULT_TIER_COUNTS[artist.tier];
-          } else {
-            initialCounts[artist.name] = 3;
-          }
-        });
-        setPerArtistCounts(initialCounts);
-      } catch (err) {
-        console.error('Error parsing stored artists:', err);
-        router.push('/upload');
-        return;
-      }
+    // A completed or degraded personalization result is already stored:
+    // restore its summary and never re-run the request for this lineup.
+    if (draft.artistReview.personalization) {
+      setPersonalizeResult({
+        lovedCount: draft.artistReview.personalization.lovedCount,
+        gemCount: draft.artistReview.personalization.gemCount,
+        degraded: draft.artistReview.personalization.status === 'degraded',
+      });
     }
 
     setLoading(false);
-  }, [authLoading, user, router]);
+  }, [authLoading, user, platform, router]);
 
   // Track mount status. Refs survive Strict-Mode's unmount/remount, so after the
   // double-invoke settles activeRef is back to true; on a real unmount it stays false.
@@ -155,13 +163,15 @@ export default function ReviewArtists() {
     if (loading || authLoading) return;
     if (personalizeStartedRef.current) return;
     if (platform !== 'apple-music') return;
-    if (artistsRef.current.length === 0) return;
+    const current = reviewRef.current;
+    if (!current || current.artists.length === 0) return;
+    if (current.personalization) return; // stored complete/degraded result
 
     personalizeStartedRef.current = true;
     setPersonalizing(true);
 
     apiClient
-      .post('/api/personalize', { artists: artistsRef.current, platform })
+      .post('/api/personalize', { artists: current.artists, platform })
       .then((res) => {
         if (!activeRef.current) return; // navigated away / stale
         const data = res.data as PersonalizeResponse;
@@ -172,37 +182,52 @@ export default function ReviewArtists() {
           degraded: data.degraded,
         });
 
-        if (data.degraded) return;
+        // Store the counts the server actually reported — a degraded scan can
+        // still carry real loved matches (its annotations stand server-side).
+        const summary: PlaylistPersonalizationSummary = {
+          status: data.degraded ? 'degraded' : 'complete',
+          lovedCount: data.lovedCount,
+          gemCount: data.gemCount,
+        };
+
+        const base = reviewRef.current;
+        if (!base) return;
+
+        if (data.degraded) {
+          // The server finished (partially); persist so a return visit skips the retry.
+          commitReview({ ...base, personalization: summary });
+          return;
+        }
 
         // Merge ONLY affinity fields, keyed by name, into current state — never
         // replace the artist objects (protects removals/edits during the wait).
         const affinityByName = new Map(data.artists.map((a) => [a.name, a]));
-        setArtists((prev) =>
-          prev.map((artist) => {
-            const annotated = affinityByName.get(artist.name);
-            if (!annotated?.affinity) return artist;
-            return {
-              ...artist,
-              affinity: annotated.affinity,
-              affinityConfidence: annotated.affinityConfidence,
-              affinityReason: annotated.affinityReason,
-              affinityLinkedTo: annotated.affinityLinkedTo,
-            };
-          })
-        );
+        const merged = base.artists.map((artist) => {
+          const annotated = affinityByName.get(artist.name);
+          if (!annotated?.affinity) return artist;
+          return {
+            ...artist,
+            affinity: annotated.affinity,
+            affinityConfidence: annotated.affinityConfidence,
+            affinityReason: annotated.affinityReason,
+            affinityLinkedTo: annotated.affinityLinkedTo,
+          };
+        });
+        commitReview({ ...base, artists: merged, personalization: summary });
       })
       .catch((err) => {
         if (!activeRef.current) return;
         console.error('[ReviewArtists] Personalize failed:', err);
-        // Degrade quietly — the header hides itself and the lineup still works.
+        // Degrade quietly for this visit; nothing is persisted, so returning
+        // to the page retries the interrupted personalization.
         setPersonalizeResult({ lovedCount: 0, gemCount: 0, degraded: true });
       })
       .finally(() => {
         if (activeRef.current) setPersonalizing(false);
       });
-  }, [loading, authLoading, platform]);
+  }, [loading, authLoading, platform, commitReview]);
 
-  // Toggle artist selection
+  // Toggle artist selection (ephemeral bulk-selection UI state)
   const handleToggleSelection = (artistName: string) => {
     setSelectedArtists((prev) => {
       const newSet = new Set(prev);
@@ -217,106 +242,125 @@ export default function ReviewArtists() {
 
   // Remove single artist
   const handleRemoveArtist = (artistName: string) => {
-    setArtists((prev) => prev.filter((a) => a.name !== artistName));
+    const current = reviewRef.current;
+    if (!current) return;
+    const perArtistCounts = { ...current.perArtistCounts };
+    delete perArtistCounts[artistName];
+    commitReview({
+      ...current,
+      artists: current.artists.filter((a) => a.name !== artistName),
+      perArtistCounts,
+    });
     setSelectedArtists((prev) => {
       const newSet = new Set(prev);
       newSet.delete(artistName);
       return newSet;
     });
-    // Clean up perArtistCounts to prevent stale entries
-    setPerArtistCounts((prev) => {
-      const updated = { ...prev };
-      delete updated[artistName];
-      return updated;
-    });
   };
 
   // Remove selected artists (bulk)
   const handleRemoveSelected = () => {
-    setArtists((prev) => prev.filter((a) => !selectedArtists.has(a.name)));
-    // Clean up perArtistCounts for removed artists
-    setPerArtistCounts((prev) => {
-      const updated = { ...prev };
-      selectedArtists.forEach((artistName) => {
-        delete updated[artistName];
-      });
-      return updated;
+    const current = reviewRef.current;
+    if (!current) return;
+    const perArtistCounts = { ...current.perArtistCounts };
+    selectedArtists.forEach((artistName) => {
+      delete perArtistCounts[artistName];
+    });
+    commitReview({
+      ...current,
+      artists: current.artists.filter((a) => !selectedArtists.has(a.name)),
+      perArtistCounts,
     });
     setSelectedArtists(new Set());
   };
 
-  // Reset to recommended tier-based counts
+  // Reset to recommended tier-based counts. Keeps the selection mode and any
+  // stored personalization; clears the staged bulk inputs so a later Apply
+  // can't restore pre-reset values.
   const handleResetToRecommended = () => {
-    // Reset the staged bulk tier inputs too — otherwise their pre-reset values
-    // survive in the bulk bar and a later Apply would restore them.
-    setStagedTierCounts({});
-
-    if (inputSource === 'text') {
-      // Manual lineups have no tiers — restore the text-entry defaults:
-      // per-artist mode with 5 tracks for every artist.
-      setTrackCountMode('per-artist');
-      const resetCounts = createArtistCountMap();
-      artists.forEach((artist) => {
-        resetCounts[artist.name] = DEFAULT_TEXT_ARTIST_TRACK_COUNT;
-      });
-      setPerArtistCounts(resetCounts);
-      return;
-    }
-
-    setTrackCountMode('tier-based');
-    setTierCounts(DEFAULT_TIER_COUNTS);
-    // Reset per-artist counts to defaults
-    const resetCounts = createArtistCountMap();
-    artists.forEach((artist) => {
-      if (artist.tier) {
-        resetCounts[artist.name] = DEFAULT_TIER_COUNTS[artist.tier];
-      } else {
-        resetCounts[artist.name] = 3;
-      }
+    const current = reviewRef.current;
+    if (!current) return;
+    const perArtistCounts: Record<string, number> = Object.create(null);
+    current.artists.forEach((artist) => {
+      perArtistCounts[artist.name] = recommendedCount(artist, inputSource);
     });
-    setPerArtistCounts(resetCounts);
+    commitReview({
+      ...current,
+      trackCountMode: inputSource === 'text' ? 'per-artist' : 'tier-based',
+      tierCounts: withDefaultTierCounts(),
+      perArtistCounts,
+      stagedTierCounts: {},
+    });
   };
 
   // Apply track count to all artists in a tier
   const handleApplyToTier = (tier: string, count: number) => {
-    setPerArtistCounts((prev) => {
-      const updated = { ...prev };
-      artists.forEach((artist) => {
-        if (artist.tier === tier) {
-          updated[artist.name] = count;
-        }
-      });
-      return updated;
+    const current = reviewRef.current;
+    if (!current) return;
+    const perArtistCounts = { ...current.perArtistCounts };
+    current.artists.forEach((artist) => {
+      if (artist.tier === tier) {
+        perArtistCounts[artist.name] = count;
+      }
     });
+    commitReview({ ...current, perArtistCounts });
   };
 
   // Stage a bulk tier count edit; reaches the lineup only via the explicit
   // Apply action in the bulk bar.
   const handleStagedTierCountChange = (tier: keyof TierCounts, count: number) => {
-    setStagedTierCounts((prev) => ({ ...prev, [tier]: count }));
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({
+      ...current,
+      stagedTierCounts: { ...current.stagedTierCounts, [tier]: count },
+    });
   };
 
   // Update per-artist track count
   const handlePerArtistCountChange = (artistName: string, count: number) => {
-    setPerArtistCounts((prev) => ({
-      ...prev,
-      [artistName]: count,
-    }));
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({
+      ...current,
+      perArtistCounts: { ...current.perArtistCounts, [artistName]: count },
+    });
   };
 
   // Update tier count (for custom-per-tier mode)
   const handleTierCountChange = (tier: keyof TierCounts, count: number) => {
-    setTierCounts((prev) => ({
-      ...prev,
-      [tier]: count,
-    }));
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({ ...current, tierCounts: { ...current.tierCounts, [tier]: count } });
   };
 
+  const handleTrackCountModeChange = (mode: TrackCountMode) => {
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({ ...current, trackCountMode: mode });
+  };
+
+  const handleTrackSelectionModeChange = (mode: TrackSelectionMode) => {
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({ ...current, trackSelectionMode: mode });
+  };
+
+  const artists = review?.artists ?? [];
   const overLimit = artists.length > MAX_ARTISTS_PER_SEARCH;
 
-  // Continue to search tracks
+  /**
+   * Continue to track review. When the stored track result was produced from
+   * identical search inputs (fingerprint), reuse it — no new API call — and
+   * keep the exact selections, warnings, and playlist name. Otherwise search,
+   * then atomically store the updated artist review and track review (verified
+   * write) before routing.
+   */
   const handleContinue = async () => {
-    if (artists.length === 0) {
+    const current = reviewRef.current;
+    if (!current) return;
+
+    if (current.artists.length === 0) {
       setError({
         type: 'validation',
         message:
@@ -331,55 +375,78 @@ export default function ReviewArtists() {
       return; // Button should be disabled, but guard anyway
     }
 
+    if (!user || !platform) return;
+
+    const fingerprint = computeSearchFingerprint({
+      artists: current.artists,
+      trackCountMode: current.trackCountMode,
+      trackSelectionMode: current.trackSelectionMode,
+      tierCounts: current.tierCounts,
+      perArtistCounts: current.perArtistCounts,
+    });
+
+    const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
+    if (!draft) {
+      // Prerequisites vanished (cleared draft / owner change) — restart the flow.
+      router.push('/upload');
+      return;
+    }
+
     setSearching(true);
     setError(null);
 
     try {
+      if (trackReviewMatches(draft.trackReview, fingerprint)) {
+        // Same effective inputs: navigate without another /api/search-tracks.
+        const write = updatePlaylistDraft((d) => ({ ...d, artistReview: current }));
+        if (!write.ok) {
+          setSearching(false);
+          setError(PLAYLIST_DRAFT_STORAGE_ERROR);
+          return;
+        }
+        router.push('/review-tracks');
+        return;
+      }
+
       const requestBody: any = {
-        artists: artists,
-        trackCountMode: trackCountMode,
-        trackSelectionMode: trackSelectionMode,
+        artists: current.artists,
+        trackCountMode: current.trackCountMode,
+        trackSelectionMode: current.trackSelectionMode,
       };
 
       // Add appropriate track count data based on mode
-      if (trackCountMode === 'custom-per-tier') {
-        requestBody.tierCounts = tierCounts;
-      } else if (trackCountMode === 'per-artist') {
-        requestBody.perArtistCounts = perArtistCounts;
+      if (current.trackCountMode === 'custom-per-tier') {
+        requestBody.tierCounts = current.tierCounts;
+      } else if (current.trackCountMode === 'per-artist') {
+        requestBody.perArtistCounts = current.perArtistCounts;
       }
 
       const response = await apiClient.post('/api/search-tracks', requestBody);
 
-      console.log('[ReviewArtists] Received tracks from API:', response.data.tracks.length);
+      const tracks = response.data.tracks;
+      // Preserve an independently edited playlist name; only a first-ever
+      // result gets the source-derived default.
+      const playlistName = draft.trackReview?.playlistName?.trim()
+        ? draft.trackReview.playlistName
+        : defaultPlaylistName(draft.source);
 
-      // Store tracks and poster thumbnail for review page
-      if (typeof window !== 'undefined') {
-        const tracksJson = JSON.stringify(response.data.tracks);
-        sessionStorage.setItem('tracks', tracksJson);
-        console.log(
-          '[ReviewArtists] Stored tracks in sessionStorage:',
-          response.data.tracks.length,
-          'tracks'
-        );
-
-        if (response.data.warnings?.length) {
-          sessionStorage.setItem('trackWarnings', JSON.stringify(response.data.warnings));
-        }
-
-        if (posterThumbnail) {
-          sessionStorage.setItem('posterThumbnail', posterThumbnail);
-          console.log('[ReviewArtists] Stored poster thumbnail');
-        }
-
-        // Verify storage
-        const verification = sessionStorage.getItem('tracks');
-        console.log(
-          '[ReviewArtists] Verification - tracks in storage:',
-          verification ? 'YES' : 'NO'
-        );
+      const write = updatePlaylistDraft((d) => ({
+        ...d,
+        artistReview: current,
+        trackReview: {
+          searchFingerprint: fingerprint,
+          tracks,
+          selectedTrackIds: tracks.map((t: { id: string }) => t.id),
+          warnings: response.data.warnings ?? [],
+          playlistName,
+        },
+      }));
+      if (!write.ok) {
+        setSearching(false);
+        setError(PLAYLIST_DRAFT_STORAGE_ERROR);
+        return;
       }
 
-      console.log('[ReviewArtists] Navigating to /review-tracks...');
       router.push('/review-tracks');
     } catch (err: any) {
       console.error('Error searching tracks:', err);
@@ -392,14 +459,8 @@ export default function ReviewArtists() {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || loading || !review) {
     return <LoadingScreen message="Loading your workspace..." />;
-  }
-
-  if (searching) {
-    return (
-      <LoadingScreen message={`Finding tracks on ${platformName}... This may take a minute.`} />
-    );
   }
 
   return (
@@ -420,7 +481,7 @@ export default function ReviewArtists() {
             <div className="mb-8">
               <ProgressStepper
                 steps={[
-                  { label: 'Upload' },
+                  { label: 'Upload', href: '/upload' },
                   { label: 'Review Artists' },
                   { label: 'Review Tracks' },
                   { label: 'Done' },
@@ -469,12 +530,12 @@ export default function ReviewArtists() {
                 {/* Bulk Actions Bar */}
                 <BulkActionsBar
                   artists={artists}
-                  trackCountMode={trackCountMode}
+                  trackCountMode={review.trackCountMode}
                   selectedCount={selectedArtists.size}
                   onResetToRecommended={handleResetToRecommended}
                   onRemoveSelected={handleRemoveSelected}
                   onApplyToTier={handleApplyToTier}
-                  stagedTierCounts={stagedTierCounts}
+                  stagedTierCounts={review.stagedTierCounts}
                   onStagedTierCountChange={handleStagedTierCountChange}
                 />
 
@@ -482,8 +543,8 @@ export default function ReviewArtists() {
                 <EditableArtistList
                   artists={artists}
                   provider={analysisProvider}
-                  trackCountMode={trackCountMode}
-                  perArtistCounts={perArtistCounts}
+                  trackCountMode={review.trackCountMode}
+                  perArtistCounts={review.perArtistCounts}
                   selectedArtists={selectedArtists}
                   onToggleSelection={handleToggleSelection}
                   onRemoveArtist={handleRemoveArtist}
@@ -497,16 +558,16 @@ export default function ReviewArtists() {
                 <div className="lg:sticky lg:top-24 space-y-6">
                   {/* Track Selection Mode Selector */}
                   <TrackSelectionModeSelector
-                    mode={trackSelectionMode}
-                    onModeChange={setTrackSelectionMode}
+                    mode={review.trackSelectionMode}
+                    onModeChange={handleTrackSelectionModeChange}
                     disabled={searching}
                   />
 
                   {/* Track Count Mode Selector */}
                   <TrackCountModeSelector
-                    mode={trackCountMode}
-                    tierCounts={tierCounts}
-                    onModeChange={setTrackCountMode}
+                    mode={review.trackCountMode}
+                    tierCounts={review.tierCounts}
+                    onModeChange={handleTrackCountModeChange}
                     onTierCountChange={handleTierCountChange}
                     disabled={searching}
                     showTierModes={inputSource !== 'text'}
@@ -515,9 +576,9 @@ export default function ReviewArtists() {
                   {/* Playlist Summary Preview */}
                   <PlaylistSummaryPreview
                     artists={artists}
-                    trackCountMode={trackCountMode}
-                    tierCounts={tierCounts}
-                    perArtistCounts={perArtistCounts}
+                    trackCountMode={review.trackCountMode}
+                    tierCounts={review.tierCounts}
+                    perArtistCounts={review.perArtistCounts}
                   />
 
                   {/* Continue button */}
@@ -554,6 +615,7 @@ export default function ReviewArtists() {
                       >
                         Search Tracks & Continue
                       </Button>
+                      {/* Navigation only — Back never clears draft state. */}
                       <Button
                         variant="ghost"
                         size="md"
@@ -575,6 +637,7 @@ export default function ReviewArtists() {
                         </svg>
                         Back to Upload
                       </Button>
+                      <StartOverButton className="w-full" />
                     </div>
                   </Card>
                 </div>
