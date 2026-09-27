@@ -16,13 +16,7 @@ export default function Section({
   noPadding = false,
 }: SectionProps) {
   return (
-    <section
-      className={cn(
-        !fullWidth && 'container mx-auto',
-        !noPadding && 'px-4 py-12 lg:py-20',
-        className
-      )}
-    >
+    <section className={cn(!fullWidth && 'studio-shell', !noPadding && 'py-8 lg:py-10', className)}>
       {children}
     </section>
   );
@@ -51,16 +45,16 @@ export function AsymmetricSection({
         )}
       >
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
         >
           {left}
         </motion.div>
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
         >
           {right}
         </motion.div>

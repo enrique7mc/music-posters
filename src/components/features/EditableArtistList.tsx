@@ -48,11 +48,13 @@ export default function EditableArtistList({
   const hasRanking = !isManual && (provider === 'gemini' || provider === 'hybrid');
 
   return (
-    <div className="space-y-6">
+    <div className="surface space-y-4 p-4 sm:p-5">
       {/* Header with provider badge */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-bold text-dark-50">Review Artists ({artists.length})</h3>
-        <span className="text-xs text-dark-400 bg-dark-800 px-3 py-1.5 rounded-md border border-dark-700">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl font-semibold tracking-tight text-white">
+          Review Artists ({artists.length})
+        </h3>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/50">
           {isManual
             ? 'Entered manually'
             : provider === 'hybrid'
@@ -66,7 +68,7 @@ export default function EditableArtistList({
       {/* Tier summary cards (only for Gemini/Hybrid) */}
       {hasRanking && Object.keys(tierCounts).length > 0 && (
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
@@ -78,11 +80,15 @@ export default function EditableArtistList({
             { tier: 'undercard', label: 'Undercard', icon: '·' },
           ].map(({ tier, label, icon }) => (
             <motion.div key={tier} variants={staggerItem}>
-              <Card variant="glass" className="p-3 text-center">
-                <div className="text-2xl mb-1">{icon}</div>
-                <div className="text-xl font-bold text-dark-100">{tierCounts[tier] || 0}</div>
-                <div className="text-xs text-dark-400">{label}</div>
-              </Card>
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
+                <span className="text-sm text-[#f29520]" aria-hidden>
+                  {icon}
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-white">
+                  {tierCounts[tier] || 0}
+                </span>
+                <span className="truncate text-xs text-dark-300">{label}</span>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -90,7 +96,7 @@ export default function EditableArtistList({
 
       {/* Artist list */}
       <motion.div
-        className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide"
+        className="max-h-[600px] space-y-2 overflow-y-auto pr-1"
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
@@ -102,8 +108,8 @@ export default function EditableArtistList({
           >
             <Card
               className={cn(
-                'p-4 flex items-center gap-4 transition-all hover:bg-accent-500/10',
-                selectedArtists.has(artist.name) && 'ring-2 ring-accent-500/50'
+                'flex flex-wrap items-center gap-3 rounded-xl border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.055] sm:flex-nowrap sm:px-4',
+                selectedArtists.has(artist.name) && 'border-[#f29520]/60 bg-[#f29520]/[0.06]'
               )}
             >
               {/* Checkbox for multi-select */}
@@ -118,14 +124,16 @@ export default function EditableArtistList({
               {/* Artist info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-dark-500 flex-shrink-0">#{index + 1}</span>
+                  <span className="w-7 flex-shrink-0 text-xs tabular-nums text-dark-300">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                   <h4
                     className={`font-semibold truncate ${
                       artist.weight && artist.weight >= 8
-                        ? 'text-lg text-dark-50'
+                        ? 'text-base text-white'
                         : artist.weight && artist.weight >= 6
-                          ? 'text-base text-dark-100'
-                          : 'text-sm text-dark-200'
+                          ? 'text-sm text-white'
+                          : 'text-sm text-white/75'
                     }`}
                   >
                     {artist.name}
@@ -145,10 +153,10 @@ export default function EditableArtistList({
               )}
 
               {/* Tier/Weight indicators */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 {/* Weight indicator */}
                 {artist.weight !== undefined && (
-                  <span className="text-xs text-dark-400 bg-dark-800 px-2 py-1 rounded">
+                  <span className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-dark-300">
                     {artist.weight}/10
                   </span>
                 )}
@@ -161,7 +169,7 @@ export default function EditableArtistList({
               <div className="flex-shrink-0">
                 <button
                   onClick={() => onRemoveArtist(artist.name)}
-                  className="p-2 text-dark-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                  className="rounded-lg p-2 text-dark-300 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-ring"
                   aria-label={`Remove ${artist.name}`}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -182,8 +190,8 @@ export default function EditableArtistList({
       {/* Empty state */}
       {artists.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-dark-400 text-lg">No artists to display</p>
-          <p className="text-dark-500 text-sm mt-2">
+          <p className="text-lg text-dark-300">No artists to display</p>
+          <p className="mt-2 text-sm text-dark-300">
             {isManual
               ? 'All artists have been removed. Go back and enter artists again to start over.'
               : 'All artists have been removed. Upload a new poster to start over.'}
@@ -193,8 +201,8 @@ export default function EditableArtistList({
 
       {/* Instructions */}
       {artists.length > 0 && (
-        <div className="mt-6 p-4 bg-dark-900/50 rounded-lg border border-dark-800">
-          <p className="text-sm text-dark-400">
+        <div className="border-t border-white/10 pt-3">
+          <p className="text-xs text-dark-300">
             {isManual
               ? 'You entered these artists manually. Adjust track counts or remove artists before continuing.'
               : hasRanking

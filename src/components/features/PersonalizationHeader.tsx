@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 import { Artist } from '@/types';
 import Card from '../ui/Card';
 import LoadingSpinner from '../ui/LoadingSpinner';
-import Illustration from '../ui/Illustration';
 import { fadeIn, staggerContainer, staggerItem } from '@/lib/animations';
 
 /** Summary of the personalize pass, surfaced to the user. */
@@ -45,12 +44,19 @@ export default function PersonalizationHeader({
   if (personalizing) {
     return (
       <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <Card variant="glass" className="p-5 flex items-center gap-4">
-          <LoadingSpinner size="sm" />
+        <Card
+          variant="default"
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-4 rounded-2xl border-white/10 p-4 sm:px-5"
+        >
+          <LoadingSpinner size="sm" className="mx-0 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-dark-100">Personalizing your lineup…</p>
-            <p className="text-xs text-dark-400 mt-0.5">
-              Matching the lineup against your Apple Music library and finding hidden gems.
+            <p className="text-sm font-semibold text-white">
+              Finding your favorites and hidden gems…
+            </p>
+            <p className="mt-0.5 text-xs text-dark-300">
+              Matching this lineup against your Apple Music library. Your settings are ready below.
             </p>
           </div>
         </Card>
@@ -83,98 +89,108 @@ export default function PersonalizationHeader({
 
   return (
     <motion.div variants={fadeIn} initial="hidden" animate="visible">
-      <Card variant="elevated" className="overflow-hidden">
-        <div className="p-6 space-y-5">
-          {/* Title + summary */}
-          <div className="flex items-start gap-3">
-            <Illustration name="ranking" size={32} />
-            <div>
-              <h3 className="text-xl font-bold text-dark-50">Personalized for you</h3>
-              <p className="text-sm text-dark-400 mt-1">
-                {parts.join(' · ')} — your playlist is tuned to your taste.
-              </p>
-            </div>
+      <Card variant="default" className="overflow-hidden rounded-2xl border-white/10">
+        <div className="p-4 sm:px-5 sm:py-4">
+          <div>
+            <p className="eyebrow mb-1">Curated from your library</p>
+            <h3 className="text-lg font-semibold text-white">Personalized for you</h3>
+            <p className="mt-0.5 text-xs text-dark-300">
+              {parts.join(' · ')} — your playlist is tuned to your taste.
+            </p>
           </div>
 
-          {/* Artists you already love */}
-          {loved.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-accent-400" aria-hidden>
-                  ♥
-                </span>
-                <h4 className="text-sm font-semibold text-dark-100">Artists you already love</h4>
-              </div>
-              <p className="text-xs text-dark-400 mb-3">
-                Already in your library — we&apos;ll reach for their deep cuts.
-              </p>
-              <motion.div
-                className="flex flex-wrap gap-2"
-                variants={staggerContainer}
-                initial="hidden"
-                animate="visible"
-              >
-                {loved.map((artist) => (
-                  <motion.span
-                    key={artist.name}
-                    variants={staggerItem}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-accent-500/10 text-accent-300 border border-accent-500/30"
-                  >
-                    <span className="text-xs" aria-hidden>
+          <details className="group mt-3 border-t border-white/10 pt-3">
+            <summary className="w-fit cursor-pointer text-xs font-semibold text-[#f29520] focus-ring">
+              See your recommendations
+            </summary>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 md:gap-6">
+              {/* Artists you already love */}
+              {loved.length > 0 && (
+                <div className="min-w-0">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[#f29520]" aria-hidden>
                       ♥
                     </span>
-                    {artist.name}
-                  </motion.span>
-                ))}
-              </motion.div>
-            </div>
-          )}
-
-          {/* Hidden gems */}
-          {gems.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-muted-300" aria-hidden>
-                  ◆
-                </span>
-                <h4 className="text-sm font-semibold text-dark-100">Hidden gems</h4>
-              </div>
-              <p className="text-xs text-dark-400 mb-3">
-                New to you, but on-taste — we&apos;ll grab their best-known tracks.
-              </p>
-              <motion.div
-                className="space-y-2"
-                variants={staggerContainer}
-                initial="hidden"
-                animate="visible"
-              >
-                {gems.map((artist) => (
+                    <h4 className="text-sm font-semibold text-dark-100">
+                      Artists you already love
+                    </h4>
+                  </div>
+                  <p className="mb-2 text-xs text-dark-300">
+                    Already in your library — we&apos;ll reach for their deep cuts.
+                  </p>
                   <motion.div
-                    key={artist.name}
-                    variants={staggerItem}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-muted-500/10 border border-muted-500/30"
+                    className="flex flex-wrap content-start gap-1.5"
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
                   >
-                    <span className="text-muted-300 mt-0.5" aria-hidden>
+                    {loved.map((artist) => (
+                      <motion.span
+                        key={artist.name}
+                        variants={staggerItem}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[#f29520]/25 bg-[#f29520]/[0.08] px-2.5 py-1 text-xs text-[#f29520]"
+                      >
+                        <span className="text-xs" aria-hidden>
+                          ♥
+                        </span>
+                        {artist.name}
+                      </motion.span>
+                    ))}
+                  </motion.div>
+                </div>
+              )}
+
+              {/* Hidden gems */}
+              {gems.length > 0 && (
+                <div className="min-w-0 md:border-l md:border-white/10 md:pl-6">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[#f29520]" aria-hidden>
                       ◆
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-dark-100">{artist.name}</span>
-                        {artist.affinityConfidence !== undefined && (
-                          <span className="text-xs text-muted-300 bg-muted-500/10 px-2 py-0.5 rounded border border-muted-500/30">
-                            {pct(artist.affinityConfidence)}% match
-                          </span>
-                        )}
-                      </div>
-                      {artist.affinityReason && (
-                        <p className="text-xs text-dark-400 mt-1">{artist.affinityReason}</p>
-                      )}
-                    </div>
+                    <h4 className="text-sm font-semibold text-dark-100">Hidden gems</h4>
+                  </div>
+                  <p className="mb-2 text-xs text-dark-300">
+                    New to you, but on-taste — we&apos;ll grab their best-known tracks.
+                  </p>
+                  <motion.div
+                    className="space-y-1.5"
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {gems.map((artist) => (
+                      <motion.div
+                        key={artist.name}
+                        variants={staggerItem}
+                        className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.025] px-2.5 py-1.5"
+                      >
+                        <span className="mt-0.5 text-xs text-[#f29520]" aria-hidden>
+                          ◆
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-dark-100">
+                              {artist.name}
+                            </span>
+                            {artist.affinityConfidence !== undefined && (
+                              <span className="rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-dark-300">
+                                {pct(artist.affinityConfidence)}% match
+                              </span>
+                            )}
+                          </div>
+                          {artist.affinityReason && (
+                            <p className="mt-0.5 text-xs leading-snug text-dark-300">
+                              {artist.affinityReason}
+                            </p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
                   </motion.div>
-                ))}
-              </motion.div>
+                </div>
+              )}
             </div>
-          )}
+          </details>
         </div>
       </Card>
     </motion.div>

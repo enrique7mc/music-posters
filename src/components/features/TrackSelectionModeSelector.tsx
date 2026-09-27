@@ -1,6 +1,5 @@
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import Card, { CardContent } from '@/components/ui/Card';
+import Card from '@/components/ui/Card';
 import type { TrackSelectionMode } from '@/types';
 
 interface TrackSelectionModeSelectorProps {
@@ -9,20 +8,12 @@ interface TrackSelectionModeSelectorProps {
   disabled?: boolean;
 }
 
-/**
- * Component for selecting track selection mode on the Review Artists page.
- * Controls whether to fetch popular hits, balanced mix, or deep cuts.
- */
 export default function TrackSelectionModeSelector({
   mode,
   onModeChange,
   disabled = false,
 }: TrackSelectionModeSelectorProps) {
-  const modes: Array<{
-    value: TrackSelectionMode;
-    label: string;
-    description: string;
-  }> = [
+  const modes: Array<{ value: TrackSelectionMode; label: string; description: string }> = [
     {
       value: 'popular',
       label: 'Popular Hits',
@@ -33,65 +24,41 @@ export default function TrackSelectionModeSelector({
       label: 'Balanced Mix',
       description: 'Mix of popular tracks and lesser-known favorites',
     },
-    {
-      value: 'deep-cuts',
-      label: 'Deep Cuts',
-      description: 'Hidden gems and fan favorites',
-    },
+    { value: 'deep-cuts', label: 'Deep Cuts', description: 'Hidden gems and fan favorites' },
   ];
 
   return (
-    <Card variant="glass" className="overflow-hidden">
-      <CardContent className="p-6">
-        <h4 className="text-lg font-semibold text-dark-100 mb-4">Track Selection</h4>
-
-        <div className="flex flex-col gap-3">
-          {modes.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => onModeChange(option.value)}
-              disabled={disabled}
-              className={cn(
-                'p-4 rounded-lg transition-all duration-200',
-                'border-2 text-left',
-                mode === option.value
-                  ? 'border-accent-500 bg-accent-500/10'
-                  : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-                disabled && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                    mode === option.value
-                      ? 'border-accent-500 bg-accent-500'
-                      : 'border-dark-600 bg-dark-800'
-                  )}
-                >
-                  {mode === option.value && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="w-2.5 h-2.5 rounded-full bg-white"
-                    />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-dark-100 mb-1">{option.label}</div>
-                  <div className="text-sm text-dark-400">{option.description}</div>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 p-3 bg-dark-800/50 rounded-lg border border-dark-700">
-          <p className="text-xs text-dark-400">
-            Tip: Different modes help create unique playlists even with the same artists
-          </p>
-        </div>
-      </CardContent>
+    <Card variant="default" className="rounded-2xl border-white/10 p-5 sm:p-6">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h4 className="text-lg font-semibold text-white">Track selection</h4>
+        <span className="text-xs text-dark-300">Choose the mood</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {modes.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onModeChange(option.value)}
+            disabled={disabled}
+            aria-pressed={mode === option.value}
+            className={cn(
+              'min-h-[76px] rounded-xl border px-3 py-3 text-left transition-colors focus-ring',
+              mode === option.value
+                ? 'border-[#f29520] bg-[#f29520]/10 text-white'
+                : 'border-white/10 bg-white/[0.03] text-white/75 hover:border-white/25 hover:bg-white/[0.06]',
+              disabled && 'cursor-not-allowed opacity-50'
+            )}
+          >
+            <span className="block text-sm font-semibold leading-tight">{option.label}</span>
+            <span className="mt-1 block text-xs leading-snug text-dark-300">
+              {option.description}
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-dark-300">
+        Different modes help create unique playlists even with the same artists.
+      </p>
     </Card>
   );
 }

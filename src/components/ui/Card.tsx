@@ -11,13 +11,13 @@ export interface CardProps extends Omit<HTMLMotionProps<'div'>, 'children'> {
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = 'default', hover = false, children, ...props }, ref) => {
-    const baseStyles = 'rounded-lg transition-[box-shadow,ring-color,opacity]';
+    const baseStyles = 'rounded-2xl transition-[box-shadow,opacity]';
 
     const variants = {
-      default: 'bg-dark-900 border border-dark-800',
+      default: 'bg-dark-900 border border-dark-700',
       glass: 'glass',
       overlay: 'bg-dark-900/80 backdrop-blur-md border border-dark-700/50',
-      elevated: 'bg-dark-900 border border-dark-800 shadow-hard',
+      elevated: 'bg-dark-900 border border-dark-700 shadow-soft',
     };
 
     const MotionDiv = motion.div;

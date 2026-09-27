@@ -50,8 +50,8 @@ export const staggerContainer: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.1,
+      staggerChildren: 0,
+      delayChildren: 0,
     },
   },
 };
@@ -62,17 +62,17 @@ export const staggerItem: Variants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.4, ease: 'easeOut' },
+    transition: { duration: 0.2, ease: 'easeOut' },
   },
 };
 
 // Page transition
 export const pageTransition: Variants = {
-  initial: { opacity: 0, y: 10 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.4, ease: 'easeOut' },
+    transition: { duration: 0.2, ease: 'easeOut' },
   },
   exit: {
     opacity: 0,
@@ -88,8 +88,8 @@ export const hoverLift: Variants = {
     transition: { duration: 0.15, ease: 'easeOut' as const },
   },
   hover: {
-    scale: 1.02,
-    y: -2,
+    scale: 1,
+    y: 0,
     transition: { duration: 0.15, ease: 'easeOut' as const },
   },
 };
@@ -97,6 +97,6 @@ export const hoverLift: Variants = {
 // Button press
 export const buttonPress: Variants = {
   rest: { scale: 1 },
-  hover: { scale: 1.02 },
+  hover: { scale: 1 },
   tap: { scale: 0.98 },
 };

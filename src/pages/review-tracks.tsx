@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Track } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
@@ -10,13 +10,12 @@ import { MAX_PLAYLIST_TRACKS } from '@/lib/constants';
 import { readPlaylistDraftForUser, updatePlaylistDraft } from '@/lib/playlist-draft';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
-import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { LoadingScreen } from '@/components/ui/LoadingSpinner';
+import Card from '@/components/ui/Card';
+import LoadingSpinner, { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import Illustration from '@/components/ui/Illustration';
 import StartOverButton from '@/components/features/StartOverButton';
-import { fadeIn, slideUp, staggerContainer, staggerItem } from '@/lib/animations';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -300,560 +299,380 @@ export default function ReviewTracks() {
   const overTrackLimit = selectedCount > MAX_PLAYLIST_TRACKS;
   const excessTracks = selectedCount - MAX_PLAYLIST_TRACKS;
 
+  const toggleWithKeyboard = (event: React.KeyboardEvent<HTMLElement>, trackId: string) => {
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      handleToggleTrack(trackId);
+    }
+  };
+
   return (
     <PageLayout showNav>
       <Head>
         <title>Review Tracks - Playlistd</title>
       </Head>
 
-      <div className="container mx-auto px-4 py-8 lg:py-12">
-        <motion.div
-          className="max-w-7xl mx-auto"
-          variants={fadeIn}
-          initial="hidden"
-          animate="visible"
+      <div className="studio-shell pb-40 pt-28 sm:pt-32">
+        <div className="mb-6">
+          <ProgressStepper
+            steps={[
+              { label: 'Upload', href: '/upload' },
+              { label: 'Review Artists', href: '/review-artists' },
+              { label: 'Review Tracks' },
+              { label: 'Done' },
+            ]}
+            currentStep={2}
+          />
+        </div>
+
+        <header className="mb-6 border-b border-dark-700/70 pb-6">
+          <p className="eyebrow mb-3">03 / Final selection</p>
+          <div className="flex flex-col justify-between gap-2 sm:gap-5 lg:flex-row lg:items-end">
+            <div>
+              <h1 className="page-heading">Make the final cut.</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-dark-300 sm:text-base">
+                Name your mix and choose the songs you want to keep.
+              </p>
+            </div>
+            <p className="hidden text-sm text-dark-300 lg:block">
+              <span className="font-semibold text-accent-500">{totalCount}</span> tracks found
+            </p>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {warnings.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="mb-6 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-amber-200">Some artists had issues</p>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-100/70">
+                    {warnings.slice(0, 10).map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                    {warnings.length > 10 && <li>…and {warnings.length - 10} more</li>}
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDismissWarnings}
+                  className="rounded-lg px-2 py-1 text-sm text-amber-200 hover:bg-amber-200/10 focus-ring"
+                  aria-label="Dismiss warnings"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="mb-6"
+            >
+              <ErrorMessage
+                message={error.message}
+                title={error.title}
+                action={error.action}
+                onDismiss={() => setError(null)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <section
+          className="surface mb-6 flex items-center gap-4 p-4 sm:gap-5"
+          aria-labelledby="playlist-details-heading"
         >
-          {/* Progress Stepper */}
-          <div className="mb-8">
-            <ProgressStepper
-              steps={[
-                { label: 'Upload', href: '/upload' },
-                { label: 'Review Artists', href: '/review-artists' },
-                { label: 'Review Tracks' },
-                { label: 'Done' },
-              ]}
-              currentStep={2}
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-dark-700 bg-dark-800 sm:h-24 sm:w-24">
+            {generatingCover ? (
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-dark-900"
+                role="status"
+                aria-label="Generating cover preview"
+              >
+                <LoadingSpinner size="sm" />
+              </div>
+            ) : coverPreview ? (
+              <img
+                src={coverPreview}
+                alt="Playlist cover preview"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-dark-300">
+                <Illustration name="cover" size={48} />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 id="playlist-details-heading" className="eyebrow mb-1">
+              Your playlist
+            </h2>
+            <label htmlFor="playlistName" className="sr-only">
+              Playlist Name
+            </label>
+            <input
+              id="playlistName"
+              type="text"
+              value={playlistName}
+              onChange={handlePlaylistNameChange}
+              disabled={creating}
+              className="w-full rounded-xl border border-dark-600 bg-dark-950 px-3 py-2.5 text-sm text-white placeholder-dark-400 outline-none transition-colors focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 disabled:opacity-50 sm:px-4"
+              placeholder="Enter playlist name…"
+              maxLength={100}
             />
+            <p className="mt-1.5 text-xs text-dark-300">
+              This name will appear in your {platformName} library · {playlistName.length}/100
+            </p>
+            {posterThumbnail && (
+              <p className="mt-1 text-xs text-accent-400">Cover artwork uses your poster</p>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="tracks-heading">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-wrap items-end gap-x-5 gap-y-1">
+              <h2 id="tracks-heading" className="text-2xl font-bold tracking-tight text-white">
+                Review your tracks
+              </h2>
+              <p role="status" aria-label="Track selection" className="text-xs text-dark-300">
+                <span className="text-lg sm:text-3xl font-bold tabular-nums tracking-tight text-accent-500">
+                  {selectedCount} <span className="text-dark-300">of</span> {totalCount}
+                </span>{' '}
+                <span className="text-dark-300">selected</span>
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="flex rounded-xl border border-dark-700 bg-dark-900 p-1"
+                role="group"
+                aria-label="Track view"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('card')}
+                  aria-label="Switch to card view"
+                  aria-pressed={viewMode === 'card'}
+                  className={cn(
+                    'rounded-lg px-3 py-2 text-sm focus-ring',
+                    viewMode === 'card'
+                      ? 'bg-dark-700 text-white'
+                      : 'text-dark-300 hover:text-white'
+                  )}
+                >
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('list')}
+                  aria-label="Switch to list view"
+                  aria-pressed={viewMode === 'list'}
+                  className={cn(
+                    'rounded-lg px-3 py-2 text-sm focus-ring',
+                    viewMode === 'list'
+                      ? 'bg-dark-700 text-white'
+                      : 'text-dark-300 hover:text-white'
+                  )}
+                >
+                  List
+                </button>
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleSelectAll} disabled={creating}>
+                Select All
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleDeselectAll} disabled={creating}>
+                Deselect All
+              </Button>
+            </div>
           </div>
 
-          {/* Header */}
-          <motion.div className="mb-8" variants={slideUp}>
-            <h1 className="text-4xl lg:text-5xl font-display font-bold tracking-tight text-dark-50 mb-3">
-              Review Your Tracks
-            </h1>
-            <p className="text-lg text-dark-300">Select the tracks you want in your playlist</p>
-          </motion.div>
-
-          {/* Warnings Banner */}
-          <AnimatePresence>
-            {warnings.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-6"
-              >
-                <div className="rounded-lg border border-amber-600/50 bg-amber-950/50 p-4 backdrop-blur-sm">
-                  <div className="flex items-start gap-3">
-                    <svg
-                      className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                      />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="font-semibold text-amber-200 mb-1">Some artists had issues</p>
-                      <ul className="text-sm text-amber-300/80 space-y-0.5">
-                        {warnings.slice(0, 10).map((w, i) => (
-                          <li key={i}>{w}</li>
-                        ))}
-                        {warnings.length > 10 && <li>...and {warnings.length - 10} more</li>}
-                      </ul>
-                    </div>
-                    <button
-                      onClick={handleDismissWarnings}
-                      className="text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
-                      aria-label="Dismiss warnings"
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Error Message */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-6"
-              >
-                <ErrorMessage
-                  message={error.message}
-                  title={error.title}
-                  action={error.action}
-                  onDismiss={() => setError(null)}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Summary Card */}
-          <motion.div variants={slideUp}>
-            <Card variant="glass" className="mb-8 overflow-hidden">
-              <div className="relative">
-                {/* Ambient gradient background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-accent-500/20 via-accent-600/10 to-transparent opacity-50" />
-
-                <CardContent className="relative p-6 lg:p-8">
-                  <div className="flex items-center justify-between flex-wrap gap-6">
-                    <div>
-                      <div className="text-4xl lg:text-5xl font-display font-bold text-dark-50 mb-2">
-                        {selectedCount} <span className="text-dark-300">of</span> {totalCount}
-                      </div>
-                      <div className="text-dark-300">
-                        {selectedCount === totalCount
-                          ? 'All tracks selected'
-                          : selectedCount === 0
-                            ? 'No tracks selected'
-                            : `${totalCount - selectedCount} track${totalCount - selectedCount !== 1 ? 's' : ''} excluded`}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3 items-center">
-                      {/* View Toggle */}
-                      <div className="flex gap-1 glass rounded-lg p-1">
-                        <button
-                          onClick={() => handleViewModeChange('card')}
-                          className={cn(
-                            'p-2 rounded-md transition-all duration-200',
-                            viewMode === 'card'
-                              ? 'bg-accent-500 text-white shadow-glow'
-                              : 'text-dark-300 hover:text-dark-50 hover:bg-dark-700'
-                          )}
-                          title="Card View"
-                          aria-label="Switch to card view"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleViewModeChange('list')}
-                          className={cn(
-                            'p-2 rounded-md transition-all duration-200',
-                            viewMode === 'list'
-                              ? 'bg-accent-500 text-white shadow-glow'
-                              : 'text-dark-300 hover:text-dark-50 hover:bg-dark-700'
-                          )}
-                          title="List View"
-                          aria-label="Switch to list view"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 6h16M4 12h16M4 18h16"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={handleSelectAll}
-                        disabled={creating}
-                      >
-                        Select All
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="md"
-                        onClick={handleDeselectAll}
-                        disabled={creating}
-                      >
-                        Deselect All
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* Track Grid - Card View */}
-          <AnimatePresence mode="wait">
-            {viewMode === 'card' && (
-              <motion.div
-                key="card-view"
-                variants={staggerContainer}
-                initial="hidden"
-                animate="visible"
-                exit={{ opacity: 0 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8"
-              >
-                {tracks.map((track) => {
-                  const isSelected = selectedTracks.has(track.id);
-                  return (
-                    <motion.div key={track.id} variants={staggerItem}>
-                      <Card
-                        variant="default"
-                        hover
-                        onClick={() => handleToggleTrack(track.id)}
-                        className={cn(
-                          'cursor-pointer overflow-hidden transition-opacity duration-100',
-                          isSelected
-                            ? 'ring-2 ring-accent-500 shadow-glow'
-                            : 'opacity-60 hover:opacity-100'
-                        )}
-                      >
-                        <div className="relative">
-                          {/* Album Artwork */}
-                          {track.albumArtwork ? (
-                            <img
-                              src={track.albumArtwork}
-                              alt={track.album}
-                              className="w-full h-48 object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-48 bg-gradient-to-br from-dark-700 to-dark-800 flex items-center justify-center">
-                              <Illustration name="tracks" size={96} />
-                            </div>
-                          )}
-
-                          {/* Checkbox Overlay */}
-                          <motion.div
-                            className="absolute top-3 right-3"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <div
-                              className={cn(
-                                'w-7 h-7 rounded-lg flex items-center justify-center shadow-md transition-colors duration-100',
-                                isSelected
-                                  ? 'bg-accent-500 shadow-glow'
-                                  : 'bg-dark-800/80 backdrop-blur-sm'
-                              )}
-                            >
-                              {isSelected && (
-                                <motion.svg
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                    clipRule="evenodd"
-                                  />
-                                </motion.svg>
-                              )}
-                            </div>
-                          </motion.div>
-                        </div>
-
-                        {/* Track Info */}
-                        <CardContent className="p-4">
-                          <h3 className="font-semibold text-dark-50 mb-1 line-clamp-1">
-                            {track.name}
-                          </h3>
-                          <p className="text-sm text-dark-300 mb-2 line-clamp-1">{track.artist}</p>
-                          <div className="flex items-center justify-between text-xs text-dark-400">
-                            <span className="line-clamp-1">{track.album}</span>
-                            <span className="ml-2 flex-shrink-0 tabular-nums">
-                              {formatDuration(track.duration)}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            )}
-
-            {/* List View */}
-            {viewMode === 'list' && (
-              <motion.div
-                key="list-view"
-                variants={fadeIn}
-                initial="hidden"
-                animate="visible"
-                exit={{ opacity: 0 }}
-                className="mb-8"
-              >
-                <Card variant="default" className="overflow-hidden">
-                  <motion.div variants={staggerContainer} initial="hidden" animate="visible">
-                    {tracks.map((track, index) => {
-                      const isSelected = selectedTracks.has(track.id);
-                      return (
-                        <motion.div
-                          key={track.id}
-                          variants={staggerItem}
-                          onClick={() => handleToggleTrack(track.id)}
-                          className={cn(
-                            'flex items-center gap-3 p-4 cursor-pointer transition-all duration-200',
-                            index % 2 === 0 ? 'bg-dark-900/30' : 'bg-dark-900/10',
-                            isSelected
-                              ? 'border-l-4 border-accent-500 bg-accent-500/10'
-                              : 'border-l-4 border-transparent hover:bg-dark-800/50'
-                          )}
-                        >
-                          {/* Album Artwork Thumbnail */}
-                          <div className="flex-shrink-0">
-                            {track.albumArtwork ? (
-                              <img
-                                src={track.albumArtwork}
-                                alt={track.album}
-                                className="w-14 h-14 object-cover rounded-lg"
-                              />
-                            ) : (
-                              <div className="w-14 h-14 bg-gradient-to-br from-dark-700 to-dark-800 rounded-lg flex items-center justify-center">
-                                <Illustration name="tracks" size={48} />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Track Info */}
-                          <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4">
-                            {/* Track Name */}
-                            <div className="sm:col-span-4">
-                              <p className="font-semibold text-dark-50 truncate">{track.name}</p>
-                            </div>
-                            {/* Artist */}
-                            <div className="sm:col-span-3">
-                              <p className="text-sm text-dark-300 truncate">{track.artist}</p>
-                            </div>
-                            {/* Album */}
-                            <div className="sm:col-span-3 hidden sm:block">
-                              <p className="text-sm text-dark-400 truncate">{track.album}</p>
-                            </div>
-                            {/* Duration */}
-                            <div className="sm:col-span-2 flex items-center justify-end">
-                              <p className="text-sm text-dark-400 tabular-nums">
-                                {formatDuration(track.duration)}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Checkbox */}
-                          <motion.div
-                            className="flex-shrink-0"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <div
-                              className={cn(
-                                'w-6 h-6 rounded-md flex items-center justify-center border-2 transition-all duration-200',
-                                isSelected
-                                  ? 'bg-accent-500 border-accent-500 shadow-glow'
-                                  : 'bg-dark-800 border-dark-600'
-                              )}
-                            >
-                              {isSelected && (
-                                <motion.svg
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                    clipRule="evenodd"
-                                  />
-                                </motion.svg>
-                              )}
-                            </div>
-                          </motion.div>
-                        </motion.div>
-                      );
-                    })}
-                  </motion.div>
-                </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Playlist Details */}
-          <motion.div variants={slideUp}>
-            <Card variant="glass" className="mb-8">
-              <CardHeader>
-                <CardTitle>Playlist Details</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex gap-6 items-start flex-col lg:flex-row">
-                  {/* Cover Preview */}
-                  <div className="flex-shrink-0">
-                    <div className="text-sm font-semibold text-dark-200 mb-3">Cover Preview</div>
-                    <div className="relative w-48 h-48 rounded-xl overflow-hidden border-2 border-dark-700 bg-dark-800">
-                      {generatingCover ? (
-                        <div className="absolute inset-0 flex items-center justify-center bg-dark-900">
-                          <div className="text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-500 mx-auto mb-2"></div>
-                            <p className="text-xs text-dark-400">Generating...</p>
-                          </div>
-                        </div>
-                      ) : coverPreview ? (
+          {viewMode === 'card' ? (
+            <div
+              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+              role="group"
+              aria-label="Select tracks"
+            >
+              {tracks.map((track) => {
+                const isSelected = selectedTracks.has(track.id);
+                return (
+                  <Card
+                    key={track.id}
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-label={`${track.name} by ${track.artist}`}
+                    tabIndex={0}
+                    onClick={() => handleToggleTrack(track.id)}
+                    onKeyDown={(event) => toggleWithKeyboard(event, track.id)}
+                    className={cn(
+                      'group cursor-pointer overflow-hidden rounded-2xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
+                      isSelected
+                        ? 'border-accent-500/80 bg-dark-800'
+                        : 'border-dark-700 bg-dark-900 hover:border-dark-500'
+                    )}
+                  >
+                    <div className="relative aspect-square bg-dark-800">
+                      {track.albumArtwork ? (
                         <img
-                          src={coverPreview}
-                          alt="Playlist cover preview"
-                          className="w-full h-full object-cover"
+                          src={track.albumArtwork}
+                          alt={track.album}
+                          className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-dark-800 to-dark-900">
-                          <div className="text-center px-4">
-                            <Illustration name="cover" size={72} className="mx-auto mb-2" />
-                            <p className="text-xs text-dark-400">Cover preview</p>
-                          </div>
+                        <div className="flex h-full items-center justify-center">
+                          <Illustration name="tracks" size={72} />
                         </div>
                       )}
-                    </div>
-                  </div>
-
-                  {/* Playlist Name Input */}
-                  <div className="flex-1 w-full">
-                    <label
-                      htmlFor="playlistName"
-                      className="block text-sm font-semibold text-dark-200 mb-3"
-                    >
-                      Playlist Name
-                    </label>
-                    <input
-                      id="playlistName"
-                      type="text"
-                      value={playlistName}
-                      onChange={handlePlaylistNameChange}
-                      disabled={creating}
-                      className={cn(
-                        'w-full px-4 py-3 bg-dark-800 border border-dark-700 rounded-lg',
-                        'text-dark-50 placeholder-dark-400',
-                        'focus:ring-2 focus:ring-accent-500 focus:border-transparent focus-ring',
-                        'disabled:opacity-50 disabled:cursor-not-allowed',
-                        'transition-all duration-200'
-                      )}
-                      placeholder="Enter playlist name..."
-                      maxLength={100}
-                    />
-                    <p className="text-xs text-dark-400 mt-2">
-                      This will be the name of your {platformName} playlist ({playlistName.length}
-                      /100 characters)
-                    </p>
-                    {posterThumbnail && (
-                      <p className="text-xs text-accent-400 mt-2 flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        Custom cover with poster background
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Action Bar - Sticky at bottom */}
-          <motion.div variants={slideUp} className="sticky bottom-4 z-20">
-            <Card variant="glass" className="shadow-hard">
-              <CardContent className="p-4">
-                {overTrackLimit && (
-                  <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/50 p-3">
-                    <p className="text-sm text-amber-200">
-                      Too many tracks selected ({selectedCount}/{MAX_PLAYLIST_TRACKS}). Deselect{' '}
-                      {excessTracks} track{excessTracks !== 1 ? 's' : ''} to create the playlist.
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-4 justify-between flex-wrap items-center">
-                  <div className="flex gap-2 flex-wrap items-center">
-                    <Button
-                      variant="secondary"
-                      size="lg"
-                      onClick={handleBackToEdit}
-                      disabled={creating}
-                    >
-                      <svg
-                        className="w-5 h-5 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg border text-sm font-bold',
+                          isSelected
+                            ? 'border-accent-500 bg-accent-500 text-dark-950'
+                            : 'border-white/50 bg-dark-950/80 text-white'
+                        )}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 19l-7-7 7-7"
-                        />
-                      </svg>
-                      Back to Edit
-                    </Button>
-                    <StartOverButton />
-                  </div>
-
-                  {creating ? (
-                    <div className="flex-1 max-w-md bg-gradient-to-r from-accent-500 to-accent-600 rounded-lg p-4 text-white flex items-center justify-center shadow-glow">
-                      <div className="flex items-center gap-3">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        <span className="font-semibold">Creating your playlist...</span>
+                        {isSelected && '✓'}
+                      </span>
+                    </div>
+                    <div className="p-3.5">
+                      <p className="truncate text-sm font-semibold text-white" title={track.name}>
+                        {track.name}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-dark-300" title={track.artist}>
+                        {track.artist}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-dark-700 pt-2 text-xs text-dark-300">
+                        <span className="truncate" title={track.album}>
+                          {track.album}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {formatDuration(track.duration)}
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      onClick={handleCreatePlaylist}
-                      disabled={selectedCount === 0 || overTrackLimit}
-                      className="flex-1 max-w-md"
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              className="overflow-hidden rounded-2xl border border-dark-700 bg-dark-900"
+              role="group"
+              aria-label="Select tracks"
+            >
+              {tracks.map((track, index) => {
+                const isSelected = selectedTracks.has(track.id);
+                return (
+                  <div
+                    key={track.id}
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-label={`${track.name} by ${track.artist}`}
+                    tabIndex={0}
+                    onClick={() => handleToggleTrack(track.id)}
+                    onKeyDown={(event) => toggleWithKeyboard(event, track.id)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 border-b border-dark-700/70 px-3 py-3 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 sm:gap-4 sm:px-5',
+                      isSelected
+                        ? 'bg-accent-500/[0.08] hover:bg-accent-500/[0.12]'
+                        : 'hover:bg-dark-800',
+                      index % 2 === 1 && !isSelected && 'bg-dark-800/20'
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold',
+                        isSelected
+                          ? 'border-accent-500 bg-accent-500 text-dark-950'
+                          : 'border-dark-500 text-white'
+                      )}
                     >
-                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
-                      </svg>
-                      Create Playlist with {selectedCount} Track{selectedCount !== 1 ? 's' : ''}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </motion.div>
+                      {isSelected && '✓'}
+                    </span>
+                    {track.albumArtwork ? (
+                      <img
+                        src={track.albumArtwork}
+                        alt={track.album}
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-dark-800">
+                        <Illustration name="tracks" size={36} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 sm:grid sm:grid-cols-12 sm:items-center sm:gap-4">
+                      <div className="min-w-0 sm:col-span-5">
+                        <p className="truncate text-sm font-semibold text-white">{track.name}</p>
+                        <p className="truncate text-xs text-dark-300 sm:hidden">{track.artist}</p>
+                      </div>
+                      <p className="hidden truncate text-sm text-dark-300 sm:col-span-3 sm:block">
+                        {track.artist}
+                      </p>
+                      <p className="hidden truncate text-sm text-dark-300 sm:col-span-3 sm:block">
+                        {track.album}
+                      </p>
+                      <p className="text-right text-xs tabular-nums text-dark-300 sm:col-span-1">
+                        {formatDuration(track.duration)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <div
+          className="sticky bottom-3 z-20 mt-8 rounded-2xl border border-dark-600 bg-dark-900/95 p-3 shadow-hard backdrop-blur-md sm:p-4"
+          role="region"
+          aria-label="Playlist actions"
+        >
+          {overTrackLimit && (
+            <p className="mb-3 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+              Too many tracks selected ({selectedCount}/{MAX_PLAYLIST_TRACKS}). Deselect{' '}
+              {excessTracks} track{excessTracks !== 1 ? 's' : ''} to create the playlist.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={handleBackToEdit} disabled={creating}>
+                Back to Edit
+              </Button>
+              <StartOverButton />
+            </div>
+            {creating ? (
+              <div
+                className="flex items-center gap-3 rounded-xl bg-accent-500 px-5 py-3 text-sm font-semibold text-dark-950"
+                role="status"
+              >
+                <LoadingSpinner size="sm" className="border-dark-950/30 border-t-dark-950" />
+                Creating your playlist…
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleCreatePlaylist}
+                disabled={selectedCount === 0 || overTrackLimit}
+                className="rounded-xl bg-accent-500 text-dark-950 hover:bg-accent-400"
+              >
+                Create Playlist with {selectedCount} Track{selectedCount !== 1 ? 's' : ''}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </PageLayout>
   );

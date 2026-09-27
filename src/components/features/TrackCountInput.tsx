@@ -79,11 +79,11 @@ export default function TrackCountInput({
   const showRangeError = draft !== null && !isValid(draft);
 
   return (
-    <span className={cn('inline-flex w-32 flex-col items-center', className)}>
+    <span className={cn('inline-flex w-28 flex-col items-center', className)}>
       <span
         className={cn(
-          'inline-flex h-10 items-center rounded-full border bg-dark-800 focus-within:ring-2 focus-within:ring-accent-500/50',
-          showRangeError ? 'border-red-500/60' : 'border-dark-700',
+          'inline-flex h-9 items-center rounded-lg border bg-black/40 focus-within:ring-2 focus-within:ring-[#f29520]/50',
+          showRangeError ? 'border-red-500/60' : 'border-white/15',
           disabled && 'opacity-50'
         )}
       >
@@ -92,7 +92,7 @@ export default function TrackCountInput({
           onClick={() => handleStep(-1)}
           disabled={disabled || value <= MIN_TRACKS_PER_ARTIST}
           aria-label={`Decrease ${label}`}
-          className="flex h-full w-9 items-center justify-center rounded-l-full text-lg text-dark-200 hover:bg-dark-700 hover:text-accent-300 focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="flex h-full w-8 items-center justify-center rounded-l-lg text-lg text-white/65 hover:bg-white/10 hover:text-[#f29520] focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           −
         </button>
@@ -118,14 +118,14 @@ export default function TrackCountInput({
           aria-valuenow={showRangeError ? undefined : value}
           aria-invalid={showRangeError}
           aria-describedby={showRangeError ? errorId : undefined}
-          className="h-8 w-10 rounded-full bg-accent-500/10 text-center text-sm font-semibold tabular-nums text-accent-300 outline-none focus:bg-accent-500/20 disabled:cursor-not-allowed"
+          className="h-8 w-10 bg-transparent text-center text-sm font-semibold tabular-nums text-[#f29520] outline-none disabled:cursor-not-allowed"
         />
         <button
           type="button"
           onClick={() => handleStep(1)}
           disabled={disabled || value >= MAX_TRACKS_PER_ARTIST}
           aria-label={`Increase ${label}`}
-          className="flex h-full w-9 items-center justify-center rounded-r-full text-lg text-dark-200 hover:bg-dark-700 hover:text-accent-300 focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="flex h-full w-8 items-center justify-center rounded-r-lg text-lg text-white/65 hover:bg-white/10 hover:text-[#f29520] focus-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           +
         </button>
