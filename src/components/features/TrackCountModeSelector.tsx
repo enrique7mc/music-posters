@@ -117,7 +117,7 @@ export default function TrackCountModeSelector({
     <Card variant="default" className="rounded-2xl border-white/10 p-5 sm:p-6">
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <h4 className="text-lg font-semibold text-white">Tracks per artist</h4>
-        <span className="text-xs text-dark-300">01–25 each</span>
+        <span className="text-xs text-dark-300">1-25</span>
       </div>
       <div className={cn('grid gap-2', showTierModes ? 'sm:grid-cols-3' : 'sm:grid-cols-1')}>
         {modes

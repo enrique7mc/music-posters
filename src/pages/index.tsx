@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
@@ -119,7 +120,14 @@ export default function Home() {
             className="flex items-center gap-3 text-xl font-bold tracking-tight"
             aria-label="Playlistd"
           >
-            <span className="h-3 w-3 rounded-full bg-accent-500" aria-hidden="true" />
+            <Image
+              src="/favicon-32x32.png"
+              alt=""
+              width={28}
+              height={28}
+              className="shrink-0"
+              aria-hidden="true"
+            />
             <span>
               Playlistd<span className="text-accent-500">.</span>
             </span>
@@ -260,39 +268,6 @@ export default function Home() {
                     <span>Everywhere you go</span>
                   </div>
                 </div>
-              </div>
-              <div className="absolute bottom-7 right-4 w-[65%] rotate-[3deg] rounded-2xl border border-dark-600 bg-dark-950 p-4 shadow-[0_24px_44px_rgba(0,0,0,0.5)] sm:bottom-10 sm:right-3 sm:p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500 text-dark-950">
-                    <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                      <path d="M10 4v12.26A4 4 0 1 0 12 20V8h7V4h-9z" />
-                    </svg>
-                  </span>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent-400">
-                      Ready to play
-                    </p>
-                    <p className="text-sm font-bold text-dark-50 sm:text-base">The Next Sound</p>
-                  </div>
-                </div>
-                {[
-                  ['01', 'Alvvays', 'Dreams Tonite'],
-                  ['02', 'The Beths', 'Expert In A Dying Field'],
-                  ['03', 'Men I Trust', 'Show Me How'],
-                ].map(([number, artist, song]) => (
-                  <div
-                    key={number}
-                    className="flex items-center gap-3 border-t border-dark-800 py-2 text-xs"
-                  >
-                    <span className="text-dark-300">{number}</span>
-                    <span className="min-w-0 flex-1 truncate font-semibold text-dark-200">
-                      {artist}
-                    </span>
-                    <span className="hidden max-w-[100px] truncate text-dark-300 sm:block">
-                      {song}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           </motion.div>

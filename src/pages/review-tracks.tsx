@@ -52,7 +52,7 @@ export default function ReviewTracks() {
   const [playlistName, setPlaylistName] = useState(
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [posterThumbnail, setPosterThumbnail] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [generatingCover, setGeneratingCover] = useState(false);
@@ -571,6 +571,15 @@ export default function ReviewTracks() {
               role="group"
               aria-label="Select tracks"
             >
+              <div className="grid grid-cols-[2rem_minmax(0,1fr)_3rem_1.5rem] items-center gap-3 border-b border-dark-700 bg-dark-800/70 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-dark-300 sm:grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_3.5rem_1.5rem] sm:gap-4 sm:px-6">
+                <span aria-hidden="true">#</span>
+                <span className="sm:hidden">Song / artist</span>
+                <span className="hidden sm:block">Song name</span>
+                <span className="hidden sm:block">Artist</span>
+                <span className="hidden sm:block">Album</span>
+                <span className="text-right">Time</span>
+                <span className="sr-only">Selected</span>
+              </div>
               {tracks.map((track, index) => {
                 const isSelected = selectedTracks.has(track.id);
                 return (
@@ -583,50 +592,98 @@ export default function ReviewTracks() {
                     onClick={() => handleToggleTrack(track.id)}
                     onKeyDown={(event) => toggleWithKeyboard(event, track.id)}
                     className={cn(
-                      'flex cursor-pointer items-center gap-3 border-b border-dark-700/70 px-3 py-3 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 sm:gap-4 sm:px-5',
+                      'grid cursor-pointer grid-cols-[2rem_minmax(0,1fr)_3rem_1.5rem] items-center gap-3 border-b border-l-2 border-dark-700/70 px-4 py-3.5 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 sm:grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_3.5rem_1.5rem] sm:gap-4 sm:px-6',
                       isSelected
-                        ? 'bg-accent-500/[0.08] hover:bg-accent-500/[0.12]'
-                        : 'hover:bg-dark-800',
-                      index % 2 === 1 && !isSelected && 'bg-dark-800/20'
+                        ? 'border-l-transparent bg-dark-900 hover:bg-dark-800'
+                        : 'border-l-dark-600 bg-dark-950 hover:bg-dark-800/70'
                     )}
                   >
                     <span
+                      className="font-mono text-xs tabular-nums text-dark-400"
                       aria-hidden="true"
+                    >
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <div className="flex min-w-0 items-center gap-3">
+                      {track.albumArtwork ? (
+                        <img
+                          src={track.albumArtwork}
+                          alt=""
+                          className={cn(
+                            'h-11 w-11 shrink-0 rounded-md object-cover',
+                            !isSelected && 'grayscale opacity-50'
+                          )}
+                        />
+                      ) : (
+                        <div
+                          className={cn(
+                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-dark-800',
+                            !isSelected && 'opacity-50'
+                          )}
+                        >
+                          <Illustration name="tracks" size={32} />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            'truncate text-sm font-semibold',
+                            isSelected
+                              ? 'text-white'
+                              : 'text-dark-300 line-through decoration-dark-500'
+                          )}
+                          title={track.name}
+                        >
+                          {track.name}
+                        </p>
+                        <p
+                          className={cn(
+                            'truncate text-xs sm:hidden',
+                            isSelected ? 'text-dark-300' : 'text-dark-400'
+                          )}
+                          title={track.artist}
+                        >
+                          {track.artist}
+                        </p>
+                      </div>
+                    </div>
+                    <p
                       className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold',
-                        isSelected
-                          ? 'border-accent-500 bg-accent-500 text-dark-950'
-                          : 'border-dark-500 text-white'
+                        'hidden truncate text-sm sm:block',
+                        isSelected ? 'text-dark-300' : 'text-dark-400'
+                      )}
+                      title={track.artist}
+                    >
+                      {track.artist}
+                    </p>
+                    <p
+                      className={cn(
+                        'hidden truncate text-sm sm:block',
+                        isSelected ? 'text-dark-300' : 'text-dark-400'
+                      )}
+                      title={track.album}
+                    >
+                      {track.album}
+                    </p>
+                    <p
+                      className={cn(
+                        'text-right text-xs tabular-nums',
+                        isSelected ? 'text-dark-300' : 'text-dark-400'
                       )}
                     >
-                      {isSelected && '✓'}
+                      {formatDuration(track.duration)}
+                    </p>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold',
+                        isSelected
+                          ? 'border-dark-400 bg-dark-700 text-white'
+                          : 'border-dark-600 bg-dark-800 text-dark-400'
+                      )}
+                    >
+                      {isSelected ? '✓' : '−'}
                     </span>
-                    {track.albumArtwork ? (
-                      <img
-                        src={track.albumArtwork}
-                        alt={track.album}
-                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-dark-800">
-                        <Illustration name="tracks" size={36} />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1 sm:grid sm:grid-cols-12 sm:items-center sm:gap-4">
-                      <div className="min-w-0 sm:col-span-5">
-                        <p className="truncate text-sm font-semibold text-white">{track.name}</p>
-                        <p className="truncate text-xs text-dark-300 sm:hidden">{track.artist}</p>
-                      </div>
-                      <p className="hidden truncate text-sm text-dark-300 sm:col-span-3 sm:block">
-                        {track.artist}
-                      </p>
-                      <p className="hidden truncate text-sm text-dark-300 sm:col-span-3 sm:block">
-                        {track.album}
-                      </p>
-                      <p className="text-right text-xs tabular-nums text-dark-300 sm:col-span-1">
-                        {formatDuration(track.duration)}
-                      </p>
-                    </div>
                   </div>
                 );
               })}

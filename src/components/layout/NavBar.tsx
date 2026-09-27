@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import Button from '../ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +24,14 @@ export default function NavBar() {
           href={user ? '/upload' : '/'}
           className="flex items-center gap-3 text-xl font-bold tracking-tight"
         >
-          <span className="h-3 w-3 rounded-full bg-accent-500" aria-hidden="true" />
+          <Image
+            src="/favicon-32x32.png"
+            alt=""
+            width={28}
+            height={28}
+            className="shrink-0"
+            aria-hidden="true"
+          />
           <span>
             Playlistd<span className="text-accent-500">.</span>
           </span>

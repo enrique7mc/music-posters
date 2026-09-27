@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
@@ -25,7 +26,14 @@ export function LoadingScreen({ message = 'Loading your workspace...' }: { messa
     <div className="min-h-screen bg-dark-950 text-dark-50">
       <div className="border-b border-dark-800">
         <div className="studio-shell flex h-20 items-center gap-3">
-          <span className="h-3 w-3 rounded-full bg-accent-500" aria-hidden="true" />
+          <Image
+            src="/favicon-32x32.png"
+            alt=""
+            width={28}
+            height={28}
+            className="shrink-0"
+            aria-hidden="true"
+          />
           <span className="text-xl font-bold tracking-tight">
             Playlistd<span className="text-accent-500">.</span>
           </span>

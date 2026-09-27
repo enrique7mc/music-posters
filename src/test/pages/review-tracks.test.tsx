@@ -196,21 +196,24 @@ describe('review-tracks hydration from the playlist draft', () => {
     const user = userEvent.setup();
 
     render(<ReviewTracks />);
-    const gridTrack = await screen.findByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
-    expect(gridTrack).toHaveAttribute('aria-checked', 'false');
-
-    gridTrack.focus();
-    await user.keyboard(' ');
-    expect(gridTrack).toHaveAttribute('aria-checked', 'true');
-    expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual(['track-1']);
-
-    await user.click(screen.getByRole('button', { name: 'Switch to list view' }));
-    const listTrack = screen.getByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
-    expect(listTrack).toHaveAttribute('aria-checked', 'true');
+    const listTrack = await screen.findByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
+    expect(screen.getByText('Song name')).toBeInTheDocument();
+    expect(screen.getByText('Artist', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText('Album', { selector: 'span' })).toBeInTheDocument();
+    expect(listTrack).toHaveAttribute('aria-checked', 'false');
 
     listTrack.focus();
+    await user.keyboard(' ');
+    expect(listTrack).toHaveAttribute('aria-checked', 'true');
+    expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual(['track-1']);
+
+    await user.click(screen.getByRole('button', { name: 'Switch to card view' }));
+    const gridTrack = await screen.findByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
+    expect(gridTrack).toHaveAttribute('aria-checked', 'true');
+
+    gridTrack.focus();
     await user.keyboard('{Enter}');
-    expect(listTrack).toHaveAttribute('aria-checked', 'false');
+    expect(gridTrack).toHaveAttribute('aria-checked', 'false');
     expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual([]);
   });
 

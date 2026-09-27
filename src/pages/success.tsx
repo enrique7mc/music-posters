@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
+import Image from 'next/image';
 import PageLayout from '@/components/layout/PageLayout';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -108,11 +109,27 @@ export default function Success() {
         <title>Playlist Created! - Playlistd</title>
       </Head>
 
-      <PageLayout showNav={false}>
-        <div className="studio-shell flex min-h-screen flex-col justify-center py-12 sm:py-20">
+      <PageLayout
+        showNav={false}
+        className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden py-12 sm:py-20"
+      >
+        <div className="success-lights" aria-hidden="true">
+          <div className="success-light success-light--amber" />
+          <div className="success-light success-light--emerald" />
+          <div className="success-light success-light--violet" />
+        </div>
+        <div className="studio-shell relative z-10">
           <div className="mx-auto w-full max-w-2xl">
             <div className="mb-8 flex items-center justify-between border-b border-dark-700 pb-5">
-              <span className="text-sm font-black uppercase tracking-[0.24em] text-white">
+              <span className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.24em] text-white">
+                <Image
+                  src="/favicon-32x32.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="shrink-0"
+                  aria-hidden="true"
+                />
                 Playlistd
               </span>
               <span className="eyebrow">04 / Complete</span>

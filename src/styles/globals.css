@@ -189,6 +189,54 @@
   animation: loadingBreath 2s ease-in-out infinite;
 }
 
+/* Soft, pulsing light pools from the original completion screen. */
+.success-lights {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.success-light {
+  position: absolute;
+  width: clamp(280px, 38vw, 520px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform;
+}
+
+.success-light--amber {
+  top: 13%;
+  left: 12%;
+  background: rgba(227, 119, 22, 0.18);
+  animation: successGlowFloat 10s ease-in-out infinite alternate;
+}
+
+.success-light--emerald {
+  right: 12%;
+  bottom: 11%;
+  background: rgba(5, 150, 105, 0.15);
+  animation: successGlowFloat 12s ease-in-out -3s infinite alternate-reverse;
+}
+
+.success-light--violet {
+  top: 38%;
+  left: 42%;
+  background: rgba(118, 118, 146, 0.08);
+}
+
+@keyframes successGlowFloat {
+  from {
+    opacity: 0.6;
+    transform: translate(-5%, 4%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(6%, -5%) scale(1.13);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
