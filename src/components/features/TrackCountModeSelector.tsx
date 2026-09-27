@@ -1,8 +1,6 @@
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import Card, { CardContent } from '@/components/ui/Card';
+import Card from '@/components/ui/Card';
 import TrackCountInput from './TrackCountInput';
-import { DEFAULT_TIER_COUNTS } from '@/lib/track-counts';
 import type { TierCounts, TrackCountMode } from '@/lib/track-counts';
 
 // Shared with src/lib (draft persistence); re-exported here for the pages and
@@ -16,17 +14,82 @@ interface TrackCountModeSelectorProps {
   onModeChange: (mode: TrackCountMode) => void;
   onTierCountChange: (tier: keyof TierCounts, count: number) => void;
   disabled?: boolean;
-  /**
-   * Show the tier-based and custom-per-tier modes. Defaults to true; pass
-   * false for manually entered lineups, which have no tiers.
-   */
   showTierModes?: boolean;
+  showTierControls?: boolean;
 }
 
-/**
- * Component for selecting track count mode on the Review Artists page.
- * Supports tier-based (recommended), custom-per-tier, or per-artist customization.
- */
+interface TierCountControlsProps {
+  tierCounts: TierCounts;
+  onTierCountChange: (tier: keyof TierCounts, count: number) => void;
+  disabled?: boolean;
+}
+
+const tierFields: Array<{
+  tier: keyof TierCounts;
+  id: string;
+  label: string;
+  inputLabel: string;
+}> = [
+  {
+    tier: 'headliner',
+    id: 'tier-count-headliner',
+    label: 'Headliners',
+    inputLabel: 'Headliners track count',
+  },
+  {
+    tier: 'sub-headliner',
+    id: 'tier-count-sub-headliner',
+    label: 'Sub-headliners',
+    inputLabel: 'Sub-headliners track count',
+  },
+  {
+    tier: 'mid-tier',
+    id: 'tier-count-mid-tier',
+    label: 'Mid-tier',
+    inputLabel: 'Mid-tier track count',
+  },
+  {
+    tier: 'undercard',
+    id: 'tier-count-undercard',
+    label: 'Undercard',
+    inputLabel: 'Undercard track count',
+  },
+];
+
+export function TierCountControls({
+  tierCounts,
+  onTierCountChange,
+  disabled = false,
+}: TierCountControlsProps) {
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-sm font-semibold text-white">Custom counts by tier</h4>
+        <p className="text-xs text-dark-300">Whole numbers, 1–25 tracks per tier.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 md:grid-cols-4">
+        {tierFields.map(({ tier, id, label, inputLabel }) => (
+          <div
+            key={tier}
+            className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.025] p-2.5 sm:flex-col sm:items-start"
+          >
+            <label htmlFor={id} className="text-xs font-medium text-white/70">
+              {label}
+            </label>
+            <TrackCountInput
+              id={id}
+              value={tierCounts[tier]}
+              onCommit={(count) => onTierCountChange(tier, count)}
+              label={inputLabel}
+              disabled={disabled}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TrackCountModeSelector({
   mode,
   tierCounts,
@@ -34,210 +97,67 @@ export default function TrackCountModeSelector({
   onTierCountChange,
   disabled = false,
   showTierModes = true,
+  showTierControls = true,
 }: TrackCountModeSelectorProps) {
-  const tierFields: Array<{
-    tier: keyof TierCounts;
-    id: string;
-    label: string;
-    // Accessible names include the visible label text (WCAG 2.5.3 Label in Name).
-    inputLabel: string;
-  }> = [
+  const modes: Array<{ value: TrackCountMode; label: string; description: string }> = [
     {
-      tier: 'headliner',
-      id: 'tier-count-headliner',
-      label: 'Headliners',
-      inputLabel: 'Headliners track count',
+      value: 'tier-based',
+      label: 'Recommended (Tier-based)',
+      description: '10 · 5 · 3 · 1 tracks by tier',
     },
     {
-      tier: 'sub-headliner',
-      id: 'tier-count-sub-headliner',
-      label: 'Sub-headliners',
-      inputLabel: 'Sub-headliners track count',
+      value: 'custom-per-tier',
+      label: 'Custom Per Tier',
+      description: 'Set a count for each tier',
     },
-    {
-      tier: 'mid-tier',
-      id: 'tier-count-mid-tier',
-      label: 'Mid-tier',
-      inputLabel: 'Mid-tier track count',
-    },
-    {
-      tier: 'undercard',
-      id: 'tier-count-undercard',
-      label: 'Undercard',
-      inputLabel: 'Undercard track count',
-    },
+    { value: 'per-artist', label: 'Per-Artist', description: 'Edit counts in the lineup' },
   ];
 
   return (
-    <Card variant="glass" className="overflow-hidden">
-      <CardContent className="p-6">
-        <h4 className="text-lg font-semibold text-dark-100 mb-4">Track Count Mode</h4>
-
-        {/* Mode Selection */}
-        <div className="flex flex-col gap-3 mb-4">
-          {/* Recommended (Tier-based) */}
-          {showTierModes && (
+    <Card variant="default" className="rounded-2xl border-white/10 p-5 sm:p-6">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h4 className="text-lg font-semibold text-white">Tracks per artist</h4>
+        <span className="text-xs text-dark-300">1-25</span>
+      </div>
+      <div className={cn('grid gap-2', showTierModes ? 'sm:grid-cols-3' : 'sm:grid-cols-1')}>
+        {modes
+          .filter((option) => showTierModes || option.value === 'per-artist')
+          .map((option) => (
             <button
-              onClick={() => onModeChange('tier-based')}
+              key={option.value}
+              type="button"
+              onClick={() => onModeChange(option.value)}
               disabled={disabled}
+              aria-pressed={mode === option.value}
               className={cn(
-                'p-4 rounded-lg transition-all duration-200',
-                'border-2 text-left',
-                mode === 'tier-based'
-                  ? 'border-accent-500 bg-accent-500/10'
-                  : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-                disabled && 'opacity-50 cursor-not-allowed'
+                'min-h-[76px] rounded-xl border px-3 py-3 text-left transition-colors focus-ring',
+                mode === option.value
+                  ? 'border-[#f29520] bg-[#f29520]/10 text-white'
+                  : 'border-white/10 bg-white/[0.03] text-white/75 hover:border-white/25 hover:bg-white/[0.06]',
+                disabled && 'cursor-not-allowed opacity-50'
               )}
             >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                    mode === 'tier-based'
-                      ? 'border-accent-500 bg-accent-500'
-                      : 'border-dark-600 bg-dark-800'
-                  )}
-                >
-                  {mode === 'tier-based' && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="w-2.5 h-2.5 rounded-full bg-white"
-                    />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-dark-100 mb-1">Recommended (Tier-based)</div>
-                  <div className="text-sm text-dark-400">
-                    Headliners: 10 • Sub-headliners: 5 • Mid-tier: 3 • Undercard: 1
-                  </div>
-                </div>
-              </div>
+              <span className="block text-sm font-semibold leading-tight">{option.label}</span>
+              <span className="mt-1 block text-xs leading-snug text-dark-300">
+                {option.description}
+              </span>
             </button>
-          )}
-
-          {/* Custom Per Tier */}
-          {showTierModes && (
-            <button
-              onClick={() => onModeChange('custom-per-tier')}
-              disabled={disabled}
-              className={cn(
-                'p-4 rounded-lg transition-all duration-200',
-                'border-2 text-left',
-                mode === 'custom-per-tier'
-                  ? 'border-accent-500 bg-accent-500/10'
-                  : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-                disabled && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                    mode === 'custom-per-tier'
-                      ? 'border-accent-500 bg-accent-500'
-                      : 'border-dark-600 bg-dark-800'
-                  )}
-                >
-                  {mode === 'custom-per-tier' && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="w-2.5 h-2.5 rounded-full bg-white"
-                    />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-dark-100 mb-1">Custom Per Tier</div>
-                  <div className="text-sm text-dark-400">
-                    Set different track counts for each tier
-                  </div>
-                </div>
-              </div>
-            </button>
-          )}
-
-          {/* Per-Artist */}
-          <button
-            onClick={() => onModeChange('per-artist')}
+          ))}
+      </div>
+      {mode === 'custom-per-tier' && showTierControls && (
+        <div className="mt-4">
+          <TierCountControls
+            tierCounts={tierCounts}
+            onTierCountChange={onTierCountChange}
             disabled={disabled}
-            className={cn(
-              'p-4 rounded-lg transition-all duration-200',
-              'border-2 text-left',
-              mode === 'per-artist'
-                ? 'border-accent-500 bg-accent-500/10'
-                : 'border-dark-700 bg-dark-800 hover:border-dark-600',
-              disabled && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                  mode === 'per-artist'
-                    ? 'border-accent-500 bg-accent-500'
-                    : 'border-dark-600 bg-dark-800'
-                )}
-              >
-                {mode === 'per-artist' && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-2.5 h-2.5 rounded-full bg-white"
-                  />
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-dark-100 mb-1">Per-Artist</div>
-                <div className="text-sm text-dark-400">
-                  Customize track count for each artist individually
-                </div>
-              </div>
-            </div>
-          </button>
+          />
         </div>
-
-        {/* Custom Per Tier Controls */}
-        {mode === 'custom-per-tier' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="space-y-4 pt-2">
-              <p className="text-xs text-dark-400">Whole numbers, 1–25 tracks per tier.</p>
-              {tierFields.map(({ tier, id, label, inputLabel }) => (
-                <div key={tier}>
-                  <label htmlFor={id} className="block text-sm font-medium text-dark-200 mb-2">
-                    {label}
-                  </label>
-                  <TrackCountInput
-                    id={id}
-                    value={tierCounts[tier]}
-                    onCommit={(count) => onTierCountChange(tier, count)}
-                    label={inputLabel}
-                    disabled={disabled}
-                  />
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Info for per-artist mode */}
-        {mode === 'per-artist' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-3 p-3 bg-dark-800/50 rounded-lg border border-dark-700"
-          >
-            <p className="text-xs text-dark-400">
-              Customize track counts (1–25 tracks) for each artist individually in the list below
-            </p>
-          </motion.div>
-        )}
-      </CardContent>
+      )}
+      {mode === 'per-artist' && (
+        <p className="mt-3 text-xs text-dark-300">
+          Customize track counts (1–25 tracks) for each artist individually in the list below
+        </p>
+      )}
     </Card>
   );
 }

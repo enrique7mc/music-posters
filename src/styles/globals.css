@@ -28,8 +28,12 @@
 }
 
 @layer base {
-  /* Smooth theme transitions */
-  * {
+  /* Keep transitions on interactive elements, not every layout node. */
+  button,
+  a,
+  input,
+  textarea,
+  select {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 200ms;
@@ -93,9 +97,25 @@
 }
 
 @layer components {
-  /* Glassmorphism utility */
+  .studio-shell {
+    @apply mx-auto w-full max-w-[1200px] px-5 sm:px-8;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.2em] text-accent-400;
+  }
+
+  .surface {
+    @apply rounded-2xl border border-dark-700 bg-dark-900;
+  }
+
+  .page-heading {
+    @apply text-3xl font-bold tracking-tight text-dark-50 sm:text-5xl;
+  }
+
+  /* Shared surface treatment */
   .glass {
-    @apply bg-dark-800/50 backdrop-blur-md border border-dark-700/50;
+    @apply bg-dark-900/95 backdrop-blur-md border border-dark-700;
   }
 
   /* Overlay utility for asymmetric panels */
@@ -105,7 +125,7 @@
 
   /* Text gradient utility */
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-400 via-accent-500 to-ember-500;
+    @apply text-accent-500;
   }
 
   /* Elegant focus rings */
@@ -139,14 +159,94 @@
 @keyframes pageEnter {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .page-enter {
   animation: pageEnter 0.4s ease-out;
+}
+
+/* Every keyboard control gets a visible focus indicator. */
+:focus-visible {
+  outline: 2px solid #f5b144;
+  outline-offset: 4px;
+}
+
+@keyframes loadingBreath {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.loading-placeholder {
+  animation: loadingBreath 2s ease-in-out infinite;
+}
+
+/* Soft, pulsing light pools from the original completion screen. */
+.success-lights {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.success-light {
+  position: absolute;
+  width: clamp(280px, 38vw, 520px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform;
+}
+
+.success-light--amber {
+  top: 13%;
+  left: 12%;
+  background: rgba(227, 119, 22, 0.18);
+  animation: successGlowFloat 10s ease-in-out infinite alternate;
+}
+
+.success-light--emerald {
+  right: 12%;
+  bottom: 11%;
+  background: rgba(5, 150, 105, 0.15);
+  animation: successGlowFloat 12s ease-in-out -3s infinite alternate-reverse;
+}
+
+.success-light--violet {
+  top: 38%;
+  left: 42%;
+  background: rgba(118, 118, 146, 0.08);
+}
+
+@keyframes successGlowFloat {
+  from {
+    opacity: 0.6;
+    transform: translate(-5%, 4%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(6%, -5%) scale(1.13);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

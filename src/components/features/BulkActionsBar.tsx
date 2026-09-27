@@ -38,14 +38,21 @@ export default function BulkActionsBar({
   const hasRanking = availableTiers.length > 0;
 
   return (
-    <Card variant="glass" className="overflow-hidden">
-      <div className="p-4">
-        <h4 className="text-sm font-semibold text-dark-100 mb-3">Bulk Actions</h4>
+    <Card variant="default" className="overflow-hidden rounded-2xl border-white/10">
+      <div className="p-4 sm:px-5">
+        <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-dark-300">
+          Bulk actions
+        </h4>
 
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-wrap gap-2">
           {/* Reset to Recommended */}
           {trackCountMode !== 'tier-based' && (
-            <Button variant="secondary" size="sm" onClick={onResetToRecommended} className="flex-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onResetToRecommended}
+              className="rounded-lg border-white/15 bg-white/[0.04]"
+            >
               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -64,7 +71,7 @@ export default function BulkActionsBar({
               variant="secondary"
               size="sm"
               onClick={onRemoveSelected}
-              className="flex-1 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              className="rounded-lg border-white/15 bg-white/[0.04] text-red-400 hover:bg-red-500/10 hover:text-red-300"
             >
               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -84,9 +91,9 @@ export default function BulkActionsBar({
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="mt-4 pt-4 border-t border-dark-700 space-y-3"
+            className="mt-4 space-y-3 border-t border-white/10 pt-4"
           >
-            <p className="text-xs text-dark-400 mb-2">
+            <p className="mb-2 text-xs text-dark-300">
               Apply a track count (1–25) to all artists in a tier:
             </p>
 
@@ -114,12 +121,14 @@ export default function BulkActionsBar({
               return (
                 <div
                   key={tier}
-                  className="flex flex-wrap items-center gap-3 p-2 bg-dark-800/50 rounded"
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-2 sm:px-3"
                 >
                   <div className="flex-1 flex items-center gap-2">
-                    <span className="text-lg">{tierIcons[tier as keyof typeof tierIcons]}</span>
-                    <span className="text-sm text-dark-200">{tierLabel}</span>
-                    <span className="text-xs text-dark-500">({artistCount})</span>
+                    <span className="text-base text-[#f29520]" aria-hidden>
+                      {tierIcons[tier as keyof typeof tierIcons]}
+                    </span>
+                    <span className="text-sm text-white/80">{tierLabel}</span>
+                    <span className="text-xs text-dark-300">({artistCount})</span>
                   </div>
 
                   <TrackCountInput
@@ -133,6 +142,7 @@ export default function BulkActionsBar({
                     size="sm"
                     onClick={() => onApplyToTier(tier, stagedCount)}
                     aria-label={`Apply track count to ${tierLabel}`}
+                    className="rounded-lg border-white/15 bg-white/[0.04]"
                   >
                     Apply
                   </Button>

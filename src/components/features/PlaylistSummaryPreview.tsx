@@ -73,11 +73,11 @@ export default function PlaylistSummaryPreview({
 
   return (
     <motion.div variants={fadeIn} initial="hidden" animate="visible">
-      <Card variant="elevated" className="overflow-hidden">
-        <div className="p-6">
-          <h4 className="text-lg font-semibold text-dark-100 mb-4 flex items-center gap-2">
+      <Card variant="default" className="overflow-hidden rounded-2xl border-white/10">
+        <div className="p-5 sm:p-6">
+          <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
             <svg
-              className="w-5 h-5 text-accent-500"
+              className="h-4 w-4 text-[#f29520]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -93,31 +93,35 @@ export default function PlaylistSummaryPreview({
           </h4>
 
           {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="text-center p-3 bg-dark-800/50 rounded-lg">
-              <div className="text-2xl font-bold text-accent-400">{artists.length}</div>
-              <div className="text-xs text-dark-400 mt-1">
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-center">
+              <div className="text-2xl font-semibold tabular-nums text-[#f29520]">
+                {artists.length}
+              </div>
+              <div className="mt-1 text-xs text-dark-300">
                 {artists.length === 1 ? 'Artist' : 'Artists'}
               </div>
             </div>
 
-            <div className="text-center p-3 bg-dark-800/50 rounded-lg">
-              <div className="text-2xl font-bold text-accent-400">~{estimatedTracks}</div>
-              <div className="text-xs text-dark-400 mt-1">
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-center">
+              <div className="text-2xl font-semibold tabular-nums text-[#f29520]">
+                ~{estimatedTracks}
+              </div>
+              <div className="mt-1 text-xs text-dark-300">
                 {estimatedTracks === 1 ? 'Track' : 'Tracks'}
               </div>
             </div>
 
-            <div className="text-center p-3 bg-dark-800/50 rounded-lg">
-              <div className="text-2xl font-bold text-accent-400">
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-center">
+              <div className="text-2xl font-semibold tabular-nums text-[#f29520]">
                 {formatDuration(estimatedMinutes)}
               </div>
-              <div className="text-xs text-dark-400 mt-1">Duration</div>
+              <div className="mt-1 text-xs text-dark-300">Duration</div>
             </div>
           </div>
 
           {/* Additional info */}
-          <div className="text-sm text-dark-400 text-center mb-3">
+          <div className="mb-3 text-center text-xs text-dark-300">
             Average: {avgTracksPerArtist} tracks per artist
           </div>
 
@@ -158,7 +162,7 @@ export default function PlaylistSummaryPreview({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg"
+              className="rounded-lg border border-red-500/30 bg-red-500/10 p-3"
             >
               <div className="flex items-start gap-2 text-sm text-red-400">
                 <svg
@@ -188,7 +192,7 @@ export default function PlaylistSummaryPreview({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg"
+              className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3"
             >
               <div className="flex items-start gap-2 text-sm text-yellow-400">
                 <svg
@@ -207,7 +211,7 @@ export default function PlaylistSummaryPreview({
                 <div>
                   <div className="font-semibold">Large Playlist</div>
                   <div className="text-xs mt-1">
-                    This playlist will take 2-3 minutes to generate due to Spotify API rate limits.
+                    This playlist may take 2-3 minutes to generate. Consider reducing track counts.
                   </div>
                 </div>
               </div>
@@ -218,9 +222,9 @@ export default function PlaylistSummaryPreview({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-accent-500/10 border border-accent-500/30 rounded-lg"
+              className="rounded-lg border border-[#f29520]/25 bg-[#f29520]/[0.07] p-3"
             >
-              <div className="flex items-center gap-2 text-sm text-accent-400">
+              <div className="flex items-center gap-2 text-sm text-[#f29520]">
                 <svg
                   className="w-5 h-5 flex-shrink-0"
                   fill="none"
@@ -235,7 +239,7 @@ export default function PlaylistSummaryPreview({
                   />
                 </svg>
                 <div>
-                  <span className="font-semibold">Ready to create!</span> Expected generation time:
+                  <span className="font-semibold">Ready to search.</span> Expected generation time:
                   ~1-2 minutes
                 </div>
               </div>

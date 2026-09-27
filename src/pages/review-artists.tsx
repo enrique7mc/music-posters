@@ -26,7 +26,9 @@ import ErrorMessage from '@/components/ui/ErrorMessage';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import EditableArtistList from '@/components/features/EditableArtistList';
-import TrackCountModeSelector from '@/components/features/TrackCountModeSelector';
+import TrackCountModeSelector, {
+  TierCountControls,
+} from '@/components/features/TrackCountModeSelector';
 import TrackSelectionModeSelector from '@/components/features/TrackSelectionModeSelector';
 import BulkActionsBar from '@/components/features/BulkActionsBar';
 import PlaylistSummaryPreview from '@/components/features/PlaylistSummaryPreview';
@@ -470,15 +472,10 @@ export default function ReviewArtists() {
       </Head>
 
       <PageLayout showNav>
-        <div className="container mx-auto px-4 py-8 lg:py-12">
-          <motion.div
-            className="max-w-7xl mx-auto"
-            variants={fadeIn}
-            initial="hidden"
-            animate="visible"
-          >
+        <div className="studio-shell pb-12 pt-28 lg:pt-32">
+          <motion.div className="mx-auto" variants={fadeIn} initial="hidden" animate="visible">
             {/* Progress Stepper */}
-            <div className="mb-8">
+            <div className="mb-8 border-b border-white/10 pb-6">
               <ProgressStepper
                 steps={[
                   { label: 'Upload', href: '/upload' },
@@ -492,11 +489,10 @@ export default function ReviewArtists() {
 
             {/* Header */}
             <motion.div className="mb-8" variants={slideUp}>
-              <h1 className="text-4xl lg:text-5xl font-display font-bold tracking-tight text-dark-50 mb-3">
-                Customize Your Artists
-              </h1>
-              <p className="text-lg text-dark-300">
-                Review artists, adjust track counts, and remove unwanted artists
+              <p className="eyebrow mb-3">02 / Shape the lineup</p>
+              <h1 className="page-heading mb-3">Make it yours.</h1>
+              <p className="max-w-2xl text-base text-white/55">
+                Review the artists, set the sound, and decide how many tracks each one gets.
               </p>
             </motion.div>
 
@@ -523,11 +519,50 @@ export default function ReviewArtists() {
               </div>
             )}
 
-            {/* Main content in grid layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left column - 2/3 width on desktop */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Bulk Actions Bar */}
+            {/* Settings stay above the lineup, including when tier counts are expanded. */}
+            <section aria-label="Playlist settings" className="mb-8">
+              <div className="mb-4 flex items-baseline gap-3">
+                <span className="eyebrow">01 / Set the direction</span>
+                <span className="text-xs text-dark-300">Choose the sound and the size</span>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+                <TrackSelectionModeSelector
+                  mode={review.trackSelectionMode}
+                  onModeChange={handleTrackSelectionModeChange}
+                  disabled={searching}
+                />
+                <TrackCountModeSelector
+                  mode={review.trackCountMode}
+                  tierCounts={review.tierCounts}
+                  onModeChange={handleTrackCountModeChange}
+                  onTierCountChange={handleTierCountChange}
+                  disabled={searching}
+                  showTierModes={inputSource !== 'text'}
+                  showTierControls={false}
+                />
+              </div>
+              {review.trackCountMode === 'tier-based' && (
+                <p className="mt-3 text-xs text-dark-300">
+                  Recommended counts: Headliners 10 · Sub-headliners 5 · Mid-tier 3 · Undercard 1
+                </p>
+              )}
+              {review.trackCountMode === 'custom-per-tier' && (
+                <div className="mt-4">
+                  <TierCountControls
+                    tierCounts={review.tierCounts}
+                    onTierCountChange={handleTierCountChange}
+                    disabled={searching}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section aria-label="Artist lineup" className="mb-8">
+              <div className="mb-4 flex items-baseline gap-3">
+                <span className="eyebrow">02 / Edit the lineup</span>
+                <span className="text-xs text-dark-300">Select or remove artists below</span>
+              </div>
+              <div className="space-y-4">
                 <BulkActionsBar
                   artists={artists}
                   trackCountMode={review.trackCountMode}
@@ -539,7 +574,6 @@ export default function ReviewArtists() {
                   onStagedTierCountChange={handleStagedTierCountChange}
                 />
 
-                {/* Editable Artist List */}
                 <EditableArtistList
                   artists={artists}
                   provider={analysisProvider}
@@ -552,97 +586,79 @@ export default function ReviewArtists() {
                   inputSource={inputSource}
                 />
               </div>
+            </section>
 
-              {/* Right column - 1/3 width on desktop, sticky */}
-              <div className="lg:col-span-1 space-y-6">
-                <div className="lg:sticky lg:top-24 space-y-6">
-                  {/* Track Selection Mode Selector */}
-                  <TrackSelectionModeSelector
-                    mode={review.trackSelectionMode}
-                    onModeChange={handleTrackSelectionModeChange}
-                    disabled={searching}
-                  />
-
-                  {/* Track Count Mode Selector */}
-                  <TrackCountModeSelector
-                    mode={review.trackCountMode}
-                    tierCounts={review.tierCounts}
-                    onModeChange={handleTrackCountModeChange}
-                    onTierCountChange={handleTierCountChange}
-                    disabled={searching}
-                    showTierModes={inputSource !== 'text'}
-                  />
-
-                  {/* Playlist Summary Preview */}
-                  <PlaylistSummaryPreview
-                    artists={artists}
-                    trackCountMode={review.trackCountMode}
-                    tierCounts={review.tierCounts}
-                    perArtistCounts={review.perArtistCounts}
-                  />
-
-                  {/* Continue button */}
-                  <Card variant="glass" className="p-6">
-                    <h4 className="text-lg font-semibold text-dark-100 mb-4">
-                      Ready to find tracks?
-                    </h4>
-                    <p className="text-sm text-dark-400 mb-6">
-                      We&apos;ll search {platformName} for tracks from {artists.length}{' '}
-                      {artists.length === 1 ? 'artist' : 'artists'} and let you review them before
-                      creating your playlist.
-                    </p>
-                    {overLimit && (
-                      <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/50 p-3">
-                        <p className="text-sm text-amber-200">
-                          Too many artists ({artists.length}/{MAX_ARTISTS_PER_SEARCH}). Please
-                          remove {artists.length - MAX_ARTISTS_PER_SEARCH} artist
-                          {artists.length - MAX_ARTISTS_PER_SEARCH !== 1 ? 's' : ''} to continue.
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-3">
-                      <Button
-                        variant="primary"
-                        size="lg"
-                        onClick={handleContinue}
-                        className="w-full"
-                        isLoading={searching}
-                        // Block Continue while personalization is in flight: posting
-                        // early would send untagged artists to search-tracks, so loved
-                        // artists silently lose deep-cuts and gems lose popular tracks.
-                        // The PersonalizationHeader above shows the "Personalizing…" state.
-                        disabled={artists.length === 0 || overLimit || personalizing}
-                      >
-                        Search Tracks & Continue
-                      </Button>
-                      {/* Navigation only — Back never clears draft state. */}
-                      <Button
-                        variant="ghost"
-                        size="md"
-                        onClick={() => router.push('/upload')}
-                        className="w-full"
-                      >
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 19l-7-7 7-7"
-                          />
-                        </svg>
-                        Back to Upload
-                      </Button>
-                      <StartOverButton className="w-full" />
-                    </div>
-                  </Card>
-                </div>
+            <section aria-label="Playlist summary and next steps">
+              <div className="mb-4 flex items-baseline gap-3">
+                <span className="eyebrow">03 / Check the mix</span>
+                <span className="text-xs text-dark-300">A preview before the track search</span>
               </div>
-            </div>
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)] lg:items-start">
+                <PlaylistSummaryPreview
+                  artists={artists}
+                  trackCountMode={review.trackCountMode}
+                  tierCounts={review.tierCounts}
+                  perArtistCounts={review.perArtistCounts}
+                />
+
+                <Card variant="default" className="rounded-2xl border-white/10 p-5 sm:p-6">
+                  <h4 className="mb-2 text-lg font-semibold text-white">Ready for the tracks?</h4>
+                  <p className="mb-5 text-sm leading-relaxed text-white/50">
+                    We&apos;ll search {platformName} for tracks from {artists.length}{' '}
+                    {artists.length === 1 ? 'artist' : 'artists'} and let you review them before
+                    creating your playlist.
+                  </p>
+                  {overLimit && (
+                    <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-950/50 p-3">
+                      <p className="text-sm text-amber-200">
+                        Too many artists ({artists.length}/{MAX_ARTISTS_PER_SEARCH}). Please remove{' '}
+                        {artists.length - MAX_ARTISTS_PER_SEARCH} artist
+                        {artists.length - MAX_ARTISTS_PER_SEARCH !== 1 ? 's' : ''} to continue.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={handleContinue}
+                      className="w-full rounded-xl bg-[#f29520] text-black hover:bg-[#ffa837]"
+                      isLoading={searching}
+                      // Block Continue while personalization is in flight: posting
+                      // early would send untagged artists to search-tracks, so loved
+                      // artists silently lose deep-cuts and gems lose popular tracks.
+                      // The PersonalizationHeader above shows the "Personalizing…" state.
+                      disabled={artists.length === 0 || overLimit || personalizing}
+                    >
+                      Search Tracks & Continue
+                    </Button>
+                    {/* Navigation only — Back never clears draft state. */}
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => router.push('/upload')}
+                      className="w-full"
+                    >
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                      Back to Upload
+                    </Button>
+                    <StartOverButton className="w-full" />
+                  </div>
+                </Card>
+              </div>
+            </section>
           </motion.div>
         </div>
       </PageLayout>

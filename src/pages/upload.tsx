@@ -561,10 +561,9 @@ export default function Upload() {
       </Head>
 
       <PageLayout>
-        <div className="min-h-[calc(100vh-4rem)] pt-20">
-          {/* Progress Stepper (only show when artists are analyzed) */}
-          {showResult && (
-            <div className="container mx-auto px-4 mb-8">
+        <div className="min-h-screen pb-20 pt-28 sm:pt-32">
+          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+            <div className="mb-8 border-b border-dark-800 pb-5">
               <ProgressStepper
                 steps={[
                   { label: 'Upload' },
@@ -575,11 +574,24 @@ export default function Upload() {
                 currentStep={0}
               />
             </div>
-          )}
+            <div className="mb-7">
+              {inputMode === null && !showResult && (
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.23em] text-accent-400">
+                  Start Your Playlist
+                </p>
+              )}
+              <h1 className="font-display text-4xl font-black tracking-tight text-dark-50 sm:text-5xl">
+                Build your playlist.
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-dark-300 sm:text-base">
+                Choose a poster or enter a lineup. Review the artists and songs before saving.
+              </p>
+            </div>
+          </div>
 
           {/* Error message */}
           {error && (
-            <div className="container mx-auto px-4 mb-6">
+            <div className="mx-auto mb-6 max-w-7xl px-5 sm:px-8 lg:px-10">
               <ErrorMessage
                 message={error.message}
                 title={error.title}
@@ -592,51 +604,85 @@ export default function Upload() {
           {/* Empty state - choose how to start */}
           {inputMode === null && !showResult && (
             <motion.div
-              className="container mx-auto px-4 py-12"
+              className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10"
               variants={fadeIn}
               initial="hidden"
               animate="visible"
             >
-              <div className="max-w-3xl mx-auto text-center mb-8">
-                <h2 className="text-3xl font-bold text-dark-50 mb-3">Start Your Playlist</h2>
-                <p className="text-dark-400">
-                  Upload a festival poster for us to analyze, or type the artists yourself.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
+              <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
                 {/* Upload a poster */}
                 <button
                   onClick={() => {
                     resetFlowState();
                     setInputMode('poster');
                   }}
-                  className="group flex h-full flex-col items-center rounded-lg border-2 border-dark-700 bg-dark-800 p-8 text-center transition-all hover:border-accent-500 hover:bg-accent-500/10"
+                  className="group flex min-h-[230px] sm:min-h-[310px] flex-col items-start justify-between overflow-hidden rounded-[1.75rem] border border-accent-500/60 bg-dark-900 p-7 text-left transition-colors hover:border-accent-400 hover:bg-dark-800 focus-ring sm:p-9"
                 >
-                  <div className="mb-6 flex h-40 w-40 items-center justify-center rounded-xl bg-dark-950 ring-1 ring-dark-700 transition-colors group-hover:ring-accent-500/50">
-                    <Illustration name="poster" size={144} />
+                  <div className="flex w-full items-start justify-between">
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
+                      Recommended · 01
+                    </span>
+                    <span className="text-2xl text-accent-400" aria-hidden="true">
+                      ↗
+                    </span>
                   </div>
-                  <div className="mb-2 text-xl font-semibold text-dark-100 transition-colors group-hover:text-accent-400">
-                    Upload a Poster
+                  <div className="mt-8 flex w-full items-end justify-between gap-4">
+                    <div>
+                      <div className="font-display text-3xl font-black tracking-tight text-dark-50 transition-colors group-hover:text-accent-400 sm:text-4xl">
+                        Upload a Poster
+                      </div>
+                      <p className="mt-3 max-w-sm text-sm leading-relaxed text-dark-300">
+                        Start with a festival or concert image. We&apos;ll read the lineup and bring
+                        the artists into review.
+                      </p>
+                    </div>
+                    <div
+                      className="hidden h-36 w-28 shrink-0 rotate-[7deg] flex-col justify-between border-[7px] border-[#e5d6b9] bg-accent-500 p-3 text-left text-dark-950 shadow-xl sm:flex"
+                      aria-hidden="true"
+                    >
+                      <span className="border-b border-dark-950/50 pb-1 text-[8px] font-black uppercase">
+                        Lineup
+                      </span>
+                      <span className="font-display text-2xl font-black uppercase leading-[0.8] tracking-tighter">
+                        LIVE
+                        <br />
+                        LOUD
+                        <br />
+                        NOW.
+                      </span>
+                      <span className="border-t border-dark-950/50 pt-1 text-[7px] font-black uppercase">
+                        No. 001
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-dark-400">
-                    We&apos;ll read the lineup from a festival or concert poster image.
-                  </p>
                 </button>
 
                 {/* Enter artists */}
                 <button
                   onClick={handleSwitchToText}
-                  className="group flex h-full flex-col items-center rounded-lg border-2 border-dark-700 bg-dark-800 p-8 text-center transition-all hover:border-accent-500 hover:bg-accent-500/10"
+                  className="group flex min-h-[230px] sm:min-h-[310px] flex-col items-start justify-between rounded-[1.75rem] border border-dark-700 bg-dark-900 p-7 text-left transition-colors hover:border-accent-500 hover:bg-dark-800 focus-ring sm:p-9"
                 >
-                  <div className="mb-6 flex h-40 w-40 items-center justify-center rounded-xl bg-dark-950 ring-1 ring-dark-700 transition-colors group-hover:ring-accent-500/50">
-                    <Illustration name="manual" size={144} />
+                  <div className="flex w-full items-start justify-between">
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-dark-300">
+                      Or make your own · 02
+                    </span>
+                    <span className="text-2xl text-accent-400" aria-hidden="true">
+                      ↗
+                    </span>
                   </div>
-                  <div className="mb-2 text-xl font-semibold text-dark-100 transition-colors group-hover:text-accent-400">
-                    Enter Artists
+                  <div className="w-full">
+                    <div className="mb-5 space-y-2" aria-hidden="true">
+                      <span className="block h-2 w-2/3 rounded-full bg-dark-700" />
+                      <span className="block h-2 w-1/2 rounded-full bg-dark-700" />
+                      <span className="block h-2 w-3/4 rounded-full bg-dark-700" />
+                    </div>
+                    <div className="font-display text-3xl font-black tracking-tight text-dark-50 transition-colors group-hover:text-accent-400">
+                      Enter Artists
+                    </div>
+                    <p className="mt-3 max-w-sm text-sm leading-relaxed text-dark-300">
+                      Already know who you want? Type the artist names yourself, one per line.
+                    </p>
                   </div>
-                  <p className="text-sm text-dark-400">
-                    Type the artists you want, one per line — no poster needed.
-                  </p>
                 </button>
               </div>
             </motion.div>
@@ -645,13 +691,19 @@ export default function Upload() {
           {/* Poster mode - upload zone */}
           {inputMode === 'poster' && !showResult && (
             <motion.div
-              className="container mx-auto px-4 py-12"
+              className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10"
               variants={fadeIn}
               initial="hidden"
               animate="visible"
             >
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <p className="text-sm font-semibold text-dark-300">Poster upload</p>
+                <Button variant="text" onClick={() => setInputMode(null)}>
+                  Change starting point
+                </Button>
+              </div>
               <UploadZone onFileSelect={handleFileSelect} />
-              <div className="max-w-3xl mx-auto mt-6 text-center">
+              <div className="mt-6 text-center">
                 <Button variant="text" onClick={handleSwitchToText}>
                   Or enter artists manually instead
                 </Button>
@@ -662,12 +714,12 @@ export default function Upload() {
           {/* Text mode - manual artist entry */}
           {inputMode === 'text' && (
             <motion.div
-              className="container mx-auto px-4 py-12"
+              className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10"
               variants={fadeIn}
               initial="hidden"
               animate="visible"
             >
-              <div className="max-w-3xl mx-auto">
+              <div className="mx-auto max-w-3xl">
                 {hasMeaningfulUploadState && (
                   <div className="flex justify-end mb-2">
                     <StartOverButton
@@ -697,12 +749,18 @@ export default function Upload() {
           {/* Two-pane layout with poster and artists */}
           {showResult && (
             <AsymmetricSection
+              className="!max-w-7xl !px-5 !py-0 sm:!px-8 lg:!px-10"
               left={
                 <div className="space-y-6">
                   {/* Poster preview (blob URL, stored thumbnail, or placeholder) */}
-                  <Card variant="elevated" className="p-6">
-                    <h3 className="text-lg font-semibold text-dark-100 mb-4">Your Poster</h3>
-                    <div className="relative rounded-lg overflow-hidden bg-dark-900">
+                  <Card variant="elevated" className="rounded-[1.75rem] border-dark-700 p-5 sm:p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-dark-100">Your Poster</h3>
+                      <span className="text-xs font-bold uppercase tracking-widest text-accent-400">
+                        Analyzed
+                      </span>
+                    </div>
+                    <div className="relative overflow-hidden rounded-2xl bg-dark-950">
                       {posterPreviewSrc ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
@@ -712,7 +770,7 @@ export default function Upload() {
                           style={{ maxHeight: '60vh', objectFit: 'contain' }}
                         />
                       ) : (
-                        <div className="w-full aspect-square flex flex-col items-center justify-center text-dark-500">
+                        <div className="w-full aspect-square flex flex-col items-center justify-center text-dark-300">
                           <Illustration name="poster" size={64} className="mb-3" />
                           <span className="text-sm">Poster preview unavailable</span>
                         </div>
@@ -741,13 +799,16 @@ export default function Upload() {
                   <ArtistList artists={artists} provider={analysisProvider} />
 
                   {/* Flow choice: Quick Create or Customize */}
-                  <Card variant="glass" className="p-6">
-                    <h4 className="text-lg font-semibold text-dark-100 mb-4">
-                      What would you like to do?
+                  <Card variant="elevated" className="rounded-[1.75rem] border-dark-700 p-6 sm:p-8">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
+                      Next up
+                    </p>
+                    <h4 className="font-display text-2xl font-black tracking-tight text-dark-50 sm:text-3xl">
+                      Make the lineup yours.
                     </h4>
-                    <p className="text-sm text-dark-400 mb-6">
-                      Choose how to proceed with your {artists.length}{' '}
-                      {artists.length === 1 ? 'artist' : 'artists'}
+                    <p className="mb-6 mt-3 text-sm text-dark-300">
+                      We found {artists.length} {artists.length === 1 ? 'artist' : 'artists'}.
+                      Choose how much you want to customize.
                     </p>
 
                     <div className="space-y-3">
@@ -755,7 +816,7 @@ export default function Upload() {
                       <button
                         onClick={handleCreatePlaylist}
                         disabled={creating || !storageAvailable}
-                        className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="group w-full rounded-2xl border border-dark-700 bg-dark-950 p-5 text-left transition-colors hover:border-accent-500 hover:bg-dark-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 bg-accent-500/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent-500/30 transition-colors">
@@ -777,7 +838,7 @@ export default function Upload() {
                             <div className="font-semibold text-dark-100 mb-1 group-hover:text-accent-400 transition-colors">
                               Quick Create Playlist
                             </div>
-                            <div className="text-sm text-dark-400">
+                            <div className="text-sm text-dark-300">
                               Use recommended tier-based track counts and create your playlist now
                             </div>
                           </div>
@@ -788,7 +849,7 @@ export default function Upload() {
                       <button
                         onClick={handleCustomizeArtists}
                         disabled={creating || !storageAvailable}
-                        className="w-full p-4 rounded-lg border-2 border-dark-700 bg-dark-800 hover:border-accent-500 hover:bg-accent-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="group w-full rounded-2xl border border-dark-700 bg-dark-950 p-5 text-left transition-colors hover:border-accent-500 hover:bg-dark-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 bg-accent-500/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent-500/30 transition-colors">
@@ -810,7 +871,7 @@ export default function Upload() {
                             <div className="font-semibold text-dark-100 mb-1 group-hover:text-accent-400 transition-colors">
                               Customize Artists
                             </div>
-                            <div className="text-sm text-dark-400">
+                            <div className="text-sm text-dark-300">
                               Review artists, adjust track counts, and remove unwanted artists
                               before creating
                             </div>

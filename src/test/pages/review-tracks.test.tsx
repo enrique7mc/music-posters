@@ -54,6 +54,7 @@ vi.mock('@/components/layout/PageLayout', () => ({
 }));
 
 vi.mock('@/components/ui/LoadingSpinner', () => ({
+  default: () => <div data-testid="loading-spinner" />,
   LoadingScreen: ({ message }: { message?: string }) => <div>{message}</div>,
 }));
 
@@ -89,16 +90,6 @@ const TRACKS: Track[] = [
 function readStoredDraft(): PlaylistDraft | null {
   const raw = sessionStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY);
   return raw ? (JSON.parse(raw) as PlaylistDraft) : null;
-}
-
-/** Matches the "{selected} of {total}" counter (its text spans child nodes). */
-function selectedCountText(text: string) {
-  return screen.getByText(
-    (_, element) =>
-      !!element &&
-      element.classList.contains('text-4xl') &&
-      element.textContent?.replace(/\s+/g, ' ').trim() === text
-  );
 }
 
 function seedTrackReviewDraft(overrides: Partial<PlaylistDraft['trackReview']> = {}) {
@@ -144,7 +135,9 @@ describe('review-tracks hydration from the playlist draft', () => {
     render(<ReviewTracks />);
 
     expect(await screen.findByLabelText('Playlist Name')).toHaveValue('My Edited Mix');
-    expect(selectedCountText('1 of 2')).toBeInTheDocument(); // only track-2 selected
+    expect(screen.getByRole('status', { name: 'Track selection' })).toHaveTextContent(
+      '1 of 2 selected'
+    ); // only track-2 selected
     expect(screen.getByText(/"Nobody" was not found on Apple Music/i)).toBeInTheDocument();
     expect(screen.getByText('Archie, Marry Me')).toBeInTheDocument();
     expect(screen.getByText('Dreams Tonite')).toBeInTheDocument();
@@ -156,7 +149,9 @@ describe('review-tracks hydration from the playlist draft', () => {
     render(<ReviewTracks />);
 
     await waitFor(() => {
-      expect(selectedCountText('1 of 2')).toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Track selection' })).toHaveTextContent(
+        '1 of 2 selected'
+      );
     });
   });
 
@@ -177,7 +172,9 @@ describe('review-tracks hydration from the playlist draft', () => {
 
     render(<ReviewTracks />);
     await waitFor(() => {
-      expect(selectedCountText('2 of 2')).toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Track selection' })).toHaveTextContent(
+        '2 of 2 selected'
+      );
     });
 
     await user.click(screen.getByText('Archie, Marry Me'));
@@ -192,6 +189,32 @@ describe('review-tracks hydration from the playlist draft', () => {
     await user.clear(screen.getByLabelText('Playlist Name'));
     await user.type(screen.getByLabelText('Playlist Name'), 'Renamed Live');
     expect(readStoredDraft()?.trackReview?.playlistName).toBe('Renamed Live');
+  });
+
+  it('toggles a track with the keyboard in grid and list views', async () => {
+    seedTrackReviewDraft({ selectedTrackIds: [] });
+    const user = userEvent.setup();
+
+    render(<ReviewTracks />);
+    const listTrack = await screen.findByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
+    expect(screen.getByText('Song name')).toBeInTheDocument();
+    expect(screen.getByText('Artist', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText('Album', { selector: 'span' })).toBeInTheDocument();
+    expect(listTrack).toHaveAttribute('aria-checked', 'false');
+
+    listTrack.focus();
+    await user.keyboard(' ');
+    expect(listTrack).toHaveAttribute('aria-checked', 'true');
+    expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual(['track-1']);
+
+    await user.click(screen.getByRole('button', { name: 'Switch to card view' }));
+    const gridTrack = await screen.findByRole('checkbox', { name: 'Archie, Marry Me by Alvvays' });
+    expect(gridTrack).toHaveAttribute('aria-checked', 'true');
+
+    gridTrack.focus();
+    await user.keyboard('{Enter}');
+    expect(gridTrack).toHaveAttribute('aria-checked', 'false');
+    expect(readStoredDraft()?.trackReview?.selectedTrackIds).toEqual([]);
   });
 
   it('no longer removes warnings while loading (they survive hydration)', async () => {

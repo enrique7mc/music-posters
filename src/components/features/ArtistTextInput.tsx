@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import Button from '../ui/Button';
-import Card from '../ui/Card';
 import {
   parseArtistText,
   MAX_ARTIST_NAME_LENGTH,
@@ -53,11 +52,17 @@ export default function ArtistTextInput({
   };
 
   return (
-    <Card variant="elevated" className="p-6 lg:p-8">
-      <h3 className="text-2xl font-bold text-dark-100 mb-2">Enter Artists</h3>
-      <p className="text-dark-400 mb-6">
-        Type the artists you want, <span className="text-dark-200">one per line</span>. We&apos;ll
-        find tracks for each on your music platform.
+    <div className="rounded-[1.75rem] border border-dark-700 bg-dark-900 p-6 sm:p-8">
+      <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
+        Your own lineup
+      </p>
+      <h3 className="font-display text-3xl font-black tracking-tight text-dark-50 sm:text-4xl">
+        Enter Artists
+      </h3>
+      <p className="mb-7 mt-3 max-w-xl leading-relaxed text-dark-300">
+        Add the names you want to hear,{' '}
+        <span className="font-semibold text-dark-200">one per line</span>. We&apos;ll help you pick
+        the tracks next.
       </p>
 
       <label htmlFor="artist-text-input" className="sr-only">
@@ -72,7 +77,7 @@ export default function ArtistTextInput({
         spellCheck={false}
         autoComplete="off"
         placeholder={'Alvvays\nThe Beths\nMen I Trust'}
-        className="w-full px-4 py-3 bg-dark-800 border border-dark-700 rounded-lg text-dark-50 placeholder-dark-500 focus:ring-2 focus:ring-accent-500 focus:border-transparent focus-ring transition-all duration-200 resize-y font-medium"
+        className="min-h-[220px] w-full resize-y rounded-2xl border border-dark-600 bg-dark-950 px-5 py-4 font-medium leading-8 text-dark-50 placeholder-dark-500 transition-colors focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
       />
 
       {/* Live feedback */}
@@ -122,15 +127,24 @@ export default function ArtistTextInput({
         )}
       </div>
 
-      <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Button variant="primary" size="lg" onClick={handleSubmit} disabled={!canSubmit}>
-          Review artists
-        </Button>
-        <p className="text-xs text-dark-500">
-          Up to {MAX_ARTISTS_PER_SEARCH} artists • {MAX_ARTIST_NAME_LENGTH} characters per name •
+      <div className="mt-7 flex flex-col gap-4 border-t border-dark-700 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-sm text-xs leading-relaxed text-dark-300">
+          Up to {MAX_ARTISTS_PER_SEARCH} artists · {MAX_ARTIST_NAME_LENGTH} characters per name ·
           duplicates are removed automatically
         </p>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="shrink-0 rounded-xl text-base font-bold"
+        >
+          Review artists{' '}
+          <span aria-hidden="true" className="ml-3">
+            →
+          </span>
+        </Button>
       </div>
-    </Card>
+    </div>
   );
 }
