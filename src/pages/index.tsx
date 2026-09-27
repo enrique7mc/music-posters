@@ -207,7 +207,7 @@ export default function Home() {
                 >
                   {isLoggingIn
                     ? 'Connecting...'
-                    : appleLoading
+                    : selectedPlatform === 'apple-music' && appleLoading
                       ? 'Loading Apple Music...'
                       : `Connect with ${selectedPlatform === 'spotify' ? 'Spotify' : 'Apple Music'}`}
                 </Button>
