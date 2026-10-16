@@ -30,7 +30,7 @@ screen, and user-aware recommendations.
 └──────┬───────────────┬────────────────┬──────────────────┬───────────┘
        │               │                │                  │
 ┌──────▼──────┐ ┌──────▼───────┐ ┌──────▼───────┐ ┌────────▼──────────┐
-│ Spotify     │ │ Image analysis│ │ Gemini 3.5   │ │ Music platform    │
+│ Spotify     │ │ Image analysis│ │ Gemini 3.6   │ │ Music platform    │
 │ OAuth +     │ │ Vision (OCR)  │ │ Flash         │ │ Spotify Web API   │
 │ Apple Music │ │ Gemini (AI)   │ │ (gem engine)  │ │ Apple Music API   │
 │ MusicKit JS │ │ Hybrid        │ │               │ │ search/tracks/    │
@@ -187,7 +187,7 @@ review-tracks (edit) → POST /api/create-playlist (trackIds/URIs + name + cover
 ### External services
 
 - **Google Cloud Vision API** — OCR text extraction (`vision`, `hybrid`)
-- **Google Gemini 3.5 Flash** — image ranking (`gemini`, `hybrid`) and the gem engine
+- **Google Gemini 3.6 Flash** — image ranking (`gemini`, `hybrid`) and the gem engine
 - **Spotify Web API** — auth, search, playlists (currently broken; see above)
 - **Apple Music API** — catalog search, top songs, library scan, playlists
 
