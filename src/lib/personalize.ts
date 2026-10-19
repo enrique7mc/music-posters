@@ -26,7 +26,7 @@ import { Artist } from '@/types';
 import { matchLineup, similarity, LOVED_MATCH_THRESHOLD } from '@/lib/artist-match';
 import { MusicPlatformService } from '@/lib/music-platform/types';
 
-const GEMINI_MODEL = 'gemini-3.5-flash';
+const GEMINI_MODEL = 'gemini-3.6-flash';
 const GEM_MAX_COUNT = 12; // cap surfaced gems so the screen stays scannable
 const GEM_MIN_CONFIDENCE = 0.5; // drop low-confidence guesses
 // Gem name must clearly map back to a submitted lineup name. Independent of

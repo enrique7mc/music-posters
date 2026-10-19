@@ -42,7 +42,7 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000) to see the app.
 - Upload festival poster images
 - Enter artists manually, one per line, without uploading a poster
 - AI-powered artist extraction with three providers: Google Cloud Vision (OCR),
-  Gemini 3.5 Flash (vision-first), or Hybrid (OCR + Gemini)
+  Gemini 3.6 Flash (vision-first), or Hybrid (OCR + Gemini)
 - Artist ranking by visual prominence (Gemini/Hybrid modes), with tier badges
 - Playlist generation on **Spotify or Apple Music** with each artist's top track
 - **User-aware recommendations (Apple Music):** lineup artists already in your
@@ -68,8 +68,8 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000) to see the app.
 
 - **Frontend**: Next.js 14 (React 18 + TypeScript)
 - **Styling**: Tailwind CSS
-- **Image analysis**: Google Cloud Vision API, Gemini 3.5 Flash, or Hybrid
-- **Recommendations**: Gemini 3.5 Flash (hidden-gems engine)
+- **Image analysis**: Google Cloud Vision API, Gemini 3.6 Flash, or Hybrid
+- **Recommendations**: Gemini 3.6 Flash (hidden-gems engine)
 - **Music**: Spotify Web API and Apple Music Web API
 - **Deployment**: Vercel (recommended)
 
