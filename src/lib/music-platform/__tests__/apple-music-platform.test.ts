@@ -3,6 +3,7 @@ import type { MockInstance } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
+import { PlatformAccessError } from '../types';
 
 const LIBRARY_URL = 'https://api.music.apple.com/v1/me/library/artists';
 const SEARCH_URL = 'https://api.music.apple.com/v1/catalog/us/search';
@@ -62,6 +63,18 @@ describe('AppleMusicPlatformService.getLibraryArtists', () => {
     expect(artists).toEqual(['Phoenix']); // kept the first page, swallowed the error
     expect(complete).toBe(false); // a failed page means the scan is incomplete
   });
+
+  it.each([401, 403])(
+    'throws PlatformAccessError when Apple rejects the user token (%i)',
+    async (status) => {
+      server.use(http.get(LIBRARY_URL, () => new HttpResponse(null, { status })));
+
+      const scan = service.getLibraryArtists('user-token');
+
+      await expect(scan).rejects.toBeInstanceOf(PlatformAccessError);
+      await expect(scan).rejects.toMatchObject({ status, platform: 'apple-music' });
+    }
+  );
 
   it('skips entries with no name and handles an empty library', async () => {
     server.use(

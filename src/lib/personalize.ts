@@ -17,14 +17,17 @@
  *     minimum confidence.
  *   - Partial success, never a hard failure: a library-scan failure returns the
  *     plain lineup; a Gemini failure returns loved annotations only. The caller
- *     can always render something.
+ *     can always render something. The one exception: a PlatformAccessError (the
+ *     platform rejected the user token) is rethrown so the route can ask the
+ *     user to reconnect.
  *   - Empty-loved (0 overlap) → skip Gemini entirely (no call, no cost).
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Artist } from '@/types';
 import { matchLineup, similarity, LOVED_MATCH_THRESHOLD } from '@/lib/artist-match';
-import { MusicPlatformService } from '@/lib/music-platform/types';
+import { MusicPlatformService, PlatformAccessError } from '@/lib/music-platform/types';
+import { errDetail } from '@/lib/safe-log';
 
 const GEMINI_MODEL = 'gemini-3.6-flash';
 const GEM_MAX_COUNT = 12; // cap surfaced gems so the screen stays scannable
@@ -269,7 +272,10 @@ export async function personalizeLineup(
     lovedNames = scan.artists;
     scanComplete = scan.complete;
   } catch (error) {
-    console.error('[Personalize] Library scan threw:', error);
+    // A rejected user token is not a degradable sub-failure: the caller must
+    // ask the user to reconnect.
+    if (error instanceof PlatformAccessError) throw error;
+    console.error('[Personalize] Library scan threw:', errDetail(error));
     degraded = true;
     scanComplete = false;
   }

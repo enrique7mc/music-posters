@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { Track, PlatformUser, TrackSelectionMode } from '@/types';
-import { MusicPlatformService, ArtistSearchResult, PlaylistResult } from './types';
+import {
+  MusicPlatformService,
+  ArtistSearchResult,
+  PlaylistResult,
+  PlatformAccessError,
+} from './types';
 import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 // Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
 // never reach console.error (config.headers carries the developer bearer token and
@@ -292,6 +297,13 @@ export class AppleMusicPlatformService implements MusicPlatformService {
           `[Apple Music] Error scanning library artists (page ${pages + 1}):`,
           errMessage(error)
         );
+        // Apple rejects an expired/revoked Music-User-Token with 401 or 403. Every
+        // later user-scoped call fails the same way, so surface it instead of
+        // degrading to an empty "success" that hides the need to reconnect.
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403) {
+          throw new PlatformAccessError('apple-music', status, '/me/library/artists');
+        }
         complete = false; // partial/failed scan — keep what we have, flag incompleteness
         break;
       }

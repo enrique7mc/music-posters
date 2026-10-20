@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parseGemsResponse, selectGems, personalizeLineup } from '../personalize';
 import { Artist } from '@/types';
-import { MusicPlatformService } from '@/lib/music-platform/types';
+import { MusicPlatformService, PlatformAccessError } from '@/lib/music-platform/types';
 
 // Mock the Gemini SDK so the gem path can be driven deterministically. The
 // no-key tests below never reach it (requestGems short-circuits on a missing
@@ -172,6 +172,13 @@ describe('personalizeLineup', () => {
     expect(result.degraded).toBe(true);
     expect(result.lovedCount).toBe(0);
     expect(result.artists.every((a) => a.affinity === undefined)).toBe(true);
+  });
+
+  it('rethrows PlatformAccessError so the route can ask the user to reconnect', async () => {
+    const rejected = new PlatformAccessError('apple-music', 403, '/me/library/artists');
+    const platform = stubPlatform(() => Promise.reject(rejected));
+
+    await expect(personalizeLineup(lineup, platform, 'token')).rejects.toBe(rejected);
   });
 
   it('tags library matches as loved (and leaves unknowns untagged with no key)', async () => {
