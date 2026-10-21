@@ -136,6 +136,27 @@ describe('/api/personalize', () => {
     expect(data.artists[0].affinity).toBeUndefined();
   });
 
+  it.each([401, 403])(
+    'returns 401 and clears the session when Apple rejects the user token (%i)',
+    async (status) => {
+      server.use(http.get(LIBRARY_URL, () => new HttpResponse(null, { status })));
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: { cookie: APPLE_COOKIE },
+        body: { artists: [{ name: 'Phoenix' }] },
+      });
+
+      await handler(req as any, res as any);
+
+      expect(res._getStatusCode()).toBe(401);
+      expect(JSON.parse(res._getData()).error).toBe(
+        'Apple Music authentication expired. Please log in again.'
+      );
+      const cookies = res.getHeader('Set-Cookie') as string[];
+      expect(cookies.some((c) => c.startsWith('apple_music_user_token=;'))).toBe(true);
+    }
+  );
+
   it('returns 401 on a platform mismatch (authed apple-music, body asks spotify)', async () => {
     // Security boundary: a user authed with one platform must not run a
     // personalize scan against another. A regression loosening this would

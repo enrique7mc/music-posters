@@ -1,13 +1,19 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
+import {
+  clearAllAuthCookies,
+  getAuthenticatedPlatformOrDev,
+  getPlatformAccessTokenOrDev,
+} from '@/lib/auth';
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
+import { PlatformAccessError } from '@/lib/music-platform/types';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
 import { personalizeLineup } from '@/lib/personalize';
 import { PersonalizeResponse, MusicPlatform } from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { personalizeSchema, validateRequest } from '@/lib/validation';
+import { errDetail } from '@/lib/safe-log';
 
 /**
  * POST /api/personalize
@@ -22,6 +28,9 @@ import { personalizeSchema, validateRequest } from '@/lib/validation';
  *   count + name length (see personalizeSchema).
  * - The engine never throws on a sub-failure; on library/Gemini errors it returns
  *   a degraded result and the client hides the loved/gems UI.
+ * - Exception: when Apple rejects the user token (401/403), the route clears the
+ *   auth cookies and returns 401, so the client's 401 handler sends the user to
+ *   reconnect instead of showing an empty result.
  *
  * Apple Music only for now (it's the platform exposing a user library). Other
  * platforms return the plain lineup with degraded=true.
@@ -107,10 +116,20 @@ export default async function handler(
 
     return res.status(200).json(result);
   } catch (error: any) {
+    if (error instanceof PlatformAccessError && platform === 'apple-music') {
+      console.error('[Personalize API] Apple Music rejected the user token:', error.message);
+      // Clear the dead session so the sign-in page offers Apple Music again
+      // instead of redirecting the user straight back.
+      clearAllAuthCookies(res);
+      return res
+        .status(401)
+        .json({ error: 'Apple Music authentication expired. Please log in again.' });
+    }
+
     // The engine is built to degrade rather than throw, so reaching here is rare
     // (e.g. developer-token generation failed). Never 500 the user out of their
     // lineup — return it plain so the review screen still works.
-    console.error('[Personalize API] Unexpected error, returning plain lineup:', error);
+    console.error('[Personalize API] Unexpected error, returning plain lineup:', errDetail(error));
     return res.status(200).json({ artists, lovedCount: 0, gemCount: 0, degraded: true });
   }
 }

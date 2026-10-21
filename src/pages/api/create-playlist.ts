@@ -1,5 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
+import {
+  clearAllAuthCookies,
+  getAuthenticatedPlatformOrDev,
+  getPlatformAccessTokenOrDev,
+} from '@/lib/auth';
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
 import { getMusicPlatform } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
@@ -203,14 +207,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // whose config.headers carry the Spotify bearer or Apple Music-User-Token.
     console.error('Error creating playlist:', errDetail(error));
 
+    const status = error.response?.status;
+
+    // Apple reports a rejected Music-User-Token (expired, revoked, lapsed
+    // subscription) as 403, not 401. Clear the dead session so the sign-in page
+    // offers Apple Music again instead of redirecting the user straight back.
+    if (platform === 'apple-music' && (status === 401 || status === 403)) {
+      clearAllAuthCookies(res);
+      return res.status(401).json({
+        error: 'Apple Music authentication expired. Please log in again.',
+      });
+    }
+
     // Handle API errors
-    if (error.response?.status === 401) {
+    if (status === 401) {
       return res.status(401).json({
         error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} authentication expired. Please log in again.`,
       });
     }
 
-    if (error.response?.status === 429) {
+    if (status === 429) {
       return res.status(429).json({
         error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} rate limit exceeded. Please wait a moment and try again.`,
       });

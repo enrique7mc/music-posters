@@ -20,6 +20,28 @@ vi.mock('axios', () => ({
   default: { get: mockGet, post: mockPost },
 }));
 
+function installMusicKit(unauthorize: () => Promise<void>, { configured = true } = {}) {
+  const instance = { authorize: vi.fn(), unauthorize: vi.fn(unauthorize), isAuthorized: true };
+  // Mirror MusicKit v3: no instance until the configure() promise resolves.
+  window.MusicKit = {
+    configure: vi.fn(async () => {
+      await Promise.resolve();
+      configured = true;
+    }),
+    getInstance: () => (configured ? instance : undefined) as any,
+  };
+  return instance;
+}
+
+function InitMusicKitHarness() {
+  const { initMusicKit } = useAuth();
+  return (
+    <button onClick={() => void initMusicKit()} type="button">
+      Init MusicKit
+    </button>
+  );
+}
+
 function LogoutHarness() {
   const { logout } = useAuth();
   return (
@@ -32,6 +54,7 @@ function LogoutHarness() {
 describe('AuthContext playlist draft lifecycle', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    delete window.MusicKit;
     mockPush.mockReset();
     mockGet.mockReset();
     mockPost.mockReset();
@@ -80,5 +103,59 @@ describe('AuthContext playlist draft lifecycle', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/api/auth/logout'));
     expect(sessionStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)).toBe('{"version":1}');
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('clears the cached MusicKit token before clearing the server session', async () => {
+    const calls: string[] = [];
+    installMusicKit(async () => {
+      calls.push('unauthorize');
+    });
+    mockPost.mockImplementation(async (url: string) => {
+      calls.push(url);
+      return { data: { success: true } };
+    });
+
+    render(
+      <AuthProvider>
+        <LogoutHarness />
+      </AuthProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
+    expect(calls).toEqual(['unauthorize', '/api/auth/logout']);
+  });
+
+  it('still logs out when MusicKit unauthorize fails', async () => {
+    installMusicKit(() => Promise.reject(new Error('MusicKit broke')));
+    mockPost.mockResolvedValue({ data: { success: true } });
+
+    render(
+      <AuthProvider>
+        <LogoutHarness />
+      </AuthProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
+    expect(mockPost).toHaveBeenCalledWith('/api/auth/logout');
+  });
+
+  it('clears an orphaned MusicKit token when MusicKit initializes', async () => {
+    const instance = installMusicKit(async () => undefined, { configured: false });
+    mockGet.mockImplementation(async (url: string) =>
+      url === '/api/auth/apple-music/developer-token'
+        ? { data: { token: 'dev-token' } }
+        : Promise.reject({ response: { status: 401 } })
+    );
+
+    render(
+      <AuthProvider>
+        <InitMusicKitHarness />
+      </AuthProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /init musickit/i }));
+
+    await waitFor(() => expect(instance.unauthorize).toHaveBeenCalledTimes(1));
   });
 });

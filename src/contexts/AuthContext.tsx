@@ -16,9 +16,14 @@ import { clearPlaylistDraft } from '@/lib/playlist-draft';
 declare global {
   interface Window {
     MusicKit?: {
-      configure: (config: { developerToken: string; app: { name: string; build: string } }) => void;
+      // v3 resolves configure() asynchronously; getInstance() is undefined until it does.
+      configure: (config: {
+        developerToken: string;
+        app: { name: string; build: string };
+      }) => Promise<unknown> | void;
       getInstance: () => {
         authorize: () => Promise<string>;
+        unauthorize: () => Promise<void>;
         isAuthorized: boolean;
         musicUserToken: string;
       };
@@ -126,6 +131,21 @@ function waitForMusicKit(timeoutMs = MUSICKIT_TIMEOUT_MS): Promise<void> {
   });
 }
 
+/**
+ * Drop the Music-User-Token that MusicKit caches in localStorage. Without this,
+ * the next `authorize()` returns the cached token with no Apple popup — even
+ * after Apple rejected it — so the user can never reconnect (#60). Never throws:
+ * a MusicKit failure must not block logout or sign-in.
+ */
+async function clearMusicKitAuthorization(): Promise<void> {
+  try {
+    const music = window.MusicKit?.getInstance();
+    if (music?.isAuthorized) await music.unauthorize();
+  } catch (error) {
+    console.error('Failed to clear MusicKit authorization:', error);
+  }
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
@@ -159,10 +179,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await waitForMusicKit();
 
         const response = await axios.get('/api/auth/apple-music/developer-token');
-        window.MusicKit!.configure({
+        await window.MusicKit!.configure({
           developerToken: response.data.token,
           app: { name: 'Playlistd', build: '1.0.0' },
         });
+
+        // Only the sign-in page loads MusicKit, and it runs with no server
+        // session. A cached MusicKit token is therefore orphaned — possibly the
+        // one Apple just rejected. Clear it here, off the click path, so
+        // Connect opens the Apple popup and gets a fresh token.
+        await clearMusicKitAuthorization();
 
         setMusicKitReady(true);
         return true;
@@ -269,6 +295,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     try {
+      await clearMusicKitAuthorization();
       await axios.post('/api/auth/logout');
       setUser(null);
       setPlatform(null);
