@@ -16,7 +16,11 @@ import { clearPlaylistDraft } from '@/lib/playlist-draft';
 declare global {
   interface Window {
     MusicKit?: {
-      configure: (config: { developerToken: string; app: { name: string; build: string } }) => void;
+      // v3 resolves configure() asynchronously; getInstance() is undefined until it does.
+      configure: (config: {
+        developerToken: string;
+        app: { name: string; build: string };
+      }) => Promise<unknown> | void;
       getInstance: () => {
         authorize: () => Promise<string>;
         unauthorize: () => Promise<void>;
@@ -175,7 +179,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await waitForMusicKit();
 
         const response = await axios.get('/api/auth/apple-music/developer-token');
-        window.MusicKit!.configure({
+        await window.MusicKit!.configure({
           developerToken: response.data.token,
           app: { name: 'Playlistd', build: '1.0.0' },
         });

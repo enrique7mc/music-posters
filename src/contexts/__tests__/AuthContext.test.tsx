@@ -20,11 +20,15 @@ vi.mock('axios', () => ({
   default: { get: mockGet, post: mockPost },
 }));
 
-function installMusicKit(unauthorize: () => Promise<void>) {
+function installMusicKit(unauthorize: () => Promise<void>, { configured = true } = {}) {
   const instance = { authorize: vi.fn(), unauthorize: vi.fn(unauthorize), isAuthorized: true };
+  // Mirror MusicKit v3: no instance until the configure() promise resolves.
   window.MusicKit = {
-    configure: vi.fn(),
-    getInstance: () => instance as any,
+    configure: vi.fn(async () => {
+      await Promise.resolve();
+      configured = true;
+    }),
+    getInstance: () => (configured ? instance : undefined) as any,
   };
   return instance;
 }
@@ -138,7 +142,7 @@ describe('AuthContext playlist draft lifecycle', () => {
   });
 
   it('clears an orphaned MusicKit token when MusicKit initializes', async () => {
-    const instance = installMusicKit(async () => undefined);
+    const instance = installMusicKit(async () => undefined, { configured: false });
     mockGet.mockImplementation(async (url: string) =>
       url === '/api/auth/apple-music/developer-token'
         ? { data: { token: 'dev-token' } }
