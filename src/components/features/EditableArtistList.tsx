@@ -87,7 +87,7 @@ export default function EditableArtistList({
                 <span className="text-sm font-semibold tabular-nums text-white">
                   {tierCounts[tier] || 0}
                 </span>
-                <span className="truncate text-xs text-dark-300">{label}</span>
+                <span className="min-w-0 break-words text-xs text-dark-300">{label}</span>
               </div>
             </motion.div>
           ))}
@@ -108,7 +108,7 @@ export default function EditableArtistList({
           >
             <Card
               className={cn(
-                'flex flex-wrap items-center gap-3 rounded-xl border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.055] sm:flex-nowrap sm:px-4',
+                'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.055] sm:flex sm:px-4',
                 selectedArtists.has(artist.name) && 'border-[#f29520]/60 bg-[#f29520]/[0.06]'
               )}
             >
@@ -123,12 +123,12 @@ export default function EditableArtistList({
 
               {/* Artist info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-start gap-3 sm:items-center">
                   <span className="w-7 flex-shrink-0 text-xs tabular-nums text-dark-300">
                     {String(index + 1).padStart(2, '0')}
                   </span>
                   <h4
-                    className={`font-semibold truncate ${
+                    className={`min-w-0 whitespace-normal break-words font-semibold sm:truncate ${
                       artist.weight && artist.weight >= 8
                         ? 'text-base text-white'
                         : artist.weight && artist.weight >= 6
@@ -141,32 +141,37 @@ export default function EditableArtistList({
                 </div>
               </div>
 
-              {/* Track count selector (only in per-artist mode) */}
-              {trackCountMode === 'per-artist' && (
-                <div className="flex-shrink-0">
-                  <TrackCountInput
-                    value={perArtistCounts[artist.name] ?? 3}
-                    onCommit={(count) => onPerArtistCountChange(artist.name, count)}
-                    label={`Track count for ${artist.name}`}
-                  />
+              {/* Keep controls below the name on mobile, inline on desktop. */}
+              {(trackCountMode === 'per-artist' || artist.weight !== undefined || artist.tier) && (
+                <div className="col-span-3 row-start-2 flex flex-wrap items-center gap-2 sm:contents">
+                  {/* Track count selector (only in per-artist mode) */}
+                  {trackCountMode === 'per-artist' && (
+                    <div className="flex-shrink-0">
+                      <TrackCountInput
+                        value={perArtistCounts[artist.name] ?? 3}
+                        onCommit={(count) => onPerArtistCountChange(artist.name, count)}
+                        label={`Track count for ${artist.name}`}
+                      />
+                    </div>
+                  )}
+
+                  {/* Tier/Weight indicators */}
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    {/* Weight indicator */}
+                    {artist.weight !== undefined && (
+                      <span className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-dark-300">
+                        {artist.weight}/10
+                      </span>
+                    )}
+
+                    {/* Tier badge */}
+                    {artist.tier && <TierBadge tier={artist.tier} />}
+                  </div>
                 </div>
               )}
 
-              {/* Tier/Weight indicators */}
-              <div className="flex flex-shrink-0 items-center gap-2">
-                {/* Weight indicator */}
-                {artist.weight !== undefined && (
-                  <span className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-dark-300">
-                    {artist.weight}/10
-                  </span>
-                )}
-
-                {/* Tier badge */}
-                {artist.tier && <TierBadge tier={artist.tier} />}
-              </div>
-
               {/* Remove button */}
-              <div className="flex-shrink-0">
+              <div className="col-start-3 row-start-1 flex-shrink-0">
                 <button
                   onClick={() => onRemoveArtist(artist.name)}
                   className="rounded-lg p-2 text-dark-300 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-ring"
