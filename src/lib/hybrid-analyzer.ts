@@ -2,6 +2,7 @@ import { Artist } from '@/types';
 import { extractTextFromImage } from './ocr';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parseGeminiResponse } from './gemini-parser';
+import { isNonRetryableGeminiError } from './gemini';
 
 /**
  * Hybrid image analysis: Combines Vision API OCR with Gemini AI
@@ -224,6 +225,12 @@ export async function analyzeImageHybrid(
     } catch (error) {
       lastGeminiError = error instanceof Error ? error : new Error('Unknown error');
       console.error(`[Hybrid/Gemini] Attempt ${attempt} failed:`, lastGeminiError.message);
+
+      if (isNonRetryableGeminiError(error)) {
+        console.error('[Hybrid/Gemini] Non-retryable error, skipping remaining attempts');
+        geminiFailed = true;
+        break;
+      }
 
       if (attempt < maxRetries) {
         // Exponential backoff: 2^attempt seconds
