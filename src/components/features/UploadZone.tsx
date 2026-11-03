@@ -1,4 +1,4 @@
-import { useRef, useState, DragEvent } from 'react';
+import { useEffect, useRef, useState, DragEvent } from 'react';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 
@@ -7,13 +7,102 @@ interface UploadZoneProps {
   disabled?: boolean;
 }
 
+// Mirrors MAX_FILE_SIZE in src/lib/validation.ts. That module pulls in
+// server-only dependencies, so it is not imported into this client component.
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+const NO_IMAGE_MESSAGE = 'No image found on the clipboard. Copy a poster image, then try again.';
+const TOO_LARGE_MESSAGE = 'That image is larger than 10MB. Try a smaller image.';
+const PASTE_BLOCKED_MESSAGE =
+  "Couldn't read the clipboard. Allow clipboard access or choose the image instead.";
+
+function extensionFor(mimeType: string): string {
+  const subtype = mimeType.split('/')[1] ?? 'png';
+  return subtype === 'jpeg' ? 'jpg' : subtype;
+}
+
+/** Reads the first image from the async clipboard, or null when it has none. */
+export async function readClipboardImage(clipboard: Clipboard): Promise<File | null> {
+  const items = await clipboard.read();
+  for (const item of items) {
+    const imageType = item.types.find((type) => type.startsWith('image/'));
+    if (!imageType) continue;
+    const blob = await item.getType(imageType);
+    return new File([blob], `pasted-poster.${extensionFor(imageType)}`, { type: imageType });
+  }
+  return null;
+}
+
+/** Returns the first image file in a paste event's data, or null. */
+function imageFromDataTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  for (const file of Array.from(data.files)) {
+    if (file.type.startsWith('image/')) return file;
+  }
+  return null;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+}
+
 export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [canPaste, setCanPaste] = useState(false);
+  const [pasteMessage, setPasteMessage] = useState<string | null>(null);
+
+  // Keep the latest props for the document-level paste listener.
+  const acceptRef = useRef<(file: File | null) => void>(() => {});
+
+  const acceptFile = (file: File | null) => {
+    if (disabled) return;
+    if (!file || !file.type.startsWith('image/')) {
+      setPasteMessage(NO_IMAGE_MESSAGE);
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setPasteMessage(TOO_LARGE_MESSAGE);
+      return;
+    }
+    setPasteMessage(null);
+    onFileSelect(file);
+  };
+  acceptRef.current = acceptFile;
+
+  // Feature-detect after mount so server and client markup match.
+  useEffect(() => {
+    setCanPaste(
+      typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function'
+    );
+  }, []);
+
+  // Desktop: Cmd/Ctrl+V anywhere on the page pastes a copied image.
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+      const file = imageFromDataTransfer(e.clipboardData);
+      if (!file) return;
+      e.preventDefault();
+      acceptRef.current(file);
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, []);
+
+  const handlePasteClick = async () => {
+    setPasteMessage(null);
+    try {
+      acceptFile(await readClipboardImage(navigator.clipboard));
+    } catch {
+      setPasteMessage(PASTE_BLOCKED_MESSAGE);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) onFileSelect(file);
+    if (file && file.type.startsWith('image/')) acceptFile(file);
     // Choosing the same file again should still trigger a new analysis.
     e.target.value = '';
   };
@@ -23,7 +112,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
     setIsDragging(false);
     if (disabled) return;
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) onFileSelect(file);
+    if (file && file.type.startsWith('image/')) acceptFile(file);
   };
 
   return (
@@ -58,7 +147,7 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
       <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
         <div>
           <p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-accent-400">
-            Drop your image here
+            Drop or paste your image here
           </p>
           <h3 className="font-display text-3xl font-black tracking-tight text-dark-50 sm:text-4xl">
             Upload Festival Poster
@@ -67,18 +156,36 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
             A festival flyer, concert poster, or screenshot works. We&apos;ll find the artists and
             help you build a playlist from the lineup.
           </p>
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            className="mt-7 rounded-xl px-7 text-base font-bold"
-          >
-            Choose Image{' '}
-            <span aria-hidden="true" className="ml-3">
-              ↗
-            </span>
-          </Button>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              className="rounded-xl px-7 text-base font-bold"
+            >
+              Choose Image{' '}
+              <span aria-hidden="true" className="ml-3">
+                ↗
+              </span>
+            </Button>
+            {canPaste && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={handlePasteClick}
+                disabled={disabled}
+                className="rounded-xl px-7 text-base font-bold"
+              >
+                Paste Image
+              </Button>
+            )}
+          </div>
+          {pasteMessage && (
+            <p role="alert" className="mt-3 text-sm text-red-400">
+              {pasteMessage}
+            </p>
+          )}
           <p className="mt-4 text-xs text-dark-300">JPG, PNG, and other image formats · Max 10MB</p>
         </div>
         <div
