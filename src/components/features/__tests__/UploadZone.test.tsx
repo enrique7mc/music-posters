@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import UploadZone from '../UploadZone';
 
 function imageBlob(type = 'image/png', size = 4) {
@@ -110,6 +110,99 @@ describe('UploadZone paste support', () => {
     fireEvent.paste(screen.getByLabelText('notes'), { clipboardData: { files: [file] } });
 
     expect(onFileSelect).not.toHaveBeenCalled();
+  });
+
+  describe('pending clipboard reads', () => {
+    function deferredClipboard() {
+      let resolve: (items: unknown[]) => void = () => {};
+      stubClipboardRead(
+        () =>
+          new Promise((r) => {
+            resolve = r;
+          })
+      );
+      return {
+        resolveWithImage: () => resolve([clipboardItem('image/png', imageBlob())]),
+        resolveWithText: () => resolve([clipboardItem('text/plain', new Blob(['hi']))]),
+      };
+    }
+
+    async function flush() {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+
+    it('drops a clipboard read that resolves after the zone unmounts', async () => {
+      const clipboard = deferredClipboard();
+      const onFileSelect = vi.fn();
+      const { unmount } = render(<UploadZone onFileSelect={onFileSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: /paste image/i }));
+      unmount();
+      clipboard.resolveWithImage();
+      await flush();
+
+      expect(onFileSelect).not.toHaveBeenCalled();
+    });
+
+    it('drops a clipboard read superseded by a newer chosen file', async () => {
+      const clipboard = deferredClipboard();
+      const onFileSelect = vi.fn();
+      render(<UploadZone onFileSelect={onFileSelect} />);
+      const chosen = new File([imageBlob('image/jpeg')], 'chosen.jpg', { type: 'image/jpeg' });
+
+      fireEvent.click(await screen.findByRole('button', { name: /paste image/i }));
+      fireEvent.change(screen.getByLabelText(/choose a festival poster image/i), {
+        target: { files: [chosen] },
+      });
+      clipboard.resolveWithImage();
+      await flush();
+
+      expect(onFileSelect).toHaveBeenCalledTimes(1);
+      expect(onFileSelect).toHaveBeenCalledWith(chosen);
+    });
+
+    it('does not show a stale no-image message after a newer input', async () => {
+      const clipboard = deferredClipboard();
+      render(<UploadZone onFileSelect={vi.fn()} />);
+      const chosen = new File([imageBlob()], 'chosen.png', { type: 'image/png' });
+
+      fireEvent.click(await screen.findByRole('button', { name: /paste image/i }));
+      fireEvent.paste(document, { clipboardData: { files: [chosen] } });
+      clipboard.resolveWithText();
+      await flush();
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('uses the latest props when the read resolves', async () => {
+      const clipboard = deferredClipboard();
+      const first = vi.fn();
+      const latest = vi.fn();
+      const { rerender } = render(<UploadZone onFileSelect={first} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: /paste image/i }));
+      rerender(<UploadZone onFileSelect={latest} />);
+      clipboard.resolveWithImage();
+      await flush();
+
+      expect(first).not.toHaveBeenCalled();
+      expect(latest).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops the read when the zone became disabled meanwhile', async () => {
+      const clipboard = deferredClipboard();
+      const onFileSelect = vi.fn();
+      const { rerender } = render(<UploadZone onFileSelect={onFileSelect} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: /paste image/i }));
+      rerender(<UploadZone onFileSelect={onFileSelect} disabled />);
+      clipboard.resolveWithImage();
+      await flush();
+
+      expect(onFileSelect).not.toHaveBeenCalled();
+    });
   });
 
   it('ignores pastes while disabled', () => {

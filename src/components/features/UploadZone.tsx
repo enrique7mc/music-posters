@@ -53,10 +53,15 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
   const [canPaste, setCanPaste] = useState(false);
   const [pasteMessage, setPasteMessage] = useState<string | null>(null);
 
-  // Keep the latest props for the document-level paste listener.
+  // Keep the latest props for the document-level paste listener and for
+  // clipboard reads that resolve after a re-render.
   const acceptRef = useRef<(file: File | null) => void>(() => {});
+  // Bumped by every new input and on unmount. A clipboard read that resolves
+  // after the counter moved on is stale and gets dropped.
+  const inputGenerationRef = useRef(0);
 
   const acceptFile = (file: File | null) => {
+    inputGenerationRef.current += 1;
     if (disabled) return;
     if (!file || !file.type.startsWith('image/')) {
       setPasteMessage(NO_IMAGE_MESSAGE);
@@ -78,6 +83,15 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
     );
   }, []);
 
+  // Invalidate any pending clipboard read when the zone unmounts (for
+  // example, when the user switches to manual artist entry).
+  useEffect(() => {
+    const generation = inputGenerationRef;
+    return () => {
+      generation.current += 1;
+    };
+  }, []);
+
   // Desktop: Cmd/Ctrl+V anywhere on the page pastes a copied image.
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -93,11 +107,18 @@ export default function UploadZone({ onFileSelect, disabled }: UploadZoneProps) 
 
   const handlePasteClick = async () => {
     setPasteMessage(null);
+    const generation = ++inputGenerationRef.current;
+    let file: File | null;
     try {
-      acceptFile(await readClipboardImage(navigator.clipboard));
+      file = await readClipboardImage(navigator.clipboard);
     } catch {
-      setPasteMessage(PASTE_BLOCKED_MESSAGE);
+      if (generation === inputGenerationRef.current) setPasteMessage(PASTE_BLOCKED_MESSAGE);
+      return;
     }
+    // A newer input or an unmount happened while the clipboard read was pending.
+    if (generation !== inputGenerationRef.current) return;
+    // Use the latest props, not the ones captured when the tap happened.
+    acceptRef.current(file);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
