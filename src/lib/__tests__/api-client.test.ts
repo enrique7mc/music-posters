@@ -44,6 +44,18 @@ describe('api-client', () => {
     expect(response.status).toBe(200);
   }, 15000);
 
+  // The route already retried every artist; re-sending the search would only
+  // multiply the load on the platform during an outage.
+  it('should NOT retry a 503 from /api/search-tracks', async () => {
+    mock.onPost('/api/search-tracks').reply(503, { error: 'Apple Music is not responding' });
+
+    await expect(apiClient.post('/api/search-tracks', { artists: [] })).rejects.toMatchObject({
+      response: { status: 503 },
+    });
+
+    expect(mock.history.post.length).toBe(1);
+  });
+
   it('should NOT retry for /api/create-playlist', async () => {
     mock.onPost('/api/create-playlist').reply(429, { error: 'Rate limited' });
 

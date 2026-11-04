@@ -129,8 +129,9 @@ export interface MusicPlatformService {
    * Optional: only platforms that support a cheap read-back implement it.
    * @param playlistId - Platform-specific playlist ID
    * @param token - Platform-specific auth token
+   * @param budgetMs - Overall deadline for the read-back, including retries
    */
-  getPlaylistTrackCount?(playlistId: string, token: string): Promise<number>;
+  getPlaylistTrackCount?(playlistId: string, token: string, budgetMs?: number): Promise<number>;
 
   /**
    * Get the current authenticated user

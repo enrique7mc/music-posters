@@ -23,9 +23,12 @@ export const config = {
   maxDuration: 60,
 };
 
-// Skip the read-back when the add step ran long, so the route still answers
-// inside maxDuration. The read-back is evidence only, never required.
-const VERIFY_BUDGET_MS = 40_000;
+// The read-back is evidence only, never required. Start it only when the add
+// step left time, and give it a hard deadline so the route still answers
+// inside maxDuration (60s) after the playlist exists.
+const VERIFY_START_LIMIT_MS = 40_000;
+const VERIFY_MAX_BUDGET_MS = 10_000;
+const ROUTE_DEADLINE_MS = 55_000;
 
 /**
  * API route handler that creates a playlist for the authenticated user from provided tracks.
@@ -184,9 +187,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Read the stored count back so a silent platform-side drop shows up in the
     // logs and on the success page. Non-fatal.
     let tracksVerified: number | null = null;
-    if (platformService.getPlaylistTrackCount && Date.now() - startedAt < VERIFY_BUDGET_MS) {
+    const elapsedBeforeVerify = Date.now() - startedAt;
+    if (platformService.getPlaylistTrackCount && elapsedBeforeVerify < VERIFY_START_LIMIT_MS) {
+      const budgetMs = Math.min(VERIFY_MAX_BUDGET_MS, ROUTE_DEADLINE_MS - elapsedBeforeVerify);
       try {
-        tracksVerified = await platformService.getPlaylistTrackCount(playlist.id, accessToken);
+        tracksVerified = await platformService.getPlaylistTrackCount(
+          playlist.id,
+          accessToken,
+          budgetMs
+        );
       } catch (error) {
         console.warn('[create-playlist] read-back failed (non-fatal):', errDetail(error));
       }

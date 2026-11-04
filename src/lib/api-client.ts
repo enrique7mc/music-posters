@@ -13,10 +13,25 @@ interface RetryConfig extends InternalAxiosRequestConfig {
   _retryCount?: number;
 }
 
+/**
+ * Statuses a route answers with that must NOT be retried, although they are
+ * otherwise retryable. /api/search-tracks returns 503 after it already retried
+ * every artist server-side; re-sending the whole search would only multiply the
+ * load on the music platform during an outage.
+ */
+const NO_RETRY_STATUSES_BY_ROUTE: Record<string, number[]> = {
+  '/api/search-tracks': [503],
+};
+
 function isRetryableError(error: AxiosError): boolean {
   if (error.code === 'ERR_CANCELED') return false;
   if (!error.response) return true; // Network error
   const status = error.response.status;
+  const url = error.config?.url ?? '';
+  const excluded = Object.entries(NO_RETRY_STATUSES_BY_ROUTE).some(
+    ([route, statuses]) => url.startsWith(route) && statuses.includes(status)
+  );
+  if (excluded) return false;
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 

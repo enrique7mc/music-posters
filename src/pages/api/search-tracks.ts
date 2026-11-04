@@ -180,6 +180,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (tracks.length === 0 && failedArtists.length > 0) {
       // Every artist that matched then failed: a platform outage, not an empty poster.
+      // 503 is excluded from api-client retries on this route: each artist was
+      // already retried here, so re-sending the whole search would only multiply
+      // the load on the platform.
       return res.status(503).json({
         error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} is not responding right now. Please try again in a moment.`,
       });
@@ -229,7 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Distinct message: "no tracks found" would send the user hunting their poster.
     // Details stay server-side — errDetail() above already logged them.
     // Only 403 arrives as PlatformAccessError; expired tokens (401) come through raw
-    // and are handled below. Not 502 — api-client retries that on this route.
+    // and are handled below. Not 502 or 504 — api-client retries those on this route.
     if (error instanceof PlatformAccessError) {
       return res.status(403).json({
         error: 'The music service cannot complete this request. Please try again later.',

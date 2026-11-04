@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
 import { PlatformAccessError, PartialAddError } from '../types';
@@ -377,13 +377,13 @@ describe('AppleMusicPlatformService.addTracksToPlaylist', () => {
 
   afterEach(() => spies.forEach((s) => s.mockRestore()));
 
-  it('retries a transient batch failure and sends every batch', async () => {
+  it('retries a rate-limited batch (429) and sends every batch', async () => {
     const batchSizes: number[] = [];
     let calls = 0;
     server.use(
       http.post(TRACKS_URL, async ({ request }) => {
         calls++;
-        if (calls === 2) return new HttpResponse(null, { status: 500 }); // batch 2, first try
+        if (calls === 2) return new HttpResponse(null, { status: 429 }); // batch 2, first try
         const body = (await request.json()) as { data: unknown[] };
         batchSizes.push(body.data.length);
         return new HttpResponse(null, { status: 204 });
@@ -395,7 +395,9 @@ describe('AppleMusicPlatformService.addTracksToPlaylist', () => {
     expect(batchSizes).toEqual([100, 100, 50]);
   });
 
-  it('throws PartialAddError with the count that landed when a batch keeps failing', async () => {
+  // A 5xx can arrive after Apple stored the batch, so a retry could add the
+  // same tracks twice. Only 429 (refused before processing) is retried.
+  it('does not retry a batch after a 5xx and reports what landed', async () => {
     let calls = 0;
     server.use(
       http.post(TRACKS_URL, () => {
@@ -412,7 +414,7 @@ describe('AppleMusicPlatformService.addTracksToPlaylist', () => {
 
     expect(error).toBeInstanceOf(PartialAddError);
     expect(error).toMatchObject({ added: 100, total: 250 });
-    expect(calls).toBe(4); // batch 1 + three attempts at batch 2; batch 3 never sent
+    expect(calls).toBe(2); // batch 1 + one attempt at batch 2; batch 3 never sent
   });
 });
 
@@ -440,6 +442,19 @@ describe('AppleMusicPlatformService.getPlaylistTrackCount', () => {
     );
 
     expect(await service.getPlaylistTrackCount('p.1', 'user-token')).toBe(150);
+  });
+
+  it('gives up at its budget when a page stalls', async () => {
+    server.use(
+      http.get(TRACKS_URL, async () => {
+        await delay('infinite');
+        return HttpResponse.json({ data: [] });
+      })
+    );
+    const startedAt = Date.now();
+
+    await expect(service.getPlaylistTrackCount('p.1', 'user-token', 200)).rejects.toBeTruthy();
+    expect(Date.now() - startedAt).toBeLessThan(2000);
   });
 
   it('returns 0 for an empty playlist (Apple answers 404)', async () => {

@@ -35,9 +35,20 @@ const MAX_RETRY_AFTER_MS = 5000; // cap on an upstream Retry-After hint
 
 const PLAYLIST_ADD_BATCH_SIZE = 100;
 const PLAYLIST_TRACKS_PAGE_LIMIT = 100;
+const PLAYLIST_READBACK_PAGE_TIMEOUT_MS = 5000; // per-page cap; the caller sets the overall deadline
+const DEFAULT_READBACK_BUDGET_MS = 10_000;
 
 function httpStatus(error: unknown): number | undefined {
   return (error as { response?: { status?: number } })?.response?.status;
+}
+
+/**
+ * True only for a 429. Use it for non-idempotent requests: a 429 means Apple
+ * refused the request before processing it, whereas a 5xx or a dropped
+ * connection can arrive after Apple already applied it (RFC 9110 §9.2.2).
+ */
+function isRateLimited(error: unknown): boolean {
+  return httpStatus(error) === 429;
 }
 
 /**
@@ -147,15 +158,19 @@ export class AppleMusicPlatformService implements MusicPlatformService {
 
   /**
    * Run an Apple Music request, retrying transient failures (429, 5xx, network)
-   * with backoff. Rethrows the last error when retries run out or the error is
-   * not transient. Logs only errMessage(): raw axios errors carry both tokens.
+   * with backoff. Rethrows the last error when retries run out or `shouldRetry`
+   * rejects the error. Logs only errMessage(): raw axios errors carry both tokens.
    */
-  private async withRetry<T>(label: string, request: () => Promise<T>): Promise<T> {
+  private async withRetry<T>(
+    label: string,
+    request: () => Promise<T>,
+    shouldRetry: (error: unknown) => boolean = isTransient
+  ): Promise<T> {
     for (let attempt = 1; ; attempt++) {
       try {
         return await request();
       } catch (error) {
-        if (attempt >= MAX_ATTEMPTS || !isTransient(error)) throw error;
+        if (attempt >= MAX_ATTEMPTS || !shouldRetry(error)) throw error;
         const waitMs = retryDelayMs(error, attempt, this.retryBaseMs);
         console.warn(
           `[Apple Music] ${label} failed (${errMessage(error)}); ` +
@@ -451,8 +466,9 @@ export class AppleMusicPlatformService implements MusicPlatformService {
   }
 
   /**
-   * Add tracks in batches of 100 with a 500ms pause between batches. Each batch
-   * retries transient failures. When a batch still fails, throws PartialAddError
+   * Add tracks in batches of 100 with a 500ms pause between batches. A batch
+   * retries only on 429: the POST is not idempotent, and a retry after a 5xx
+   * or network error could add the same tracks twice. When a batch fails, throws PartialAddError
    * with the count of tracks added so far: the playlist already exists, so the
    * caller can report a partial result.
    */
@@ -468,12 +484,15 @@ export class AppleMusicPlatformService implements MusicPlatformService {
       const label = `Add batch ${i + 1}/${chunks.length} (${chunk.length} tracks)`;
 
       try {
-        const response = await this.withRetry(label, () =>
-          axios.post(
-            `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks`,
-            { data: chunk.map((id) => ({ id, type: 'songs' })) },
-            { headers: this.getHeaders(token) }
-          )
+        const response = await this.withRetry(
+          label,
+          () =>
+            axios.post(
+              `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks`,
+              { data: chunk.map((id) => ({ id, type: 'songs' })) },
+              { headers: this.getHeaders(token) }
+            ),
+          isRateLimited
         );
         added += chunk.length;
         console.log(`[Apple Music] ${label} → HTTP ${response.status}`);
@@ -492,9 +511,15 @@ export class AppleMusicPlatformService implements MusicPlatformService {
   /**
    * Count the tracks a library playlist stores, paginating 100 per page.
    * Apple answers 404 for an empty playlist. Follows `next` only to Apple's
-   * origin, because the request carries both tokens.
+   * origin, because the request carries both tokens. Bounded: each page has a
+   * timeout, and the whole read-back (pages and retries) stops at `budgetMs`.
    */
-  async getPlaylistTrackCount(playlistId: string, token: string): Promise<number> {
+  async getPlaylistTrackCount(
+    playlistId: string,
+    token: string,
+    budgetMs: number = DEFAULT_READBACK_BUDGET_MS
+  ): Promise<number> {
+    const deadline = Date.now() + budgetMs;
     let count = 0;
     let url: string | null =
       `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks?limit=${PLAYLIST_TRACKS_PAGE_LIMIT}`;
@@ -505,10 +530,24 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         throw new Error('Refusing to follow non-Apple pagination URL');
       }
 
+      if (Date.now() >= deadline) {
+        throw new Error(`Read-back exceeded its ${budgetMs}ms budget`);
+      }
+
       let data: any;
       try {
-        const response = await this.withRetry('Read back playlist tracks', () =>
-          axios.get(requestUrl, { headers: this.getHeaders(token) })
+        const response = await this.withRetry(
+          'Read back playlist tracks',
+          () =>
+            axios.get(requestUrl, {
+              headers: this.getHeaders(token),
+              timeout: PLAYLIST_READBACK_PAGE_TIMEOUT_MS,
+              // Hard stop at the overall deadline, whatever the transport does
+              // with `timeout`. An abort is not transient, so it is not retried.
+              signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+            }),
+          // Retry only while the budget leaves room for the backoff and a request.
+          (error) => isTransient(error) && Date.now() + this.retryBaseMs * 2 < deadline
         );
         data = response.data;
       } catch (error) {
