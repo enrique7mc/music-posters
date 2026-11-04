@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Success from '../../pages/success';
 import { PLAYLIST_DRAFT_STORAGE_KEY } from '@/lib/playlist-draft';
@@ -9,7 +9,7 @@ const { mockPush, mockRouter } = vi.hoisted(() => {
     mockPush: push,
     mockRouter: {
       push,
-      query: { playlistUrl: 'https://music.apple.com/playlist/test' },
+      query: { playlistUrl: 'https://music.apple.com/playlist/test' } as Record<string, string>,
     },
   };
 });
@@ -57,5 +57,28 @@ describe('success playlist draft lifecycle', () => {
     expect(sessionStorage.getItem('tracks')).toBeNull();
     expect(sessionStorage.getItem('returnAfterAuth')).toBe('keep');
     expect(sessionStorage.getItem('trackViewMode')).toBe('list');
+  });
+});
+
+describe('success track count notice', () => {
+  const baseQuery = { playlistUrl: 'https://music.apple.com/playlist/test' };
+
+  it('warns when fewer tracks landed than were requested', async () => {
+    mockRouter.query = { ...baseQuery, added: '100', requested: '340' };
+
+    render(<Success />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('100 of 340 tracks were added');
+    mockRouter.query = baseQuery;
+  });
+
+  it('shows no warning when every track landed', async () => {
+    mockRouter.query = { ...baseQuery, added: '340', requested: '340' };
+
+    render(<Success />);
+
+    expect(await screen.findByText(/340 tracks added to your Apple Music library/)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    mockRouter.query = baseQuery;
   });
 });

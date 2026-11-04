@@ -16,6 +16,7 @@ export default function Success() {
   const platformName = platform === 'apple-music' ? 'Apple Music' : 'Spotify';
 
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
+  const [trackCounts, setTrackCounts] = useState<{ added: number; requested: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [buttonsEnabled, setButtonsEnabled] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -40,6 +41,17 @@ export default function Success() {
   useEffect(() => {
     if (router.query.playlistUrl) {
       setPlaylistUrl(router.query.playlistUrl as string);
+    }
+    const added = Number(router.query.added);
+    const requested = Number(router.query.requested);
+    if (
+      router.query.added !== undefined &&
+      Number.isInteger(added) &&
+      Number.isInteger(requested) &&
+      added >= 0 &&
+      requested > 0
+    ) {
+      setTrackCounts({ added, requested });
     }
   }, [router.query]);
 
@@ -103,6 +115,8 @@ export default function Success() {
     return null;
   }
 
+  const missingTracks = trackCounts ? trackCounts.requested - trackCounts.added : 0;
+
   return (
     <>
       <Head>
@@ -156,6 +170,21 @@ export default function Success() {
                 starts here.
               </p>
             </div>
+
+            {missingTracks > 0 && trackCounts && (
+              <div
+                className="mb-6 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-5"
+                role="alert"
+              >
+                <p className="font-semibold text-amber-200">
+                  {trackCounts.added} of {trackCounts.requested} tracks were added
+                </p>
+                <p className="mt-2 text-sm text-amber-100/70">
+                  {platformName} didn&apos;t accept {missingTracks} track
+                  {missingTracks === 1 ? '' : 's'}. Open the playlist to check what landed.
+                </p>
+              </div>
+            )}
 
             <section className="surface p-5 sm:p-8" aria-labelledby="playlist-receipt-heading">
               <div className="mb-6 flex items-center justify-between border-b border-dark-700 pb-5">
@@ -215,7 +244,9 @@ export default function Success() {
                   <p className="mt-5 text-xs text-dark-300" role="status">
                     {copied
                       ? 'Link copied to clipboard.'
-                      : `Added to your ${platformName} library.`}
+                      : trackCounts
+                        ? `${trackCounts.added} track${trackCounts.added === 1 ? '' : 's'} added to your ${platformName} library.`
+                        : `Added to your ${platformName} library.`}
                   </p>
                 </>
               ) : (

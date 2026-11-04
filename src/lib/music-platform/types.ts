@@ -30,6 +30,26 @@ export class PlatformAccessError extends Error {
 }
 
 /**
+ * Thrown by addTracksToPlaylist when a batch still fails after its retries.
+ * The playlist already exists and holds the first `added` tracks, so the caller
+ * can report a partial result instead of a bare failure. `failure` is the
+ * underlying error; it may be a raw axios error, so log it with errDetail() only.
+ */
+export class PartialAddError extends Error {
+  readonly added: number;
+  readonly total: number;
+  readonly failure: unknown;
+
+  constructor(added: number, total: number, failure: unknown) {
+    super(`Added ${added} of ${total} tracks before a batch failed`);
+    this.name = 'PartialAddError';
+    this.added = added;
+    this.total = total;
+    this.failure = failure;
+  }
+}
+
+/**
  * Result of searching for an artist on a music platform
  */
 export interface ArtistSearchResult {
@@ -103,6 +123,15 @@ export interface MusicPlatformService {
    * @param token - Platform-specific auth token
    */
   addTracksToPlaylist(playlistId: string, trackIds: string[], token: string): Promise<void>;
+
+  /**
+   * Count the tracks a playlist actually stores, read back from the platform.
+   * Optional: only platforms that support a cheap read-back implement it.
+   * @param playlistId - Platform-specific playlist ID
+   * @param token - Platform-specific auth token
+   * @param budgetMs - Overall deadline for the read-back, including retries
+   */
+  getPlaylistTrackCount?(playlistId: string, token: string, budgetMs?: number): Promise<number>;
 
   /**
    * Get the current authenticated user

@@ -5,7 +5,7 @@ import {
   getPlatformAccessTokenOrDev,
 } from '@/lib/auth';
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
-import { getMusicPlatform } from '@/lib/music-platform';
+import { getMusicPlatform, PartialAddError } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { SpotifyPlatformService } from '@/lib/music-platform/spotify-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
@@ -16,10 +16,19 @@ import { createPlaylistSchema, validateRequest } from '@/lib/validation';
 import { generatePlaylistCover } from '@/lib/cover-generator';
 import { MusicPlatform } from '@/types';
 
-// Increase timeout for large playlists that require multiple batch API calls
+// Large playlists need many sequential batch calls. A measured Apple batch
+// takes ~1.5–2.5s plus the 500ms pause, and transient errors add retry
+// backoff, so 2,000 tracks (20 batches) does not fit in 30s.
 export const config = {
-  maxDuration: 30,
+  maxDuration: 60,
 };
+
+// The read-back is evidence only, never required. Start it only when the add
+// step left time, and give it a hard deadline so the route still answers
+// inside maxDuration (60s) after the playlist exists.
+const VERIFY_START_LIMIT_MS = 40_000;
+const VERIFY_MAX_BUDGET_MS = 10_000;
+const ROUTE_DEADLINE_MS = 55_000;
 
 /**
  * API route handler that creates a playlist for the authenticated user from provided tracks.
@@ -110,11 +119,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       playlistUrl: fakeUrl,
       playlistId: `dev-dry-run-${ts}`,
       tracksAdded: tracks.length,
+      tracksRequested: tracks.length,
+      tracksVerified: null,
+      partial: false,
       platform: dryRunPlatform,
       dryRun: true,
     });
   }
 
+  const startedAt = Date.now();
   try {
     // Get the platform service
     const platformService = getMusicPlatform(platform);
@@ -152,9 +165,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    await platformService.addTracksToPlaylist(playlist.id, trackIdsToAdd, accessToken);
+    // The playlist exists from here on. When a batch fails after its retries,
+    // report what landed (with the link) instead of a bare error: a generic
+    // 500 would hide a half-filled playlist, and "Try again" would make a
+    // second one.
+    let tracksAdded = trackIdsToAdd.length;
+    let partial = false;
+    try {
+      await platformService.addTracksToPlaylist(playlist.id, trackIdsToAdd, accessToken);
+    } catch (error) {
+      if (!(error instanceof PartialAddError)) throw error;
+      if (error.added === 0) throw error.failure; // nothing landed: normal error handling
+      partial = true;
+      tracksAdded = error.added;
+      console.error(
+        `[create-playlist] partial add: ${error.added}/${error.total} tracks, then:`,
+        errDetail(error.failure)
+      );
+    }
 
-    console.log(`Playlist created successfully: ${playlist.url}`);
+    // Read the stored count back so a silent platform-side drop shows up in the
+    // logs and on the success page. Non-fatal.
+    let tracksVerified: number | null = null;
+    const elapsedBeforeVerify = Date.now() - startedAt;
+    if (platformService.getPlaylistTrackCount && elapsedBeforeVerify < VERIFY_START_LIMIT_MS) {
+      const budgetMs = Math.min(VERIFY_MAX_BUDGET_MS, ROUTE_DEADLINE_MS - elapsedBeforeVerify);
+      try {
+        tracksVerified = await platformService.getPlaylistTrackCount(
+          playlist.id,
+          accessToken,
+          budgetMs
+        );
+      } catch (error) {
+        console.warn('[create-playlist] read-back failed (non-fatal):', errDetail(error));
+      }
+    }
+
+    // One summary line per request so each run can be traced in the Vercel logs.
+    console.log(
+      `[create-playlist] platform=${platform} playlist=${playlist.id} ` +
+        `requested=${trackIdsToAdd.length} added=${tracksAdded} ` +
+        `verified=${tracksVerified ?? 'skipped'} partial=${partial} ` +
+        `elapsedMs=${Date.now() - startedAt}`
+    );
 
     // Generate and upload custom playlist cover (Spotify only, non-blocking)
     if (posterThumbnail && platform === 'spotify' && platformService.uploadPlaylistCover) {
@@ -199,7 +252,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({
       playlistUrl: playlist.url,
       playlistId: playlist.id,
-      tracksAdded: tracks.length,
+      tracksAdded,
+      tracksRequested: trackIdsToAdd.length,
+      tracksVerified,
+      partial,
       platform,
     });
   } catch (error: any) {

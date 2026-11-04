@@ -60,7 +60,10 @@ export interface AnalyzeResponse {
 export interface CreatePlaylistResponse {
   playlistUrl: string;
   playlistId: string;
-  tracksAdded: number;
+  tracksAdded: number; // Tracks the platform accepted (≤ tracksRequested)
+  tracksRequested: number; // Tracks the client sent
+  tracksVerified: number | null; // Read back from the platform; null when not checked
+  partial: boolean; // True when a batch failed after retries and tracks are missing
 }
 
 export interface PersonalizeResponse {

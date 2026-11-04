@@ -3,6 +3,7 @@ import { createMocks } from 'node-mocks-http';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import handler from '../create-playlist';
+import { appleMusicPlatform } from '@/lib/music-platform/apple-music-platform';
 
 // No rate limiting in tests.
 vi.mock('@/lib/rate-limit', () => ({
@@ -87,5 +88,105 @@ describe('/api/create-playlist', () => {
       'Spotify authentication expired. Please log in again.'
     );
     expect(res.getHeader('Set-Cookie')).toBeUndefined();
+  });
+
+  describe('Apple Music track batches', () => {
+    const TRACKS_URL = 'https://api.music.apple.com/v1/me/library/playlists/p.1/tracks';
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => String(1000 + i));
+
+    function createBigRequest(n: number) {
+      return createMocks({
+        method: 'POST',
+        headers: { cookie: APPLE_COOKIE },
+        body: { trackIds: ids(n), playlistName: 'Big Mix' },
+      });
+    }
+
+    beforeEach(() => {
+      appleMusicPlatform.retryBaseMs = 0;
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      server.use(
+        http.post(APPLE_PLAYLISTS_URL, () =>
+          HttpResponse.json({ data: [{ id: 'p.1', attributes: {} }] }, { status: 201 })
+        )
+      );
+    });
+
+    it('reports added, requested, and the read-back count on success', async () => {
+      server.use(
+        http.post(TRACKS_URL, () => new HttpResponse(null, { status: 204 })),
+        http.get(TRACKS_URL, () =>
+          HttpResponse.json({ data: Array.from({ length: 50 }, () => ({})) })
+        )
+      );
+      const { req, res } = createBigRequest(50);
+
+      await handler(req as any, res as any);
+
+      expect(res._getStatusCode()).toBe(200);
+      expect(JSON.parse(res._getData())).toMatchObject({
+        tracksAdded: 50,
+        tracksRequested: 50,
+        tracksVerified: 50,
+        partial: false,
+      });
+    });
+
+    // Regression: a failed later batch returned a generic 500 and hid a
+    // half-filled playlist; a 403 on it also bounced the user to sign-in.
+    it.each([503, 403])(
+      'returns a partial 200 with the link when batch 2 keeps failing (%i)',
+      async (status) => {
+        let calls = 0;
+        server.use(
+          http.post(TRACKS_URL, () => {
+            calls++;
+            return calls === 1
+              ? new HttpResponse(null, { status: 204 })
+              : new HttpResponse(null, { status });
+          }),
+          http.get(TRACKS_URL, () =>
+            HttpResponse.json({ data: Array.from({ length: 100 }, () => ({})) })
+          )
+        );
+        const { req, res } = createBigRequest(250);
+
+        await handler(req as any, res as any);
+
+        expect(res._getStatusCode()).toBe(200);
+        expect(JSON.parse(res._getData())).toMatchObject({
+          playlistId: 'p.1',
+          tracksAdded: 100,
+          tracksRequested: 250,
+          tracksVerified: 100,
+          partial: true,
+        });
+        expect(res.getHeader('Set-Cookie')).toBeUndefined(); // session kept
+      }
+    );
+
+    it('keeps the normal error path when the first batch fails', async () => {
+      server.use(http.post(TRACKS_URL, () => new HttpResponse(null, { status: 503 })));
+      const { req, res } = createBigRequest(50);
+
+      await handler(req as any, res as any);
+
+      expect(res._getStatusCode()).toBe(500);
+    });
+
+    it('still succeeds when the read-back fails', async () => {
+      server.use(
+        http.post(TRACKS_URL, () => new HttpResponse(null, { status: 204 })),
+        http.get(TRACKS_URL, () => new HttpResponse(null, { status: 400 }))
+      );
+      const { req, res } = createBigRequest(50);
+
+      await handler(req as any, res as any);
+
+      expect(res._getStatusCode()).toBe(200);
+      expect(JSON.parse(res._getData())).toMatchObject({ tracksAdded: 50, tracksVerified: null });
+    });
   });
 });

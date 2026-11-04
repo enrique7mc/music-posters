@@ -1,5 +1,6 @@
 import { MusicPlatform, Artist, Track, TrackSelectionMode } from '@/types';
-import { MusicPlatformService, TrackCountOptions } from './types';
+import { MusicPlatformService, TrackCountOptions, PlatformAccessError } from './types';
+import { errDetail } from '@/lib/safe-log';
 import { spotifyPlatform, SpotifyPlatformService } from './spotify-platform';
 import { appleMusicPlatform, AppleMusicPlatformService } from './apple-music-platform';
 import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '@/lib/constants';
@@ -23,6 +24,13 @@ export function getMusicPlatform(platform: MusicPlatform): MusicPlatformService 
     default:
       throw new Error(`Unknown music platform: ${platform}`);
   }
+}
+
+/** An artist dropped from the results because a platform request failed. */
+export interface FailedArtist {
+  artist: string; // Name as requested (from the poster / user list)
+  stage: 'search' | 'tracks'; // Which request failed
+  reason: string; // Log-safe error detail (errDetail)
 }
 
 // Helper function to add delay between requests
@@ -124,7 +132,10 @@ export function getSelectionModeForArtist(
  * @param token - Platform-specific auth token
  * @param trackCountOptions - Optional settings to customize track counts per artist
  * @param developerToken - Developer token (required for Apple Music)
- * @returns Object containing tracks, foundArtists count, and artistMatches array
+ * @returns Object containing tracks, foundArtists count, artistMatches array, and
+ *   failedArtists: artists whose lookup or top-tracks request failed (after the
+ *   platform's own retries). They are missing from `tracks`, so callers MUST
+ *   surface them instead of treating them as "not found".
  */
 export async function searchAndGetTopTracks(
   platform: MusicPlatformService,
@@ -135,7 +146,13 @@ export async function searchAndGetTopTracks(
 ): Promise<{
   tracks: Track[];
   foundArtists: number;
-  artistMatches: Array<{ requested: string; found: string | null; similarity: number }>;
+  artistMatches: Array<{
+    requested: string;
+    found: string | null;
+    similarity: number;
+    lookupFailed: boolean;
+  }>;
+  failedArtists: FailedArtist[];
 }> {
   // Set developer token for Apple Music if needed
   if (platform.platform === 'apple-music' && developerToken) {
@@ -153,28 +170,49 @@ export async function searchAndGetTopTracks(
   const batchSize = platform.platform === 'spotify' ? 3 : 5;
   const batchDelay = platform.platform === 'spotify' ? 1000 : 500;
 
+  // A per-artist failure must not sink the batch or vanish silently. Record it
+  // and continue. Access failures still abort everything: if the platform
+  // refuses one call it refuses them all. That covers PlatformAccessError and a
+  // raw 401 (expired token), which the route maps to 401 so the client re-auths.
+  const failedArtists: FailedArtist[] = [];
+  const recordFailure = (artist: string, stage: FailedArtist['stage'], error: unknown) => {
+    if (error instanceof PlatformAccessError) throw error;
+    if ((error as { response?: { status?: number } })?.response?.status === 401) throw error;
+    const reason = errDetail(error); // never the raw error: axios carries tokens
+    console.error(`  ✗ ${stage} failed for "${artist}": ${reason}`);
+    failedArtists.push({ artist, stage, reason });
+  };
+
   // Process artist searches in batches
   const searchResults = await processBatch(
     artistNames,
-    (name) => platform.searchArtist(name, token),
+    async (name) => {
+      try {
+        return { result: await platform.searchArtist(name, token), failed: false };
+      } catch (error) {
+        recordFailure(name, 'search', error);
+        return { result: null, failed: true };
+      }
+    },
     batchSize,
     batchDelay
   );
 
   // Track all matches for debugging
   const artistMatches = artistNames.map((requested, index) => {
-    const found = searchResults[index];
+    const { result: found, failed } = searchResults[index];
     return {
       requested,
       found: found ? found.name : null,
       similarity: found ? found.similarity : 0,
       matched: found ? found.matched : false,
+      lookupFailed: failed,
     };
   });
 
   // Filter out null results and poorly matched results
   const validArtists = searchResults
-    .map((result, index) => ({
+    .map(({ result }, index) => ({
       searchResult: result,
       originalArtist: artists[index],
     }))
@@ -225,7 +263,17 @@ export async function searchAndGetTopTracks(
           `(tier: ${pair.originalArtist.tier || 'unknown'}, ` +
           `affinity: ${pair.originalArtist.affinity || 'none'} → ${selectionMode})`
       );
-      return platform.getArtistTopTracks(pair.searchResult.id, token, trackCount, selectionMode);
+      try {
+        return await platform.getArtistTopTracks(
+          pair.searchResult.id,
+          token,
+          trackCount,
+          selectionMode
+        );
+      } catch (error) {
+        recordFailure(pair.originalArtist.name, 'tracks', error);
+        return [];
+      }
     },
     batchSize,
     batchDelay
@@ -236,9 +284,14 @@ export async function searchAndGetTopTracks(
   console.log(`Retrieved ${tracks.length} total tracks from ${validArtists.length} artists`);
   console.log(`=== END ${platform.platform.toUpperCase()} SEARCH ===\n`);
 
+  if (failedArtists.length > 0) {
+    console.error(`⚠️  ${failedArtists.length} artists failed and are missing from the results`);
+  }
+
   return {
     tracks,
     foundArtists: validArtists.length,
     artistMatches,
+    failedArtists,
   };
 }

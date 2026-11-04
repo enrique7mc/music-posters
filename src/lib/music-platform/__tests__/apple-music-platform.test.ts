@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
-import { PlatformAccessError } from '../types';
+import { PlatformAccessError, PartialAddError } from '../types';
 
 const LIBRARY_URL = 'https://api.music.apple.com/v1/me/library/artists';
 const SEARCH_URL = 'https://api.music.apple.com/v1/catalog/us/search';
@@ -250,11 +250,14 @@ describe('AppleMusicPlatformService error redaction (errMessage)', () => {
   });
 
   it('never logs the bearer developer token when a search errors', async () => {
+    service.retryBaseMs = 0;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     server.use(http.get(SEARCH_URL, () => new HttpResponse(null, { status: 500 })));
 
-    const result = await service.searchArtist('Phoenix', 'user-token');
-
-    expect(result).toBeNull(); // errors degrade to null, never throw
+    // After retries the lookup throws, so the caller reports "lookup failed"
+    // instead of "not found".
+    await expect(service.searchArtist('Phoenix', 'user-token')).rejects.toBeTruthy();
+    warnSpy.mockRestore();
     expect(errorSpy).toHaveBeenCalled();
     // The raw axios error carries config.headers.Authorization = `Bearer ${SECRET}`.
     // errMessage() extracts only error.message, so the token must never appear.
@@ -279,5 +282,194 @@ describe('AppleMusicPlatformService error redaction (errMessage)', () => {
     const logged = errorSpy.mock.calls.flat().map(String).join(' | ');
     expect(logged).not.toContain(SECRET); // developer bearer token
     expect(logged).not.toContain('user-token-SECRET'); // Music-User-Token
+  });
+});
+
+describe('AppleMusicPlatformService transient-error retries', () => {
+  const TOP_SONGS_URL = 'https://api.music.apple.com/v1/catalog/us/artists/artist-1/view/top-songs';
+  let service: AppleMusicPlatformService;
+  let errorSpy: MockInstance<(...args: unknown[]) => void>;
+  let warnSpy: MockInstance<(...args: unknown[]) => void>;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+    service.retryBaseMs = 0;
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  const song = (id: string) => ({ id, attributes: { name: id, artistName: 'A', albumName: 'B' } });
+
+  it('retries a 429 on top songs and returns the tracks', async () => {
+    let calls = 0;
+    server.use(
+      http.get(TOP_SONGS_URL, () => {
+        calls++;
+        return calls === 1
+          ? new HttpResponse(null, { status: 429 })
+          : HttpResponse.json({ data: [song('t-1'), song('t-2')] });
+      })
+    );
+
+    const tracks = await service.getArtistTopTracks('artist-1', 'user-token', 2);
+
+    expect(calls).toBe(2);
+    expect(tracks).toHaveLength(2);
+  });
+
+  // Regression: a persistent failure used to return [] and drop the artist
+  // from the playlist with no warning.
+  it('throws (not []) when top songs keep failing, after 3 attempts', async () => {
+    let calls = 0;
+    server.use(
+      http.get(TOP_SONGS_URL, () => {
+        calls++;
+        return new HttpResponse(null, { status: 503 });
+      })
+    );
+
+    await expect(service.getArtistTopTracks('artist-1', 'user-token', 2)).rejects.toBeTruthy();
+    expect(calls).toBe(3);
+  });
+
+  it('returns [] for a 404 (artist has no top songs) without retrying', async () => {
+    let calls = 0;
+    server.use(
+      http.get(TOP_SONGS_URL, () => {
+        calls++;
+        return new HttpResponse(null, { status: 404 });
+      })
+    );
+
+    expect(await service.getArtistTopTracks('artist-1', 'user-token', 2)).toEqual([]);
+    expect(calls).toBe(1);
+  });
+
+  it('throws PlatformAccessError when Apple rejects the developer token (403)', async () => {
+    server.use(http.get(TOP_SONGS_URL, () => new HttpResponse(null, { status: 403 })));
+
+    await expect(service.getArtistTopTracks('artist-1', 'user-token', 2)).rejects.toBeInstanceOf(
+      PlatformAccessError
+    );
+  });
+});
+
+describe('AppleMusicPlatformService.addTracksToPlaylist', () => {
+  const TRACKS_URL = 'https://api.music.apple.com/v1/me/library/playlists/p.1/tracks';
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => String(1000 + i));
+  let service: AppleMusicPlatformService;
+  let spies: MockInstance<(...args: unknown[]) => void>[];
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+    service.retryBaseMs = 0;
+    spies = (['log', 'warn', 'error'] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation(() => {})
+    );
+  });
+
+  afterEach(() => spies.forEach((s) => s.mockRestore()));
+
+  it('retries a rate-limited batch (429) and sends every batch', async () => {
+    const batchSizes: number[] = [];
+    let calls = 0;
+    server.use(
+      http.post(TRACKS_URL, async ({ request }) => {
+        calls++;
+        if (calls === 2) return new HttpResponse(null, { status: 429 }); // batch 2, first try
+        const body = (await request.json()) as { data: unknown[] };
+        batchSizes.push(body.data.length);
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    await service.addTracksToPlaylist('p.1', ids(250), 'user-token');
+
+    expect(batchSizes).toEqual([100, 100, 50]);
+  });
+
+  // A 5xx can arrive after Apple stored the batch, so a retry could add the
+  // same tracks twice. Only 429 (refused before processing) is retried.
+  it('does not retry a batch after a 5xx and reports what landed', async () => {
+    let calls = 0;
+    server.use(
+      http.post(TRACKS_URL, () => {
+        calls++;
+        return calls === 1
+          ? new HttpResponse(null, { status: 204 })
+          : new HttpResponse(null, { status: 503 });
+      })
+    );
+
+    const error = await service
+      .addTracksToPlaylist('p.1', ids(250), 'user-token')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PartialAddError);
+    expect(error).toMatchObject({ added: 100, total: 250 });
+    expect(calls).toBe(2); // batch 1 + one attempt at batch 2; batch 3 never sent
+  });
+});
+
+describe('AppleMusicPlatformService.getPlaylistTrackCount', () => {
+  const TRACKS_URL = 'https://api.music.apple.com/v1/me/library/playlists/p.1/tracks';
+  let service: AppleMusicPlatformService;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+    service.retryBaseMs = 0;
+  });
+
+  it('counts across pages by following `next`', async () => {
+    server.use(
+      http.get(TRACKS_URL, ({ request }) => {
+        const offset = new URL(request.url).searchParams.get('offset');
+        return offset === '100'
+          ? HttpResponse.json({ data: Array.from({ length: 50 }, () => ({})) })
+          : HttpResponse.json({
+              data: Array.from({ length: 100 }, () => ({})),
+              next: '/v1/me/library/playlists/p.1/tracks?offset=100',
+            });
+      })
+    );
+
+    expect(await service.getPlaylistTrackCount('p.1', 'user-token')).toBe(150);
+  });
+
+  it('gives up at its budget when a page stalls', async () => {
+    server.use(
+      http.get(TRACKS_URL, async () => {
+        await delay('infinite');
+        return HttpResponse.json({ data: [] });
+      })
+    );
+    const startedAt = Date.now();
+
+    await expect(service.getPlaylistTrackCount('p.1', 'user-token', 200)).rejects.toBeTruthy();
+    expect(Date.now() - startedAt).toBeLessThan(2000);
+  });
+
+  it('returns 0 for an empty playlist (Apple answers 404)', async () => {
+    server.use(http.get(TRACKS_URL, () => new HttpResponse(null, { status: 404 })));
+
+    expect(await service.getPlaylistTrackCount('p.1', 'user-token')).toBe(0);
+  });
+
+  it('refuses to follow a non-Apple `next` URL (token-exfil guard)', async () => {
+    server.use(
+      http.get(TRACKS_URL, () =>
+        HttpResponse.json({ data: [{}], next: 'https://evil.example/steal' })
+      )
+    );
+
+    await expect(service.getPlaylistTrackCount('p.1', 'user-token')).rejects.toThrow(/non-Apple/);
   });
 });

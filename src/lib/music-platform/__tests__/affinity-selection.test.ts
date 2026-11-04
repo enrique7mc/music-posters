@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { getSelectionModeForArtist, searchAndGetTopTracks } from '../index';
 import { Artist, Track, TrackSelectionMode } from '@/types';
-import { MusicPlatformService } from '../types';
+import { MusicPlatformService, PlatformAccessError } from '../types';
 
 describe('getSelectionModeForArtist', () => {
   it('maps loved → deep-cuts (they know the hits)', () => {
@@ -138,5 +139,81 @@ describe('searchAndGetTopTracks affinity → per-artist mode', () => {
     const modeByArtist: Record<string, TrackSelectionMode> = {};
     await searchAndGetTopTracks(recordingPlatform(modeByArtist), [{ name: 'Plain' }], 'token');
     expect(modeByArtist.Plain).toBe('popular');
+  });
+});
+
+describe('searchAndGetTopTracks per-artist failures', () => {
+  const track = (artist: string): Track =>
+    ({ id: `${artist}-1`, name: 'Song', artist, platform: 'apple-music' }) as Track;
+
+  function failingPlatform(fail: Record<string, 'search' | 'tracks' | 'access' | 'expired'>) {
+    return {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => {
+        if (fail[name] === 'search') throw new Error('Request failed with status code 503');
+        return { id: name, name, matched: true, similarity: 1 };
+      },
+      getArtistTopTracks: async (artistId: string): Promise<Track[]> => {
+        if (fail[artistId] === 'tracks') throw new Error('Request failed with status code 429');
+        if (fail[artistId] === 'access') throw new PlatformAccessError('apple-music', 403, '/x');
+        if (fail[artistId] === 'expired')
+          throw Object.assign(new Error('401'), { response: { status: 401 } });
+        return [track(artistId)];
+      },
+    } as unknown as MusicPlatformService;
+  }
+
+  // Explicit type: ReturnType<typeof vi.spyOn> infers a constructor signature.
+  let errorSpy: MockInstance<(...args: unknown[]) => void>;
+  let logSpy: MockInstance<(...args: unknown[]) => void>;
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  // Regression: a failed top-songs request used to return [] and the artist
+  // vanished from the playlist with no warning.
+  it('reports failed artists and keeps the tracks of the others', async () => {
+    const result = await searchAndGetTopTracks(
+      failingPlatform({ B: 'tracks', C: 'search' }),
+      [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
+      'token'
+    );
+
+    expect(result.tracks.map((t) => t.artist)).toEqual(['A']);
+    expect(result.failedArtists).toEqual([
+      { artist: 'C', stage: 'search', reason: expect.stringContaining('503') },
+      { artist: 'B', stage: 'tracks', reason: expect.stringContaining('429') },
+    ]);
+    // A failed lookup is flagged, so the route does not call it "not found".
+    expect(result.artistMatches.find((m) => m.requested === 'C')).toMatchObject({
+      found: null,
+      lookupFailed: true,
+    });
+  });
+
+  it('still aborts the whole search on PlatformAccessError', async () => {
+    await expect(
+      searchAndGetTopTracks(
+        failingPlatform({ B: 'access' }),
+        [{ name: 'A' }, { name: 'B' }],
+        'token'
+      )
+    ).rejects.toBeInstanceOf(PlatformAccessError);
+  });
+
+  it('still aborts on a raw 401 so the route can send the user to re-auth', async () => {
+    await expect(
+      searchAndGetTopTracks(
+        failingPlatform({ B: 'expired' }),
+        [{ name: 'A' }, { name: 'B' }],
+        'token'
+      )
+    ).rejects.toMatchObject({ response: { status: 401 } });
   });
 });

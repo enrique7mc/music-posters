@@ -136,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Search for artists and get their top tracks with rate limiting
     console.log(`Searching tracks for ${artists.length} artists on ${platform}`);
-    const { tracks, foundArtists, artistMatches } = await searchAndGetTopTracks(
+    const { tracks, foundArtists, artistMatches, failedArtists } = await searchAndGetTopTracks(
       platformService,
       artists,
       accessToken,
@@ -152,7 +152,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Log mismatches for debugging
     const poorMatches = artistMatches.filter((m) => m.found && m.similarity < 0.9);
-    const noMatches = artistMatches.filter((m) => !m.found);
+    // A failed lookup is not "not found": it gets its own warning below.
+    const noMatches = artistMatches.filter((m) => !m.found && !m.lookupFailed);
 
     if (poorMatches.length > 0) {
       console.log(`\n⚠️  Artists with fuzzy matches (might be wrong):`);
@@ -168,6 +169,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    // One summary line per request so each run can be traced in the Vercel logs.
+    console.log(
+      `[search-tracks] platform=${platform} artists=${artists.length} matched=${foundArtists} ` +
+        `notFound=${noMatches.length} fuzzy=${poorMatches.length} ` +
+        `failedSearch=${failedArtists.filter((f) => f.stage === 'search').length} ` +
+        `failedTracks=${failedArtists.filter((f) => f.stage === 'tracks').length} ` +
+        `tracks=${tracks.length}`
+    );
+
+    if (tracks.length === 0 && failedArtists.length > 0) {
+      // Every artist that matched then failed: a platform outage, not an empty poster.
+      // 503 is excluded from api-client retries on this route: each artist was
+      // already retried here, so re-sending the whole search would only multiply
+      // the load on the platform.
+      return res.status(503).json({
+        error: `${platform === 'spotify' ? 'Spotify' : 'Apple Music'} is not responding right now. Please try again in a moment.`,
+      });
+    }
+
     if (tracks.length === 0) {
       return res.status(400).json({
         error: 'Could not find any tracks for the provided artists',
@@ -178,6 +198,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const platformDisplayName = platform === 'spotify' ? 'Spotify' : 'Apple Music';
     const warnings: string[] = [];
+    // Failures go first: their tracks are missing, and the warning list shows
+    // only the first 10 entries.
+    if (failedArtists.length > 0) {
+      warnings.push(
+        `${platformDisplayName} didn't respond for ${failedArtists.length} artist${failedArtists.length === 1 ? '' : 's'}, so their tracks are missing. Go back and search again to retry.`
+      );
+      failedArtists.forEach((f) =>
+        warnings.push(`Couldn't load tracks for "${f.artist}" (${platformDisplayName} error)`)
+      );
+    }
     noMatches.forEach((m) =>
       warnings.push(`"${m.requested}" was not found on ${platformDisplayName}`)
     );
@@ -202,7 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Distinct message: "no tracks found" would send the user hunting their poster.
     // Details stay server-side — errDetail() above already logged them.
     // Only 403 arrives as PlatformAccessError; expired tokens (401) come through raw
-    // and are handled below. Not 502 — api-client retries that on this route.
+    // and are handled below. Not 502 or 504 — api-client retries those on this route.
     if (error instanceof PlatformAccessError) {
       return res.status(403).json({
         error: 'The music service cannot complete this request. Please try again later.',
