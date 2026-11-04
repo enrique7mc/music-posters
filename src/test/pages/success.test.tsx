@@ -1,5 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Success from '../../pages/success';
 import { PLAYLIST_DRAFT_STORAGE_KEY } from '@/lib/playlist-draft';
 
@@ -80,5 +80,50 @@ describe('success track count notice', () => {
     expect(await screen.findByText(/340 tracks added to your Apple Music library/)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
     mockRouter.query = baseQuery;
+  });
+});
+
+describe('success "Open in Apple Music" target (#67)', () => {
+  const playlistUrl = 'https://music.apple.com/library/playlist/p.1';
+  const IPHONE_UA =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+
+  beforeEach(() => {
+    mockRouter.query = { playlistUrl };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mockRouter.query = { playlistUrl: 'https://music.apple.com/playlist/test' };
+  });
+
+  async function clickOpen() {
+    const button = screen.getByRole('button', { name: /Open in Apple Music/ });
+    await waitFor(() => expect(button).not.toBeDisabled(), { timeout: 2000 });
+    fireEvent.click(button);
+  }
+
+  it('opens the Library root on iPhone, where the Music app cannot open library playlists', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(IPHONE_UA);
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(<Success />);
+
+    expect(await screen.findByText(/Find your new playlist under Playlists/)).toBeTruthy();
+    await clickOpen();
+    expect(open).toHaveBeenCalledWith(
+      'https://music.apple.com/library',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  });
+
+  it('opens the playlist itself on desktop', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(<Success />);
+
+    await clickOpen();
+    expect(open).toHaveBeenCalledWith(playlistUrl, '_blank', 'noopener,noreferrer');
   });
 });

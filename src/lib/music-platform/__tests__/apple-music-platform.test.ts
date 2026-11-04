@@ -473,3 +473,38 @@ describe('AppleMusicPlatformService.getPlaylistTrackCount', () => {
     await expect(service.getPlaylistTrackCount('p.1', 'user-token')).rejects.toThrow(/non-Apple/);
   });
 });
+
+describe('AppleMusicPlatformService.createPlaylist URL', () => {
+  it('links to the library id, never the catalog globalId (#67)', async () => {
+    const service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+    server.use(
+      http.post('https://api.music.apple.com/v1/me/library/playlists', () =>
+        HttpResponse.json({
+          data: [
+            {
+              id: 'p.LibraryId',
+              type: 'library-playlists',
+              attributes: {
+                name: 'Fest',
+                playParams: {
+                  id: 'p.LibraryId',
+                  kind: 'playlist',
+                  isLibrary: true,
+                  globalId: 'pl.u-Catalog',
+                },
+              },
+            },
+          ],
+        })
+      )
+    );
+
+    const result = await service.createPlaylist('user-id', 'Fest', 'user-token');
+
+    expect(result).toEqual({
+      id: 'p.LibraryId',
+      url: 'https://music.apple.com/library/playlist/p.LibraryId',
+    });
+  });
+});
