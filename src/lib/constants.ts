@@ -25,10 +25,10 @@ export const MAX_TRACKS_PER_ARTIST = 25;
 /**
  * Largest number of tracks a user may add to a single playlist.
  * Caps aggregate playlist size so the /api/create-playlist route can finish
- * within its 30s budget: Apple Music adds tracks in chunks of 100 with a
+ * within its 60s budget: Apple Music adds tracks in chunks of 100 with a
  * mandatory 500ms delay between requests (hard rule, see
- * src/lib/music-platform/index.ts), so 2,000 tracks = 20 requests + 9.5s of
- * delays, which completes with margin. Shared by client warnings, API
- * validation, and the create-playlist button gate.
+ * src/lib/music-platform/index.ts). A measured chunk takes ~1.5–2.5s, so
+ * 2,000 tracks = 20 requests ≈ 30–50s including delays. Shared by client
+ * warnings, API validation, and the create-playlist button gate.
  */
 export const MAX_PLAYLIST_TRACKS = 2000;

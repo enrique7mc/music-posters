@@ -260,8 +260,16 @@ export default function ReviewTracks() {
       // and redirect before navigation completes.
       // The success page clears it when it mounts.
 
-      // Redirect to success page
-      router.push(`/success?playlistUrl=${encodeURIComponent(response.data.playlistUrl)}`);
+      // Redirect to success page. Carry the stored count (read-back when the
+      // platform gave one) so the page can say when tracks are missing.
+      const { playlistUrl, tracksAdded, tracksVerified } = response.data;
+      const params = new URLSearchParams({ playlistUrl, requested: String(trackIds.length) });
+      if (typeof tracksAdded === 'number') {
+        const stored =
+          typeof tracksVerified === 'number' ? Math.min(tracksAdded, tracksVerified) : tracksAdded;
+        params.set('added', String(stored));
+      }
+      router.push(`/success?${params.toString()}`);
     } catch (err: any) {
       console.error('Error creating playlist:', err);
       const appError = parseApiError(err, 'create playlist');

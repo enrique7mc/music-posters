@@ -5,6 +5,7 @@ import {
   ArtistSearchResult,
   PlaylistResult,
   PlatformAccessError,
+  PartialAddError,
 } from './types';
 import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 // Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
@@ -24,6 +25,41 @@ const LIBRARY_PAGE_LIMIT = 100; // Apple's max page size for library endpoints
 const MAX_LIBRARY_PAGES = 50; // hard ceiling (~5000 artists) to protect the 30s route budget
 const LIBRARY_PAGE_THROTTLE_MS = 50; // inter-page delay to stay under rate limits
 const LIBRARY_PAGE_TIMEOUT_MS = 8000; // per-page deadline so one slow page can't ride to the 30s kill
+
+// Transient-error retry (429, 5xx, network). These retries only add waiting on
+// top of the fixed batch pacing in music-platform/index.ts; they never send
+// requests faster.
+const MAX_ATTEMPTS = 3; // 1 try + 2 retries
+const DEFAULT_RETRY_BASE_MS = 1000; // backoff 1s, then 2s
+const MAX_RETRY_AFTER_MS = 5000; // cap on an upstream Retry-After hint
+
+const PLAYLIST_ADD_BATCH_SIZE = 100;
+const PLAYLIST_TRACKS_PAGE_LIMIT = 100;
+
+function httpStatus(error: unknown): number | undefined {
+  return (error as { response?: { status?: number } })?.response?.status;
+}
+
+/**
+ * True for failures worth retrying: rate limiting (429), Apple server errors
+ * (5xx), and network failures (an axios error with no response). Everything
+ * else (4xx, programming errors) fails at once.
+ */
+function isTransient(error: unknown): boolean {
+  const status = httpStatus(error);
+  if (status !== undefined) return status === 429 || status >= 500;
+  return axios.isAxiosError(error) && error.code !== 'ERR_CANCELED';
+}
+
+function retryDelayMs(error: unknown, attempt: number, baseMs: number): number {
+  const header = (error as { response?: { headers?: Record<string, unknown> } })?.response
+    ?.headers?.['retry-after'];
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
+  }
+  return baseMs * 2 ** (attempt - 1);
+}
 
 /**
  * Selects tracks from a pool based on the selection mode.
@@ -85,6 +121,8 @@ function delay(ms: number): Promise<void> {
 export class AppleMusicPlatformService implements MusicPlatformService {
   readonly platform = 'apple-music' as const;
   private developerToken: string | null = null;
+  /** Base backoff for transient-error retries. Tests set it to 0. */
+  retryBaseMs = DEFAULT_RETRY_BASE_MS;
 
   /**
    * Set the developer token for API requests
@@ -108,6 +146,27 @@ export class AppleMusicPlatformService implements MusicPlatformService {
   }
 
   /**
+   * Run an Apple Music request, retrying transient failures (429, 5xx, network)
+   * with backoff. Rethrows the last error when retries run out or the error is
+   * not transient. Logs only errMessage(): raw axios errors carry both tokens.
+   */
+  private async withRetry<T>(label: string, request: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await request();
+      } catch (error) {
+        if (attempt >= MAX_ATTEMPTS || !isTransient(error)) throw error;
+        const waitMs = retryDelayMs(error, attempt, this.retryBaseMs);
+        console.warn(
+          `[Apple Music] ${label} failed (${errMessage(error)}); ` +
+            `retry ${attempt}/${MAX_ATTEMPTS - 1} in ${waitMs}ms`
+        );
+        await delay(waitMs);
+      }
+    }
+  }
+
+  /**
    * Get headers for catalog-only requests (no user token needed)
    */
   private getCatalogHeaders() {
@@ -120,19 +179,24 @@ export class AppleMusicPlatformService implements MusicPlatformService {
     };
   }
 
+  /**
+   * Returns null when the catalog has no usable match. Throws when the lookup
+   * itself fails after retries, so the caller can report "lookup failed"
+   * instead of the misleading "not found". 401/403 (developer token rejected)
+   * throws PlatformAccessError, which aborts the whole search.
+   */
   async searchArtist(name: string, token: string): Promise<ArtistSearchResult | null> {
     try {
       // Search in the Apple Music catalog (doesn't require user token)
-      const response = await axios.get(
-        `${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/search`,
-        {
+      const response = await this.withRetry(`Search for "${name}"`, () =>
+        axios.get(`${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/search`, {
           params: {
             types: 'artists',
             term: name,
             limit: 5,
           },
           headers: this.getCatalogHeaders(),
-        }
+        })
       );
 
       const artists = response.data.results?.artists?.data;
@@ -178,7 +242,11 @@ export class AppleMusicPlatformService implements MusicPlatformService {
       };
     } catch (error) {
       console.error(`[Apple Music] Error searching for artist "${name}":`, errMessage(error));
-      return null;
+      const status = httpStatus(error);
+      if (status === 401 || status === 403) {
+        throw new PlatformAccessError('apple-music', status, '/catalog/search');
+      }
+      throw error;
     }
   }
 
@@ -190,14 +258,16 @@ export class AppleMusicPlatformService implements MusicPlatformService {
   ): Promise<Track[]> {
     try {
       // Get artist's top songs from catalog
-      const response = await axios.get(
-        `${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/artists/${artistId}/view/top-songs`,
-        {
-          params: {
-            limit: 25, // Get up to 25 songs to select from (API max for view endpoints)
-          },
-          headers: this.getCatalogHeaders(),
-        }
+      const response = await this.withRetry(`Top songs for artist ${artistId}`, () =>
+        axios.get(
+          `${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/artists/${artistId}/view/top-songs`,
+          {
+            params: {
+              limit: 25, // Get up to 25 songs to select from (API max for view endpoints)
+            },
+            headers: this.getCatalogHeaders(),
+          }
+        )
       );
 
       const tracks = response.data.data;
@@ -231,11 +301,18 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         };
       });
     } catch (error) {
+      const status = httpStatus(error);
+      if (status === 404) return []; // no top songs for this artist: not a failure
       console.error(
         `[Apple Music] Error getting top tracks for artist ${artistId}:`,
         errMessage(error)
       );
-      return [];
+      // Throw instead of returning []: an empty result here used to drop the
+      // artist from the playlist with no warning (e.g. under a 429 burst).
+      if (status === 401 || status === 403) {
+        throw new PlatformAccessError('apple-music', status, '/catalog/artists/top-songs');
+      }
+      throw error;
     }
   }
 
@@ -373,41 +450,76 @@ export class AppleMusicPlatformService implements MusicPlatformService {
     }
   }
 
+  /**
+   * Add tracks in batches of 100 with a 500ms pause between batches. Each batch
+   * retries transient failures. When a batch still fails, throws PartialAddError
+   * with the count of tracks added so far: the playlist already exists, so the
+   * caller can report a partial result.
+   */
   async addTracksToPlaylist(playlistId: string, trackIds: string[], token: string): Promise<void> {
-    // Apple Music allows adding tracks in batches of 100
-    const chunks = [];
-    for (let i = 0; i < trackIds.length; i += 100) {
-      chunks.push(trackIds.slice(i, i + 100));
+    const chunks: string[][] = [];
+    for (let i = 0; i < trackIds.length; i += PLAYLIST_ADD_BATCH_SIZE) {
+      chunks.push(trackIds.slice(i, i + PLAYLIST_ADD_BATCH_SIZE));
     }
 
+    let added = 0;
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
+      const label = `Add batch ${i + 1}/${chunks.length} (${chunk.length} tracks)`;
 
-      // Format tracks for Apple Music API
-      const tracksData = chunk.map((id) => ({
-        id,
-        type: 'songs',
-      }));
-
-      console.log(
-        `[Apple Music] Adding tracks batch ${i + 1}/${chunks.length} (${chunk.length} tracks)`
-      );
-      await axios.post(
-        `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks`,
-        {
-          data: tracksData,
-        },
-        {
-          headers: this.getHeaders(token),
-        }
-      );
-      console.log(`[Apple Music] Batch ${i + 1}/${chunks.length} completed`);
+      try {
+        const response = await this.withRetry(label, () =>
+          axios.post(
+            `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks`,
+            { data: chunk.map((id) => ({ id, type: 'songs' })) },
+            { headers: this.getHeaders(token) }
+          )
+        );
+        added += chunk.length;
+        console.log(`[Apple Music] ${label} → HTTP ${response.status}`);
+      } catch (error) {
+        console.error(`[Apple Music] ${label} failed after retries:`, errMessage(error));
+        throw new PartialAddError(added, trackIds.length, error);
+      }
 
       // Add delay between batches to respect rate limits
       if (i < chunks.length - 1) {
         await delay(500);
       }
     }
+  }
+
+  /**
+   * Count the tracks a library playlist stores, paginating 100 per page.
+   * Apple answers 404 for an empty playlist. Follows `next` only to Apple's
+   * origin, because the request carries both tokens.
+   */
+  async getPlaylistTrackCount(playlistId: string, token: string): Promise<number> {
+    let count = 0;
+    let url: string | null =
+      `${APPLE_MUSIC_API_BASE_URL}/me/library/playlists/${playlistId}/tracks?limit=${PLAYLIST_TRACKS_PAGE_LIMIT}`;
+
+    while (url) {
+      const requestUrl: string = url.startsWith('http') ? url : `${APPLE_MUSIC_API_ORIGIN}${url}`;
+      if (new URL(requestUrl).origin !== APPLE_MUSIC_API_ORIGIN) {
+        throw new Error('Refusing to follow non-Apple pagination URL');
+      }
+
+      let data: any;
+      try {
+        const response = await this.withRetry('Read back playlist tracks', () =>
+          axios.get(requestUrl, { headers: this.getHeaders(token) })
+        );
+        data = response.data;
+      } catch (error) {
+        if (httpStatus(error) === 404 && count === 0) return 0;
+        throw error;
+      }
+
+      count += Array.isArray(data?.data) ? data.data.length : 0;
+      url = typeof data?.next === 'string' ? data.next : null;
+    }
+    return count;
   }
 
   async getCurrentUser(token: string): Promise<PlatformUser> {
