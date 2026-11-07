@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { clearPlaylistDraft } from '@/lib/playlist-draft';
 import { useAuth } from '@/contexts/AuthContext';
+import { appleMusicOpenUrl, isAppleMobileDevice } from '@/lib/apple-music-links';
 
 export default function Success() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function Success() {
   const [trackCounts, setTrackCounts] = useState<{ added: number; requested: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [buttonsEnabled, setButtonsEnabled] = useState(false);
+  // Read after mount: navigator does not exist during SSR.
+  const [opensLibraryRoot, setOpensLibraryRoot] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Redirect to home if not authenticated
@@ -54,6 +57,10 @@ export default function Success() {
       setTrackCounts({ added, requested });
     }
   }, [router.query]);
+
+  useEffect(() => {
+    setOpensLibraryRoot(platform === 'apple-music' && isAppleMobileDevice(navigator));
+  }, [platform]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -100,10 +107,11 @@ export default function Success() {
     }
   };
 
-  const handleOpenSpotify = () => {
-    if (playlistUrl) {
-      window.open(playlistUrl, '_blank', 'noopener,noreferrer');
-    }
+  const handleOpenPlaylist = () => {
+    if (!playlistUrl) return;
+    const url =
+      platform === 'apple-music' ? appleMusicOpenUrl(playlistUrl, navigator) : playlistUrl;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleCreateAnother = () => {
@@ -205,13 +213,15 @@ export default function Success() {
               {playlistUrl ? (
                 <>
                   <p className="mb-6 text-sm leading-relaxed text-dark-300">
-                    Open your new playlist in {platformName}, or copy its link to share it.
+                    {opensLibraryRoot
+                      ? 'The Music app opens to your Library. Find your new playlist under Playlists.'
+                      : `Open your new playlist in ${platformName}, or copy its link to share it.`}
                   </p>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button
                       variant="primary"
                       size="lg"
-                      onClick={handleOpenSpotify}
+                      onClick={handleOpenPlaylist}
                       disabled={!buttonsEnabled}
                       className="flex-1 rounded-xl bg-accent-500 text-dark-950 hover:bg-accent-400"
                     >

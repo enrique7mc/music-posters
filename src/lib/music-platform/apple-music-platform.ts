@@ -12,6 +12,7 @@ import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 // never reach console.error (config.headers carries the developer bearer token and
 // the Music-User-Token).
 import { errMessage } from '@/lib/safe-log';
+import { libraryPlaylistUrl } from '@/lib/apple-music-links';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
 // Origin only (no `/v1`). Apple's pagination `next` is an absolute path like
@@ -447,11 +448,10 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         throw new Error('Apple Music API returned empty playlist response');
       }
 
-      // Apple Music doesn't return a direct URL in the response
-      // We construct it from the playlist ID
-      const playlistUrl = playlist.attributes?.playParams?.globalId
-        ? `https://music.apple.com/library/playlist/${playlist.attributes.playParams.globalId}`
-        : `https://music.apple.com/library/playlist/${playlist.id}`;
+      // Apple Music doesn't return a URL, so build the web player's library
+      // link from the library id (`p.…`). Never use playParams.globalId here:
+      // it is a catalog id (`pl.u-…`) that the /library/ path cannot resolve.
+      const playlistUrl = libraryPlaylistUrl(playlist.id);
 
       return {
         id: playlist.id,
