@@ -33,6 +33,14 @@ export interface FailedArtist {
   reason: string; // Log-safe error detail (errDetail)
 }
 
+/** An artist whose catalog has fewer tracks than the playlist asked for. */
+export interface ShortArtist {
+  artist: string; // Name as requested (from the poster / user list)
+  matchedAs: string; // Catalog name it matched
+  requested: number;
+  received: number;
+}
+
 // Helper function to add delay between requests
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -135,7 +143,8 @@ export function getSelectionModeForArtist(
  * @returns Object containing tracks, foundArtists count, artistMatches array, and
  *   failedArtists: artists whose lookup or top-tracks request failed (after the
  *   platform's own retries). They are missing from `tracks`, so callers MUST
- *   surface them instead of treating them as "not found".
+ *   surface them instead of treating them as "not found". shortArtists: matched
+ *   artists that returned fewer tracks than requested (logged, not an error).
  */
 export async function searchAndGetTopTracks(
   platform: MusicPlatformService,
@@ -153,6 +162,7 @@ export async function searchAndGetTopTracks(
     lookupFailed: boolean;
   }>;
   failedArtists: FailedArtist[];
+  shortArtists: ShortArtist[];
 }> {
   // Set developer token for Apple Music if needed
   if (platform.platform === 'apple-music' && developerToken) {
@@ -232,6 +242,7 @@ export async function searchAndGetTopTracks(
   );
 
   // Get top tracks in batches
+  const shortArtists: ShortArtist[] = [];
   const trackArrays = await processBatch(
     validArtists,
     async (pair) => {
@@ -264,12 +275,27 @@ export async function searchAndGetTopTracks(
           `affinity: ${pair.originalArtist.affinity || 'none'} → ${selectionMode})`
       );
       try {
-        return await platform.getArtistTopTracks(
+        const artistTracks = await platform.getArtistTopTracks(
           pair.searchResult.id,
           token,
           trackCount,
           selectionMode
         );
+        // A short result is not an error, but it shrinks the playlist silently.
+        // It often means the match picked a thin catalog page.
+        if (artistTracks.length < trackCount) {
+          console.warn(
+            `  ⚠ Only ${artistTracks.length} of ${trackCount} tracks available for ` +
+              `"${pair.originalArtist.name}" (matched "${pair.searchResult.name}")`
+          );
+          shortArtists.push({
+            artist: pair.originalArtist.name,
+            matchedAs: pair.searchResult.name,
+            requested: trackCount,
+            received: artistTracks.length,
+          });
+        }
+        return artistTracks;
       } catch (error) {
         recordFailure(pair.originalArtist.name, 'tracks', error);
         return [];
@@ -293,5 +319,6 @@ export async function searchAndGetTopTracks(
     foundArtists: validArtists.length,
     artistMatches,
     failedArtists,
+    shortArtists,
   };
 }

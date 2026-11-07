@@ -3,6 +3,7 @@ import {
   normalize,
   similarity,
   matchLineup,
+  containsName,
   LOVED_MATCH_THRESHOLD,
   CATALOG_MATCH_THRESHOLD,
 } from '../artist-match';
@@ -49,6 +50,24 @@ describe('similarity', () => {
 
   it('is symmetric regardless of argument order', () => {
     expect(similarity('Lane 8', 'Lane Eight')).toBe(similarity('Lane Eight', 'Lane 8'));
+  });
+});
+
+describe('containsName', () => {
+  it('finds a multi-word name as a phrase, ignoring case and accents', () => {
+    expect(containsName('Maldita Vecindad y Los Hijos del Quinto Patio', 'maldita vecindad')).toBe(
+      true
+    );
+    expect(containsName('Café Tacvba Unplugged', 'Cafe Tacvba')).toBe(true);
+  });
+
+  it('rejects partial words and non-adjacent words', () => {
+    expect(containsName('Los Bunkerson', 'Los Bunker')).toBe(false);
+    expect(containsName('Caifanes y la Sinfónica', 'Caifanes Sinfónica')).toBe(false);
+  });
+
+  it('rejects single-word names (too weak a signal)', () => {
+    expect(containsName('Porter Robinson', 'Porter')).toBe(false);
   });
 });
 

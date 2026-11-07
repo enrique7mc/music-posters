@@ -76,6 +76,19 @@ export function similarity(a: string, b: string): number {
   return (longer.length - levenshteinDistance(longer, shorter)) / longer.length;
 }
 
+/**
+ * True when `name` appears as a whole-word phrase inside `candidate` after
+ * normalization, e.g. "Maldita Vecindad" in "Maldita Vecindad y Los Hijos del
+ * Quinto Patio". Poster names are often shortened forms of the catalog name.
+ * Only multi-word names qualify: a single word ("Porter") also appears inside
+ * many unrelated names ("Porter Robinson"), so it is too weak a signal.
+ */
+export function containsName(candidate: string, name: string): boolean {
+  const n = normalize(name);
+  if (!n.includes(' ')) return false;
+  return ` ${normalize(candidate)} `.includes(` ${n} `);
+}
+
 /** A lineup artist matched to a name in the user's loved set. */
 export interface LineupMatch {
   poster: string; // lineup name as submitted

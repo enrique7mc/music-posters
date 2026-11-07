@@ -48,6 +48,7 @@ describe('/api/search-tracks per-artist failures', () => {
         { artist: 'C', stage: 'search', reason: '503' },
         { artist: 'B', stage: 'tracks', reason: '429' },
       ],
+      shortArtists: [],
     });
     const { req, res } = createRequest();
 
@@ -67,11 +68,37 @@ describe('/api/search-tracks per-artist failures', () => {
       foundArtists: 1,
       artistMatches: [{ requested: 'A', found: 'A', similarity: 1, lookupFailed: false }],
       failedArtists: [{ artist: 'A', stage: 'tracks', reason: '503' }],
+      shortArtists: [],
     });
     const { req, res } = createRequest();
 
     await handler(req as any, res as any);
 
     expect(res._getStatusCode()).toBe(503);
+  });
+
+  it('reports short artists and missing tracks in the summary log line', async () => {
+    const log = vi.mocked(console.log);
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      tracks: [track as any],
+      foundArtists: 2,
+      artistMatches: [
+        { requested: 'A', found: 'A', similarity: 1, lookupFailed: false },
+        { requested: 'B', found: 'B', similarity: 1, lookupFailed: false },
+      ],
+      failedArtists: [],
+      shortArtists: [
+        { artist: 'A', matchedAs: 'A', requested: 8, received: 2 },
+        { artist: 'B', matchedAs: 'B', requested: 3, received: 2 },
+      ],
+    });
+    const { req, res } = createRequest();
+
+    await handler(req as any, res as any);
+
+    const summary = log.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.startsWith('[search-tracks]'));
+    expect(summary).toContain('shortArtists=2 shortTracks=7');
   });
 });

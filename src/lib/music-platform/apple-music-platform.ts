@@ -7,7 +7,7 @@ import {
   PlatformAccessError,
   PartialAddError,
 } from './types';
-import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
+import { similarity, containsName, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
 // Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
 // never reach console.error (config.headers carries the developer bearer token and
 // the Music-User-Token).
@@ -110,6 +110,60 @@ function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelection
 
   // Return up to `limit` tracks
   return shuffled.slice(0, Math.min(limit, shuffled.length));
+}
+
+interface CatalogCandidate {
+  artist: any;
+  sim: number;
+  /** Albums listed in the search result (Apple caps the list; `next` adds 1). */
+  albums: number;
+}
+
+function albumCount(artist: any): number {
+  const albums = artist.relationships?.albums;
+  return (albums?.data?.length ?? 0) + (albums?.next ? 1 : 0);
+}
+
+/**
+ * Chooses the catalog artist for a poster name from Apple's search results.
+ *
+ * 1. An exact name match (after normalization) wins, first in Apple's order.
+ * 2. Otherwise the candidates are the closest spelling (if it clears
+ *    CATALOG_MATCH_THRESHOLD) plus every artist whose name contains the poster
+ *    name as a phrase. The one with the most albums wins; ties go to the higher
+ *    similarity, then to Apple's order.
+ *
+ * Rule 2 exists because the closest spelling is often a thin secondary page.
+ * Example: "Maldita Vecindad" is closest to "La Maldita Vecindad" (2 singles as
+ * a featured artist), but the band is "Maldita Vecindad y Los Hijos del Quinto
+ * Patio" (18 albums). The album count comes with the search response, so this
+ * costs no extra request.
+ */
+function pickCatalogArtist(
+  name: string,
+  artists: any[]
+): { best: CatalogCandidate; closest: CatalogCandidate; matched: boolean } {
+  const candidates: CatalogCandidate[] = artists.map((artist) => ({
+    artist,
+    sim: similarity(name, artist.attributes.name),
+    albums: albumCount(artist),
+  }));
+
+  // First candidate with the highest similarity (Apple's order breaks ties).
+  const closest = candidates.reduce((a, b) => (b.sim > a.sim ? b : a));
+  if (closest.sim === 1) return { best: closest, closest, matched: true };
+
+  const pool = candidates.filter(
+    (c) =>
+      (c === closest && c.sim >= CATALOG_MATCH_THRESHOLD) ||
+      containsName(c.artist.attributes.name, name)
+  );
+  if (pool.length === 0) return { best: closest, closest, matched: false };
+
+  const best = pool.reduce((a, b) =>
+    b.albums > a.albums || (b.albums === a.albums && b.sim > a.sim) ? b : a
+  );
+  return { best, closest, matched: true };
 }
 
 /**
@@ -221,25 +275,19 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         return null;
       }
 
-      // Find the best matching artist by name similarity
-      let bestMatch = artists[0];
-      let bestSimilarity = similarity(name, artists[0].attributes.name);
-
-      for (const artist of artists) {
-        const sim = similarity(name, artist.attributes.name);
-        if (sim > bestSimilarity) {
-          bestSimilarity = sim;
-          bestMatch = artist;
-        }
-      }
-
-      // Require at least 60% similarity to avoid completely wrong matches.
-      // Catalog search is recall-oriented; loved-overlap uses a stricter bar.
-      const matched = bestSimilarity >= CATALOG_MATCH_THRESHOLD;
+      const { best, closest, matched } = pickCatalogArtist(name, artists);
+      const bestMatch = best.artist;
+      const bestSimilarity = best.sim;
 
       if (!matched) {
         console.warn(
           `[Apple Music] Low match for "${name}": got "${bestMatch.attributes.name}" (${(bestSimilarity * 100).toFixed(0)}% similar)`
+        );
+      } else if (best !== closest) {
+        console.log(
+          `[Apple Music] Catalog match: "${name}" -> "${bestMatch.attributes.name}" ` +
+            `(${best.albums} albums), preferred over closer spelling ` +
+            `"${closest.artist.attributes.name}" (${closest.albums} albums)`
         );
       } else if (bestMatch.attributes.name !== name) {
         console.log(

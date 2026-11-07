@@ -217,3 +217,48 @@ describe('searchAndGetTopTracks per-artist failures', () => {
     ).rejects.toMatchObject({ response: { status: 401 } });
   });
 });
+
+describe('searchAndGetTopTracks short artists', () => {
+  let warn: MockInstance<(...args: unknown[]) => void>;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Regression: "Maldita Vecindad" matched a 2-song page and silently gave 2 of 8.
+  it('reports an artist that returns fewer tracks than requested', async () => {
+    const available: Record<string, number> = { A: 2, B: 10 };
+    const platform = {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => ({
+        id: name,
+        name: `${name} (catalog)`,
+        matched: true,
+        similarity: 1,
+      }),
+      getArtistTopTracks: async (artistId: string, _t: string, limit = 1): Promise<Track[]> =>
+        Array.from({ length: Math.min(limit, available[artistId]) }, (_, i) => ({
+          id: `${artistId}-${i}`,
+        })) as Track[],
+    } as unknown as MusicPlatformService;
+
+    const result = await searchAndGetTopTracks(platform, [{ name: 'A' }, { name: 'B' }], 'token', {
+      mode: 'custom',
+      customCount: 8,
+    });
+
+    expect(result.tracks).toHaveLength(10);
+    expect(result.shortArtists).toEqual([
+      { artist: 'A', matchedAs: 'A (catalog)', requested: 8, received: 2 },
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Only 2 of 8 tracks available for "A"')
+    );
+  });
+});

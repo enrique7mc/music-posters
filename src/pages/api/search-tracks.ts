@@ -136,19 +136,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Search for artists and get their top tracks with rate limiting
     console.log(`Searching tracks for ${artists.length} artists on ${platform}`);
-    const { tracks, foundArtists, artistMatches, failedArtists } = await searchAndGetTopTracks(
-      platformService,
-      artists,
-      accessToken,
-      {
-        mode: trackCountMode || 'tier-based',
-        customCount: customTrackCount,
-        tierCounts: tierCounts,
-        perArtistCounts: sanitizedPerArtistCounts,
-        selectionMode: trackSelectionMode,
-      },
-      developerToken
-    );
+    const { tracks, foundArtists, artistMatches, failedArtists, shortArtists } =
+      await searchAndGetTopTracks(
+        platformService,
+        artists,
+        accessToken,
+        {
+          mode: trackCountMode || 'tier-based',
+          customCount: customTrackCount,
+          tierCounts: tierCounts,
+          perArtistCounts: sanitizedPerArtistCounts,
+          selectionMode: trackSelectionMode,
+        },
+        developerToken
+      );
 
     // Log mismatches for debugging
     const poorMatches = artistMatches.filter((m) => m.found && m.similarity < 0.9);
@@ -175,6 +176,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `notFound=${noMatches.length} fuzzy=${poorMatches.length} ` +
         `failedSearch=${failedArtists.filter((f) => f.stage === 'search').length} ` +
         `failedTracks=${failedArtists.filter((f) => f.stage === 'tracks').length} ` +
+        `shortArtists=${shortArtists.length} ` +
+        `shortTracks=${shortArtists.reduce((n, s) => n + s.requested - s.received, 0)} ` +
         `tracks=${tracks.length}`
     );
 

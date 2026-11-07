@@ -193,6 +193,89 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.similarity).toBeLessThan(0.6);
   });
 
+  // Stub the catalog search with album counts, as Apple returns them in
+  // relationships.albums (a capped list plus `next` when there are more).
+  function stubCatalogWithAlbums(entries: Array<[name: string, albums: number, more?: boolean]>) {
+    server.use(
+      http.get(SEARCH_URL, () =>
+        HttpResponse.json({
+          results: {
+            artists: {
+              data: entries.map(([name, albums, more], i) => ({
+                id: `id-${i}`,
+                attributes: { name },
+                relationships: {
+                  albums: {
+                    data: Array.from({ length: albums }, (_, j) => ({ id: `al-${j}` })),
+                    ...(more ? { next: '/v1/next' } : {}),
+                  },
+                },
+              })),
+            },
+          },
+        })
+      )
+    );
+  }
+
+  // Regression: the closest spelling was a 2-single page, the band has 18 albums.
+  it('prefers the larger catalog among names that contain the poster name', async () => {
+    stubCatalogWithAlbums([
+      ['Maldita Vecindad y Los Hijos del Quinto Patio', 18],
+      ['La Maldita Vecindad', 2],
+      ['Maldita Vecindad Y Los Hijos Del 5to. Patio', 5],
+      ['"Sax" Maldita Vecindad', 3],
+    ]);
+    const result = await service.searchArtist('Maldita Vecindad', 'user-token');
+    expect(result!.id).toBe('id-0');
+    expect(result!.name).toBe('Maldita Vecindad y Los Hijos del Quinto Patio');
+    expect(result!.matched).toBe(true);
+  });
+
+  it('counts a capped album list (with `next`) as larger than the cap', async () => {
+    stubCatalogWithAlbums([
+      ['Los Bunkers Tributo', 25],
+      ['Los Bunkers en Vivo', 25, true],
+    ]);
+    const result = await service.searchArtist('Los Bunkers', 'user-token');
+    expect(result!.id).toBe('id-1');
+  });
+
+  it('keeps an exact name match even when a longer name has more albums', async () => {
+    stubCatalogWithAlbums([
+      ['Los Pericos y Amigos', 25],
+      ['Los Pericos', 3],
+    ]);
+    const result = await service.searchArtist('Los Pericos', 'user-token');
+    expect(result!.name).toBe('Los Pericos');
+    expect(result!.similarity).toBe(1);
+  });
+
+  it('keeps the closest spelling when it has the larger catalog', async () => {
+    stubCatalogWithAlbums([
+      ['Los Bunker', 20],
+      ['Los Bunkers Tribute Band', 2],
+    ]);
+    const result = await service.searchArtist('Los Bunkers', 'user-token');
+    expect(result!.name).toBe('Los Bunker');
+  });
+
+  it('does not treat a single-word name inside a longer name as a match', async () => {
+    stubCatalogWithAlbums([
+      ['Porter Robinson', 25],
+      ['Portera', 2],
+    ]);
+    const result = await service.searchArtist('Porter', 'user-token');
+    expect(result!.name).toBe('Portera'); // closest spelling, unchanged behaviour
+  });
+
+  it('accepts a containing name even when its spelling is below the threshold', async () => {
+    stubCatalogWithAlbums([['Rock en tu Idioma Sinfónico en Vivo', 4]]);
+    const result = await service.searchArtist('Rock en tu Idioma', 'user-token');
+    expect(result!.matched).toBe(true);
+    expect(result!.similarity).toBeLessThan(0.6);
+  });
+
   it('returns null when the catalog has no results', async () => {
     server.use(http.get(SEARCH_URL, () => HttpResponse.json({ results: {} })));
     expect(await service.searchArtist('Nobody', 'user-token')).toBeNull();
