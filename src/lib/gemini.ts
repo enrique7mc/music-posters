@@ -149,10 +149,34 @@ export async function analyzeImageWithGemini(
     };
   } catch (error) {
     console.error('[Gemini] Error analyzing image:', error);
+    // Keep the SDK error as `cause` so retry logic can read its HTTP status
     throw new Error(
-      `Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Gemini analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { cause: error }
     );
   }
+}
+
+/**
+ * HTTP statuses that will fail the same way on retry (bad request, invalid
+ * key, billing/credits, permission, unknown model). 429 and 5xx stay retryable.
+ */
+const NON_RETRYABLE_STATUSES = new Set([400, 401, 402, 403, 404]);
+
+/**
+ * True when a Gemini error carries a non-retryable HTTP status, either on the
+ * SDK error itself or on a wrapped `cause`.
+ */
+export function isNonRetryableGeminiError(error: unknown): boolean {
+  let current: unknown = error;
+  while (current && typeof current === 'object') {
+    const status = (current as { status?: unknown }).status;
+    if (typeof status === 'number' && NON_RETRYABLE_STATUSES.has(status)) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /**
@@ -220,6 +244,11 @@ export async function analyzeImageWithGeminiRetry(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Unknown error');
       console.error(`[Gemini] Attempt ${attempt} failed:`, lastError.message);
+
+      if (isNonRetryableGeminiError(error)) {
+        console.error('[Gemini] Non-retryable error, skipping remaining attempts');
+        break;
+      }
 
       if (attempt < maxRetries) {
         // Exponential backoff: 2^attempt seconds
