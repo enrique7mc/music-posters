@@ -4,6 +4,13 @@ Deep documentation for Music Posters (Playlistd), organized by the
 [Diátaxis](https://diataxis.fr/) framework — each document serves a different
 reader need.
 
+## How the app works
+
+[how-it-works.html](./how-it-works.html) is an interactive diagram of how a poster
+becomes a playlist: the path through the API routes, the three poster readers, and
+the songs each tier gets. Open it in a browser and click any part for details. The
+source is [how-it-works.md](./how-it-works.md).
+
 ## User-aware recommendations (loved + hidden gems)
 
 The personalization feature shipped in v0.2.0: Apple Music users see their poster
