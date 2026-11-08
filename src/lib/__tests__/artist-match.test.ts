@@ -5,6 +5,7 @@ import {
   matchLineup,
   containsName,
   isDerivativeName,
+  hasWordConflict,
   LOVED_MATCH_THRESHOLD,
   CATALOG_MATCH_THRESHOLD,
 } from '../artist-match';
@@ -76,6 +77,34 @@ describe('containsName', () => {
     expect(containsName('The Killers Tribute', 'The Killers')).toBe(false);
     expect(containsName('DJ Snake Remixes', 'DJ Snake')).toBe(false);
     expect(containsName('Los Fabulosos Cadillacs y Amigos', 'Los Fabulosos Cadillacs')).toBe(true);
+  });
+});
+
+describe('hasWordConflict', () => {
+  // Regression #71: 75% similar, but "ltd" and "kid" are different words.
+  it('flags names that differ by a whole word', () => {
+    expect(similarity('LTD Rock', 'Kid Rock')).toBeGreaterThanOrEqual(CATALOG_MATCH_THRESHOLD);
+    expect(hasWordConflict('LTD Rock', 'Kid Rock')).toBe(true);
+    expect(hasWordConflict('Mike D', 'Mike G')).toBe(true);
+  });
+
+  it('accepts an abbreviated word', () => {
+    expect(hasWordConflict('Señor Bikini', 'Sr. Bikini')).toBe(false);
+    expect(hasWordConflict('Doctor Krápula', 'Dr. Krapula')).toBe(false);
+  });
+
+  it('accepts a typo inside a word', () => {
+    expect(hasWordConflict('Cafe Tacuba', 'Café Tacvba')).toBe(false);
+  });
+
+  it('accepts an added or dropped word', () => {
+    expect(hasWordConflict('Skatalites', 'The Skatalites')).toBe(false);
+    expect(hasWordConflict('Maldita Vecindad', 'La Maldita Vecindad')).toBe(false);
+    expect(hasWordConflict('LTD Rock', 'L.T.D.')).toBe(false);
+  });
+
+  it('accepts words that are merged or split', () => {
+    expect(hasWordConflict('Molotov', 'Molo Tov')).toBe(false);
   });
 });
 
