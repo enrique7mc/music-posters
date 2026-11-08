@@ -77,16 +77,57 @@ export function similarity(a: string, b: string): number {
 }
 
 /**
+ * Leading words that do not make a name distinctive. "Los Lobos" is one
+ * distinctive word, as weak a signal as "Lobos" alone.
+ */
+const LEADING_PARTICLES = new Set([
+  'the', 'a', 'an', 'los', 'las', 'la', 'el', 'lo', 'les', 'le', 'il',
+  'die', 'der', 'das', 'dj', 'mc', 'lil',
+]); // prettier-ignore
+
+/**
+ * Words that mark a catalog page as derived from the artist, not the artist:
+ * tributes, karaoke, covers, live or hits compilations, "& Friends" projects.
+ * Such pages often list more albums than the real artist.
+ */
+const DERIVATIVE_MARKERS = new Set([
+  'tribute', 'tributo', 'homenaje', 'karaoke', 'cover', 'covers', 'style',
+  'live', 'vivo', 'friends', 'amigos', 'hits', 'exitos', 'greatest',
+  'unplugged', 'acoustic', 'acustico', 'symphonic', 'sinfonico',
+]); // prettier-ignore
+
+/** Number of words in a normalized name after its leading particles. */
+function distinctiveWordCount(normalized: string): number {
+  const words = normalized.split(' ');
+  let i = 0;
+  while (i < words.length && LEADING_PARTICLES.has(words[i])) i++;
+  return words.length - i;
+}
+
+/**
  * True when `name` appears as a whole-word phrase inside `candidate` after
  * normalization, e.g. "Maldita Vecindad" in "Maldita Vecindad y Los Hijos del
  * Quinto Patio". Poster names are often shortened forms of the catalog name.
- * Only multi-word names qualify: a single word ("Porter") also appears inside
- * many unrelated names ("Porter Robinson"), so it is too weak a signal.
+ * The name needs at least 2 distinctive words (leading articles and prefixes
+ * such as "The", "Los" or "DJ" do not count): a single word ("Porter", "Los
+ * Lobos") also appears inside many unrelated names, so it is too weak a signal.
  */
 export function containsName(candidate: string, name: string): boolean {
   const n = normalize(name);
-  if (!n.includes(' ')) return false;
+  if (distinctiveWordCount(n) < 2) return false;
   return ` ${normalize(candidate)} `.includes(` ${n} `);
+}
+
+/**
+ * True when `candidate` contains `name` (see containsName) and its other words
+ * mark it as a derived page, e.g. "Café Tacvba Tribute Band" or "Los Fabulosos
+ * Cadillacs en Vivo".
+ */
+export function isDerivativeName(candidate: string, name: string): boolean {
+  if (!containsName(candidate, name)) return false;
+  const n = normalize(name);
+  const rest = ` ${normalize(candidate)} `.replace(` ${n} `, ' ').trim();
+  return rest.split(' ').some((word) => DERIVATIVE_MARKERS.has(word));
 }
 
 /** A lineup artist matched to a name in the user's loved set. */

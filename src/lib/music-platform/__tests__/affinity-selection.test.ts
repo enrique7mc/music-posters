@@ -262,3 +262,62 @@ describe('searchAndGetTopTracks short artists', () => {
     );
   });
 });
+
+describe('searchAndGetTopTracks duplicate matches', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function platformWith(
+    idByName: Record<string, string>,
+    tracksById: Record<string, string[]>,
+    fetched: string[] = []
+  ): MusicPlatformService {
+    return {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => ({
+        id: idByName[name],
+        name: `catalog ${idByName[name]}`,
+        matched: true,
+        similarity: 1,
+      }),
+      getArtistTopTracks: async (artistId: string): Promise<Track[]> => {
+        fetched.push(artistId);
+        return tracksById[artistId].map((id) => ({ id }) as Track);
+      },
+    } as unknown as MusicPlatformService;
+  }
+
+  it('fetches an artist once when two poster names match it', async () => {
+    const fetched: string[] = [];
+    const platform = platformWith(
+      { 'Maldita Vecindad': '302942', 'Maldita Vecindad y Los Hijos': '302942' },
+      { '302942': ['t1', 't2'] },
+      fetched
+    );
+
+    const result = await searchAndGetTopTracks(
+      platform,
+      [{ name: 'Maldita Vecindad' }, { name: 'Maldita Vecindad y Los Hijos' }],
+      'token'
+    );
+
+    expect(fetched).toEqual(['302942']);
+    expect(result.tracks.map((t) => t.id)).toEqual(['t1', 't2']);
+    expect(result.foundArtists).toBe(2);
+  });
+
+  it('keeps one copy of a track that two artists share', async () => {
+    const platform = platformWith({ A: 'a', B: 'b' }, { a: ['t1', 'collab'], b: ['collab', 't2'] });
+
+    const result = await searchAndGetTopTracks(platform, [{ name: 'A' }, { name: 'B' }], 'token');
+
+    expect(result.tracks.map((t) => t.id)).toEqual(['t1', 'collab', 't2']);
+  });
+});

@@ -230,15 +230,60 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.id).toBe('id-0');
     expect(result!.name).toBe('Maldita Vecindad y Los Hijos del Quinto Patio');
     expect(result!.matched).toBe(true);
+    expect(result!.matchType).toBe('contains');
   });
 
   it('counts a capped album list (with `next`) as larger than the cap', async () => {
     stubCatalogWithAlbums([
-      ['Los Bunkers Tributo', 25],
-      ['Los Bunkers en Vivo', 25, true],
+      ['La Maldita Vecindad', 25],
+      ['Maldita Vecindad y Los Hijos del Quinto Patio', 25, true],
     ]);
-    const result = await service.searchArtist('Los Bunkers', 'user-token');
+    const result = await service.searchArtist('Maldita Vecindad', 'user-token');
     expect(result!.id).toBe('id-1');
+  });
+
+  it('gives a tie between two capped catalogs to the closer spelling', async () => {
+    stubCatalogWithAlbums([
+      ['Maldita Vecindad y Los Hijos del Quinto Patio', 25, true],
+      ['La Maldita Vecindad', 25, true],
+    ]);
+    const result = await service.searchArtist('Maldita Vecindad', 'user-token');
+    expect(result!.name).toBe('La Maldita Vecindad');
+  });
+
+  it('does not let a tribute or live page win on album count', async () => {
+    stubCatalogWithAlbums([
+      ['Cafe Tacuba Tribute Band', 25, true],
+      ['Café Tacvba', 20],
+      ['Cafe Tacuba en Vivo', 25, true],
+    ]);
+    const result = await service.searchArtist('Cafe Tacuba', 'user-token');
+    expect(result!.name).toBe('Café Tacvba');
+    expect(result!.matchType).toBe('fuzzy');
+  });
+
+  it('keeps the closest spelling when the response has no album lists', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    server.use(
+      http.get(SEARCH_URL, () =>
+        HttpResponse.json({
+          results: {
+            artists: {
+              data: [
+                {
+                  id: 'id-0',
+                  attributes: { name: 'Maldita Vecindad y Los Hijos del Quinto Patio' },
+                },
+                { id: 'id-1', attributes: { name: 'La Maldita Vecindad' } },
+              ],
+            },
+          },
+        })
+      )
+    );
+    const result = await service.searchArtist('Maldita Vecindad', 'user-token');
+    expect(result!.name).toBe('La Maldita Vecindad');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('No album counts'));
   });
 
   it('keeps an exact name match even when a longer name has more albums', async () => {
@@ -260,6 +305,15 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.name).toBe('Los Bunker');
   });
 
+  it('does not treat a name with one distinctive word as a phrase match', async () => {
+    stubCatalogWithAlbums([
+      ['Los Lobos del Norte', 25, true],
+      ['Los Lobo', 3],
+    ]);
+    const result = await service.searchArtist('Los Lobos', 'user-token');
+    expect(result!.name).toBe('Los Lobo');
+  });
+
   it('does not treat a single-word name inside a longer name as a match', async () => {
     stubCatalogWithAlbums([
       ['Porter Robinson', 25],
@@ -269,10 +323,10 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.name).toBe('Portera'); // closest spelling, unchanged behaviour
   });
 
-  it('accepts a containing name even when its spelling is below the threshold', async () => {
-    stubCatalogWithAlbums([['Rock en tu Idioma Sinfónico en Vivo', 4]]);
+  it('does not accept a containing name when no spelling clears the threshold', async () => {
+    stubCatalogWithAlbums([['Rock en tu Idioma y la Orquesta Nacional', 4]]);
     const result = await service.searchArtist('Rock en tu Idioma', 'user-token');
-    expect(result!.matched).toBe(true);
+    expect(result!.matched).toBe(false);
     expect(result!.similarity).toBeLessThan(0.6);
   });
 

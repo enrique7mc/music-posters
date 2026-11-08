@@ -40,9 +40,9 @@ describe('/api/search-tracks per-artist failures', () => {
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
-        { requested: 'A', found: 'A', similarity: 1, lookupFailed: false },
-        { requested: 'B', found: 'B', similarity: 1, lookupFailed: false },
-        { requested: 'C', found: null, similarity: 0, lookupFailed: true },
+        { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+        { requested: 'B', found: 'B', similarity: 1, matched: true, lookupFailed: false },
+        { requested: 'C', found: null, similarity: 0, matched: false, lookupFailed: true },
       ],
       failedArtists: [
         { artist: 'C', stage: 'search', reason: '503' },
@@ -66,7 +66,9 @@ describe('/api/search-tracks per-artist failures', () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
       tracks: [],
       foundArtists: 1,
-      artistMatches: [{ requested: 'A', found: 'A', similarity: 1, lookupFailed: false }],
+      artistMatches: [
+        { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+      ],
       failedArtists: [{ artist: 'A', stage: 'tracks', reason: '503' }],
       shortArtists: [],
     });
@@ -83,8 +85,8 @@ describe('/api/search-tracks per-artist failures', () => {
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
-        { requested: 'A', found: 'A', similarity: 1, lookupFailed: false },
-        { requested: 'B', found: 'B', similarity: 1, lookupFailed: false },
+        { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+        { requested: 'B', found: 'B', similarity: 1, matched: true, lookupFailed: false },
       ],
       failedArtists: [],
       shortArtists: [
@@ -100,5 +102,96 @@ describe('/api/search-tracks per-artist failures', () => {
       .map((c) => String(c[0]))
       .find((l) => l.startsWith('[search-tracks]'));
     expect(summary).toContain('shortArtists=2 shortTracks=7');
+  });
+
+  it('warns about a match below the threshold as "not found", not "matched as"', async () => {
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      tracks: [track as any],
+      foundArtists: 1,
+      artistMatches: [
+        { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+        {
+          requested: 'Porter',
+          found: 'Portera',
+          similarity: 0.4,
+          matched: false,
+          lookupFailed: false,
+        },
+      ],
+      failedArtists: [],
+      shortArtists: [],
+    });
+    const { req, res } = createRequest();
+
+    await handler(req as any, res as any);
+
+    const { warnings } = JSON.parse(res._getData());
+    expect(warnings).toEqual(['"Porter" was not found on Apple Music']);
+  });
+
+  it('does not warn about a whole-name match with a low similarity', async () => {
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      tracks: [track as any],
+      foundArtists: 2,
+      artistMatches: [
+        {
+          requested: 'Maldita Vecindad',
+          found: 'Maldita Vecindad y Los Hijos del Quinto Patio',
+          similarity: 0.36,
+          matched: true,
+          matchType: 'contains',
+          lookupFailed: false,
+        },
+        {
+          requested: 'Los Bunkers',
+          found: 'Los Bunker',
+          similarity: 0.91,
+          matched: true,
+          matchType: 'fuzzy',
+          lookupFailed: false,
+        },
+        {
+          requested: 'Caifanes',
+          found: 'Caifan',
+          similarity: 0.75,
+          matched: true,
+          matchType: 'fuzzy',
+          lookupFailed: false,
+        },
+      ],
+      failedArtists: [],
+      shortArtists: [],
+    });
+    const { req, res } = createRequest();
+
+    await handler(req as any, res as any);
+
+    const { warnings } = JSON.parse(res._getData());
+    expect(warnings).toEqual(['"Caifanes" matched as "Caifan" (75% match)']);
+  });
+
+  it('warns the user about an artist with fewer tracks than requested', async () => {
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      tracks: [track as any],
+      foundArtists: 2,
+      artistMatches: [
+        { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+        { requested: 'B', found: 'B', similarity: 1, matched: true, lookupFailed: false },
+      ],
+      failedArtists: [],
+      shortArtists: [
+        { artist: 'A', matchedAs: 'A', requested: 8, received: 2 },
+        { artist: 'B', matchedAs: 'B Band', requested: 3, received: 1 },
+      ],
+    });
+    const { req, res } = createRequest();
+
+    await handler(req as any, res as any);
+
+    const { warnings } = JSON.parse(res._getData());
+    expect(warnings).toEqual([
+      'Only 2 of 8 tracks found for "A"',
+      'Only 1 of 3 tracks found for "B" (matched as "B Band")',
+    ]);
   });
 });

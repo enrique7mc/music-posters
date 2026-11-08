@@ -1,5 +1,10 @@
 import { MusicPlatform, Artist, Track, TrackSelectionMode } from '@/types';
-import { MusicPlatformService, TrackCountOptions, PlatformAccessError } from './types';
+import {
+  MusicPlatformService,
+  TrackCountOptions,
+  PlatformAccessError,
+  ArtistSearchResult,
+} from './types';
 import { errDetail } from '@/lib/safe-log';
 import { spotifyPlatform, SpotifyPlatformService } from './spotify-platform';
 import { appleMusicPlatform, AppleMusicPlatformService } from './apple-music-platform';
@@ -159,6 +164,8 @@ export async function searchAndGetTopTracks(
     requested: string;
     found: string | null;
     similarity: number;
+    matched: boolean;
+    matchType?: ArtistSearchResult['matchType'];
     lookupFailed: boolean;
   }>;
   failedArtists: FailedArtist[];
@@ -216,6 +223,7 @@ export async function searchAndGetTopTracks(
       found: found ? found.name : null,
       similarity: found ? found.similarity : 0,
       matched: found ? found.matched : false,
+      matchType: found?.matchType,
       lookupFailed: failed,
     };
   });
@@ -230,7 +238,7 @@ export async function searchAndGetTopTracks(
       (
         pair
       ): pair is {
-        searchResult: { id: string; name: string; matched: boolean; similarity: number };
+        searchResult: ArtistSearchResult;
         originalArtist: Artist;
       } => pair.searchResult !== null && pair.searchResult.matched
     );
@@ -241,10 +249,26 @@ export async function searchAndGetTopTracks(
     `⚠️  Poor/No matches: ${artistNames.length - validArtists.length}/${artistNames.length}`
   );
 
+  // Two poster names can match the same catalog artist (e.g. a short and a
+  // long form of one band name). Fetch that artist once, for the first name.
+  const fetchedIds = new Map<string, string>();
+  const uniqueArtists = validArtists.filter((pair) => {
+    const firstName = fetchedIds.get(pair.searchResult.id);
+    if (firstName !== undefined) {
+      console.log(
+        `  ↺ "${pair.originalArtist.name}" matched the same artist as "${firstName}" ` +
+          `("${pair.searchResult.name}"); skipping the duplicate`
+      );
+      return false;
+    }
+    fetchedIds.set(pair.searchResult.id, pair.originalArtist.name);
+    return true;
+  });
+
   // Get top tracks in batches
   const shortArtists: ShortArtist[] = [];
   const trackArrays = await processBatch(
-    validArtists,
+    uniqueArtists,
     async (pair) => {
       // Check for per-artist override
       let trackCount: number;
@@ -305,9 +329,14 @@ export async function searchAndGetTopTracks(
     batchDelay
   );
 
-  // Flatten array of arrays into single array of tracks
-  const tracks = trackArrays.flat();
-  console.log(`Retrieved ${tracks.length} total tracks from ${validArtists.length} artists`);
+  // Flatten, keeping one copy of a track that two artists share (a collaboration).
+  const seenTracks = new Set<string>();
+  const tracks = trackArrays.flat().filter((t) => {
+    if (seenTracks.has(t.id)) return false;
+    seenTracks.add(t.id);
+    return true;
+  });
+  console.log(`Retrieved ${tracks.length} total tracks from ${uniqueArtists.length} artists`);
   console.log(`=== END ${platform.platform.toUpperCase()} SEARCH ===\n`);
 
   if (failedArtists.length > 0) {
