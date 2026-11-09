@@ -124,9 +124,27 @@ function isAbbreviation(short: string, long: string): boolean {
   return i === short.length;
 }
 
-/** True when two normalized words can be the same word: equal, a typo, or an abbreviation. */
+/**
+ * Words that mean the same in artist names but share no spelling: "and" in
+ * its short and Spanish forms ("Guns N' Roses", "Jesse y Joy"), and numbers
+ * as digits or as English or Spanish words ("Maroon Five", "Calle Trece").
+ */
+const WORD_ALIASES: Record<string, string> = Object.fromEntries([
+  ['n', 'and'], ['y', 'and'],
+  ...[
+    ['zero', 'cero'], ['one', 'uno'], ['two', 'dos'], ['three', 'tres'], ['four', 'cuatro'],
+    ['five', 'cinco'], ['six', 'seis'], ['seven', 'siete'], ['eight', 'ocho'], ['nine', 'nueve'],
+    ['ten', 'diez'], ['eleven', 'once'], ['twelve', 'doce'], ['thirteen', 'trece'],
+    ['fourteen', 'catorce'], ['fifteen', 'quince'], ['sixteen', 'dieciseis'],
+    ['seventeen', 'diecisiete'], ['eighteen', 'dieciocho'], ['nineteen', 'diecinueve'],
+    ['twenty', 'veinte'],
+  ].flatMap((words, digit) => words.map((w) => [w, String(digit)])),
+]); // prettier-ignore
+
+/** True when two normalized words can be the same word: equal, an alias, a typo, or an abbreviation. */
 function wordsCompatible(a: string, b: string): boolean {
   if (a === b) return true;
+  if ((WORD_ALIASES[a] ?? a) === (WORD_ALIASES[b] ?? b)) return true;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (isAbbreviation(short, long)) return true;
   return (long.length - levenshteinDistance(long, short)) / long.length >= WORD_MATCH_THRESHOLD;
@@ -140,8 +158,8 @@ function wordsCompatible(a: string, b: string): boolean {
  *
  * Both sides need an unmatched word. A word that is only added or dropped
  * ("The Skatalites", "Maldita Vecindad y Los Hijos del Quinto Patio") is not a
- * conflict. Typos ("Tacvba" vs "Tacuba") and abbreviations ("Sr." vs "Señor")
- * are not conflicts.
+ * conflict. Typos ("Tacvba" vs "Tacuba"), abbreviations ("Sr." vs "Señor") and
+ * aliases ("N" vs "and", "5" vs "five"; see WORD_ALIASES) are not conflicts.
  */
 export function hasWordConflict(a: string, b: string): boolean {
   const x = distinctiveWords(normalize(a));

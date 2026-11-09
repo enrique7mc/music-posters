@@ -86,11 +86,21 @@ describe('hasWordConflict', () => {
     expect(similarity('LTD Rock', 'Kid Rock')).toBeGreaterThanOrEqual(CATALOG_MATCH_THRESHOLD);
     expect(hasWordConflict('LTD Rock', 'Kid Rock')).toBe(true);
     expect(hasWordConflict('Mike D', 'Mike G')).toBe(true);
+    expect(hasWordConflict('El Tri de Mexico', 'El Trono de México')).toBe(true);
   });
 
   it('accepts an abbreviated word', () => {
     expect(hasWordConflict('Señor Bikini', 'Sr. Bikini')).toBe(false);
     expect(hasWordConflict('Doctor Krápula', 'Dr. Krapula')).toBe(false);
+  });
+
+  it('accepts "and" in short or Spanish form, and numbers as digits or words', () => {
+    expect(hasWordConflict('Guns and Roses', "Guns N' Roses")).toBe(false);
+    expect(hasWordConflict('Jesse and Joy', 'Jesse y Joy')).toBe(false);
+    expect(hasWordConflict('Maroon Five', 'Maroon 5')).toBe(false);
+    expect(hasWordConflict('Calle Trece', 'Calle 13')).toBe(false);
+    expect(hasWordConflict('4 Muertos', 'Cuatro Muertos')).toBe(false);
+    expect(hasWordConflict('Maroon Five', 'Maroon 6')).toBe(true);
   });
 
   it('accepts a typo inside a word', () => {
