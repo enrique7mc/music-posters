@@ -7,7 +7,12 @@ import {
   PlatformAccessError,
   PartialAddError,
 } from './types';
-import { similarity, CATALOG_MATCH_THRESHOLD } from '@/lib/artist-match';
+import {
+  similarity,
+  containsName,
+  isDerivativeName,
+  CATALOG_MATCH_THRESHOLD,
+} from '@/lib/artist-match';
 // Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
 // never reach console.error (config.headers carries the developer bearer token and
 // the Music-User-Token).
@@ -111,6 +116,98 @@ function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelection
 
   // Return up to `limit` tracks
   return shuffled.slice(0, Math.min(limit, shuffled.length));
+}
+
+interface CatalogCandidate {
+  artist: any;
+  sim: number;
+  /**
+   * Albums listed in the search result. Apple caps the list at 25 and adds
+   * `next` when there are more, so every larger catalog counts as 26.
+   */
+  albums: number;
+  /** A tribute, karaoke, live or hits page that contains the poster name. */
+  derivative: boolean;
+}
+
+interface CatalogPick {
+  best: CatalogCandidate;
+  closest: CatalogCandidate;
+  matched: boolean;
+  matchType: 'exact' | 'fuzzy' | 'contains';
+}
+
+function albumCount(artist: any): number {
+  const albums = artist.relationships?.albums;
+  return (albums?.data?.length ?? 0) + (albums?.next ? 1 : 0);
+}
+
+/** True when b ranks above a: real artist first, then more albums, then closer spelling. */
+function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
+  if (a.derivative !== b.derivative) return a.derivative;
+  if (b.albums !== a.albums) return b.albums > a.albums;
+  return b.sim > a.sim;
+}
+
+/**
+ * Chooses the catalog artist for a poster name from Apple's search results.
+ *
+ * 1. An exact name match (after normalization) wins, first in Apple's order.
+ * 2. If the closest spelling is below CATALOG_MATCH_THRESHOLD, there is no
+ *    match. A containing name alone never creates a match.
+ * 3. Otherwise the candidates are the closest spelling plus every artist whose
+ *    name contains the poster name as a phrase (see containsName), except
+ *    tribute, karaoke, live and hits pages (see isDerivativeName). A real
+ *    artist beats a derived page, then the most albums wins, then the higher
+ *    similarity, then Apple's order. Album counts stop at 26 (see
+ *    CatalogCandidate), so two large catalogs tie and the closer spelling wins.
+ * 4. If the search response has no album lists, rule 3 cannot rank the
+ *    candidates, so the closest spelling wins and a warning is logged.
+ *
+ * Rule 3 exists because the closest spelling is often a thin secondary page.
+ * Example: "Maldita Vecindad" is closest to "La Maldita Vecindad" (2 singles as
+ * a featured artist), but the band is "Maldita Vecindad y Los Hijos del Quinto
+ * Patio" (18 albums). The album count comes with the search response, so this
+ * costs no extra request.
+ */
+function pickCatalogArtist(name: string, artists: any[]): CatalogPick {
+  const candidates: CatalogCandidate[] = artists.map((artist) => ({
+    artist,
+    sim: similarity(name, artist.attributes.name),
+    albums: albumCount(artist),
+    derivative: isDerivativeName(artist.attributes.name, name),
+  }));
+
+  // First candidate with the highest similarity (Apple's order breaks ties).
+  const closest = candidates.reduce((a, b) => (b.sim > a.sim ? b : a));
+  if (closest.sim === 1) return { best: closest, closest, matched: true, matchType: 'exact' };
+  if (closest.sim < CATALOG_MATCH_THRESHOLD) {
+    return { best: closest, closest, matched: false, matchType: 'fuzzy' };
+  }
+
+  const containing = candidates.filter(
+    (c) => c !== closest && !c.derivative && containsName(c.artist.attributes.name, name)
+  );
+  const fuzzy: CatalogPick = { best: closest, closest, matched: true, matchType: 'fuzzy' };
+  if (containing.length === 0) {
+    if (containsName(closest.artist.attributes.name, name) && !closest.derivative) {
+      fuzzy.matchType = 'contains';
+    }
+    return fuzzy;
+  }
+
+  if (!candidates.some((c) => c.artist.relationships?.albums)) {
+    console.warn(
+      `[Apple Music] No album counts in search results for "${name}"; ` +
+        `kept closest spelling "${closest.artist.attributes.name}" over ` +
+        `${containing.length} containing name(s)`
+    );
+    return fuzzy;
+  }
+
+  const best = [closest, ...containing].reduce((a, b) => (outranks(b, a) ? b : a));
+  const contains = !best.derivative && containsName(best.artist.attributes.name, name);
+  return { best, closest, matched: true, matchType: contains ? 'contains' : 'fuzzy' };
 }
 
 /**
@@ -222,25 +319,19 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         return null;
       }
 
-      // Find the best matching artist by name similarity
-      let bestMatch = artists[0];
-      let bestSimilarity = similarity(name, artists[0].attributes.name);
-
-      for (const artist of artists) {
-        const sim = similarity(name, artist.attributes.name);
-        if (sim > bestSimilarity) {
-          bestSimilarity = sim;
-          bestMatch = artist;
-        }
-      }
-
-      // Require at least 60% similarity to avoid completely wrong matches.
-      // Catalog search is recall-oriented; loved-overlap uses a stricter bar.
-      const matched = bestSimilarity >= CATALOG_MATCH_THRESHOLD;
+      const { best, closest, matched, matchType } = pickCatalogArtist(name, artists);
+      const bestMatch = best.artist;
+      const bestSimilarity = best.sim;
 
       if (!matched) {
         console.warn(
           `[Apple Music] Low match for "${name}": got "${bestMatch.attributes.name}" (${(bestSimilarity * 100).toFixed(0)}% similar)`
+        );
+      } else if (best !== closest) {
+        console.log(
+          `[Apple Music] Catalog match: "${name}" -> "${bestMatch.attributes.name}" ` +
+            `(${best.albums} albums), preferred over closer spelling ` +
+            `"${closest.artist.attributes.name}" (${closest.albums} albums)`
         );
       } else if (bestMatch.attributes.name !== name) {
         console.log(
@@ -255,6 +346,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
         name: bestMatch.attributes.name,
         matched,
         similarity: bestSimilarity,
+        matchType,
       };
     } catch (error) {
       console.error(`[Apple Music] Error searching for artist "${name}":`, errMessage(error));

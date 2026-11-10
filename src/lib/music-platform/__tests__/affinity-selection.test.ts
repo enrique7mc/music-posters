@@ -217,3 +217,107 @@ describe('searchAndGetTopTracks per-artist failures', () => {
     ).rejects.toMatchObject({ response: { status: 401 } });
   });
 });
+
+describe('searchAndGetTopTracks short artists', () => {
+  let warn: MockInstance<(...args: unknown[]) => void>;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Regression: "Maldita Vecindad" matched a 2-song page and silently gave 2 of 8.
+  it('reports an artist that returns fewer tracks than requested', async () => {
+    const available: Record<string, number> = { A: 2, B: 10 };
+    const platform = {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => ({
+        id: name,
+        name: `${name} (catalog)`,
+        matched: true,
+        similarity: 1,
+      }),
+      getArtistTopTracks: async (artistId: string, _t: string, limit = 1): Promise<Track[]> =>
+        Array.from({ length: Math.min(limit, available[artistId]) }, (_, i) => ({
+          id: `${artistId}-${i}`,
+        })) as Track[],
+    } as unknown as MusicPlatformService;
+
+    const result = await searchAndGetTopTracks(platform, [{ name: 'A' }, { name: 'B' }], 'token', {
+      mode: 'custom',
+      customCount: 8,
+    });
+
+    expect(result.tracks).toHaveLength(10);
+    expect(result.shortArtists).toEqual([
+      { artist: 'A', matchedAs: 'A (catalog)', requested: 8, received: 2 },
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Only 2 of 8 tracks available for "A"')
+    );
+  });
+});
+
+describe('searchAndGetTopTracks duplicate matches', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function platformWith(
+    idByName: Record<string, string>,
+    tracksById: Record<string, string[]>,
+    fetched: string[] = []
+  ): MusicPlatformService {
+    return {
+      platform: 'apple-music',
+      setDeveloperToken: vi.fn(),
+      searchArtist: async (name: string) => ({
+        id: idByName[name],
+        name: `catalog ${idByName[name]}`,
+        matched: true,
+        similarity: 1,
+      }),
+      getArtistTopTracks: async (artistId: string): Promise<Track[]> => {
+        fetched.push(artistId);
+        return tracksById[artistId].map((id) => ({ id }) as Track);
+      },
+    } as unknown as MusicPlatformService;
+  }
+
+  it('fetches an artist once when two poster names match it', async () => {
+    const fetched: string[] = [];
+    const platform = platformWith(
+      { 'Maldita Vecindad': '302942', 'Maldita Vecindad y Los Hijos': '302942' },
+      { '302942': ['t1', 't2'] },
+      fetched
+    );
+
+    const result = await searchAndGetTopTracks(
+      platform,
+      [{ name: 'Maldita Vecindad' }, { name: 'Maldita Vecindad y Los Hijos' }],
+      'token'
+    );
+
+    expect(fetched).toEqual(['302942']);
+    expect(result.tracks.map((t) => t.id)).toEqual(['t1', 't2']);
+    expect(result.foundArtists).toBe(2);
+  });
+
+  it('keeps one copy of a track that two artists share', async () => {
+    const platform = platformWith({ A: 'a', B: 'b' }, { a: ['t1', 'collab'], b: ['collab', 't2'] });
+
+    const result = await searchAndGetTopTracks(platform, [{ name: 'A' }, { name: 'B' }], 'token');
+
+    expect(result.tracks.map((t) => t.id)).toEqual(['t1', 'collab', 't2']);
+  });
+});

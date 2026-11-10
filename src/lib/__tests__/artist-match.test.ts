@@ -3,6 +3,8 @@ import {
   normalize,
   similarity,
   matchLineup,
+  containsName,
+  isDerivativeName,
   LOVED_MATCH_THRESHOLD,
   CATALOG_MATCH_THRESHOLD,
 } from '../artist-match';
@@ -49,6 +51,56 @@ describe('similarity', () => {
 
   it('is symmetric regardless of argument order', () => {
     expect(similarity('Lane 8', 'Lane Eight')).toBe(similarity('Lane Eight', 'Lane 8'));
+  });
+});
+
+describe('containsName', () => {
+  it('finds a multi-word name as a phrase, ignoring case and accents', () => {
+    expect(containsName('Maldita Vecindad y Los Hijos del Quinto Patio', 'maldita vecindad')).toBe(
+      true
+    );
+    expect(containsName('Café Tacvba Unplugged', 'Cafe Tacvba')).toBe(true);
+  });
+
+  it('rejects partial words and non-adjacent words', () => {
+    expect(containsName('Cafe Tacvbas', 'Cafe Tacvba')).toBe(false);
+    expect(containsName('Caifanes y la Sinfónica', 'Caifanes Sinfónica')).toBe(false);
+  });
+
+  it('rejects single-word names (too weak a signal)', () => {
+    expect(containsName('Porter Robinson', 'Porter')).toBe(false);
+  });
+
+  it('does not count leading articles and prefixes as distinctive words', () => {
+    expect(containsName('Los Lobos del Norte', 'Los Lobos')).toBe(false);
+    expect(containsName('The Killers Tribute', 'The Killers')).toBe(false);
+    expect(containsName('DJ Snake Remixes', 'DJ Snake')).toBe(false);
+    expect(containsName('Los Fabulosos Cadillacs y Amigos', 'Los Fabulosos Cadillacs')).toBe(true);
+  });
+});
+
+describe('isDerivativeName', () => {
+  it('flags tribute, karaoke, live and hits pages', () => {
+    expect(isDerivativeName('Café Tacvba Tribute Band', 'Cafe Tacvba')).toBe(true);
+    expect(isDerivativeName('Karaoke Maldita Vecindad', 'Maldita Vecindad')).toBe(true);
+    expect(isDerivativeName('Los Fabulosos Cadillacs en Vivo', 'Los Fabulosos Cadillacs')).toBe(
+      true
+    );
+    expect(isDerivativeName('Café Tacvba & Friends', 'Cafe Tacvba')).toBe(true);
+  });
+
+  it('does not flag a longer form of the real name', () => {
+    expect(
+      isDerivativeName('Maldita Vecindad y Los Hijos del Quinto Patio', 'Maldita Vecindad')
+    ).toBe(false);
+  });
+
+  it('ignores marker words that are part of the poster name', () => {
+    expect(isDerivativeName('Live Wire Band', 'Live Wire')).toBe(false);
+  });
+
+  it('is false when the candidate does not contain the name', () => {
+    expect(isDerivativeName('Tribute', 'Cafe Tacvba')).toBe(false);
   });
 });
 

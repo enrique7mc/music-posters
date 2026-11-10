@@ -57,6 +57,12 @@ export interface ArtistSearchResult {
   name: string;
   matched: boolean;
   similarity: number;
+  /**
+   * How the name matched. 'contains' means the catalog name contains the
+   * poster name as a phrase, so a low similarity does not signal a doubtful
+   * match. Optional: the Spotify adapter does not set it.
+   */
+  matchType?: 'exact' | 'fuzzy' | 'contains';
 }
 
 /**

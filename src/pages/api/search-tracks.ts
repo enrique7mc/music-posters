@@ -136,24 +136,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Search for artists and get their top tracks with rate limiting
     console.log(`Searching tracks for ${artists.length} artists on ${platform}`);
-    const { tracks, foundArtists, artistMatches, failedArtists } = await searchAndGetTopTracks(
-      platformService,
-      artists,
-      accessToken,
-      {
-        mode: trackCountMode || 'tier-based',
-        customCount: customTrackCount,
-        tierCounts: tierCounts,
-        perArtistCounts: sanitizedPerArtistCounts,
-        selectionMode: trackSelectionMode,
-      },
-      developerToken
-    );
+    const { tracks, foundArtists, artistMatches, failedArtists, shortArtists } =
+      await searchAndGetTopTracks(
+        platformService,
+        artists,
+        accessToken,
+        {
+          mode: trackCountMode || 'tier-based',
+          customCount: customTrackCount,
+          tierCounts: tierCounts,
+          perArtistCounts: sanitizedPerArtistCounts,
+          selectionMode: trackSelectionMode,
+        },
+        developerToken
+      );
 
-    // Log mismatches for debugging
-    const poorMatches = artistMatches.filter((m) => m.found && m.similarity < 0.9);
+    // Log mismatches for debugging. A 'contains' match ("Maldita Vecindad" in
+    // "Maldita Vecindad y Los Hijos del Quinto Patio") has a low similarity by
+    // nature, so it is not a doubtful match.
+    const poorMatches = artistMatches.filter(
+      (m) => m.found && m.matched && m.similarity < 0.9 && m.matchType !== 'contains'
+    );
+    // A result below the match threshold is dropped, so it is "not found" too.
     // A failed lookup is not "not found": it gets its own warning below.
-    const noMatches = artistMatches.filter((m) => !m.found && !m.lookupFailed);
+    const noMatches = artistMatches.filter((m) => (!m.found || !m.matched) && !m.lookupFailed);
 
     if (poorMatches.length > 0) {
       console.log(`\n⚠️  Artists with fuzzy matches (might be wrong):`);
@@ -175,6 +181,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `notFound=${noMatches.length} fuzzy=${poorMatches.length} ` +
         `failedSearch=${failedArtists.filter((f) => f.stage === 'search').length} ` +
         `failedTracks=${failedArtists.filter((f) => f.stage === 'tracks').length} ` +
+        `shortArtists=${shortArtists.length} ` +
+        `shortTracks=${shortArtists.reduce((n, s) => n + s.requested - s.received, 0)} ` +
         `tracks=${tracks.length}`
     );
 
@@ -214,6 +222,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     poorMatches.forEach((m) =>
       warnings.push(
         `"${m.requested}" matched as "${m.found}" (${(m.similarity * 100).toFixed(0)}% match)`
+      )
+    );
+    shortArtists.forEach((s) =>
+      warnings.push(
+        `Only ${s.received} of ${s.requested} tracks found for "${s.artist}"` +
+          (s.matchedAs !== s.artist ? ` (matched as "${s.matchedAs}")` : '')
       )
     );
 
