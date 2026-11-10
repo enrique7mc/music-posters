@@ -8,8 +8,9 @@ reader need.
 
 [how-it-works.html](./how-it-works.html) is an interactive diagram of how a poster
 becomes a playlist: the path through the API routes, the three poster readers, and
-the songs each tier gets. Open it in a browser and click any part for details. The
-source is [how-it-works.md](./how-it-works.md).
+the songs each tier asks for. GitHub shows only its HTML source, so download the
+file (or open it from a local clone) and open it in a browser. Click any part for
+details. The source is [how-it-works.md](./how-it-works.md).
 
 ## User-aware recommendations (loved + hidden gems)
 

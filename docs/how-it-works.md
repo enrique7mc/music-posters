@@ -4,7 +4,7 @@ chrome: title
 width: wide
 ---
 
-The app turns a festival poster into a playlist. The [Analyze route](#analyze) reads the artist names once and ranks them by how big they are on the poster. The [Track search route](#search) then uses that rank to decide how many songs each artist gets. Nothing is stored on the server. A draft in the browser carries the artists and songs from page to page.
+The app turns a festival poster into a playlist. The [Analyze route](#analyze) reads the artist names once. When the server uses Gemini, it also ranks them by how big they are on the poster. The [Track search route](#search) then uses that rank to decide how many songs each artist gets. The app has no database: a draft in the browser carries the artists and songs from page to page. The Analyze route writes the upload to a temporary file on the server and deletes it after it reads the file. The server logs also record the poster text that Vision reads, and the host can keep those logs.
 
 ## 01 · The path of a poster
 
@@ -16,7 +16,7 @@ nodes:
   listener:  { label: Listener, at: [0, 1], kind: actor, about: "Signs in with Spotify or Apple Music first. Every API route below checks for that sign-in cookie." }
   upload:    { label: Upload page, at: [1, 1], about: "Takes a poster image, from a file or the clipboard, and shows the artists it found. Offers a quick create with default track counts, or a detour to edit the list. A typed lineup skips the Analyze route and goes to Review artists." }
   analyze:   { label: Analyze route, sub: /api/analyze, at: [1, 0], focal: true, about: "Checks the file by its first bytes, then sends it to the poster reader that the server is set to use. Also makes a 300 px thumbnail for the playlist cover. Limited to 5 calls per minute because AI calls cost money." }
-  ai:        { label: Google AI, sub: Vision + Gemini, at: [2, 0], kind: external, about: "Cloud Vision reads every word on the poster. Gemini looks at the image and decides which words are artists and how big each one is." }
+  ai:        { label: Google AI, sub: Vision or Gemini, at: [2, 0], kind: external, about: "The server uses one reader setup per deployment. Cloud Vision reads every word on the poster but does not rank artists. Gemini looks at the image and decides which words are artists and how big each one is. Hybrid uses both. Section 02 compares them." }
   review:    { label: Review artists, at: [2, 2], kind: optional, about: "Lets the listener remove artists and set track counts per tier or per artist. On Apple Music, it also tags artists from the listener's library and suggests hidden gems. Skipped on the quick-create path." }
   search:    { label: Track search, sub: /api/search-tracks, at: [2, 1], focal: true, about: "Looks up each artist and fetches their songs. Searches go out in small batches with a pause between them, so the music service does not rate-limit the app. Weak name matches are dropped." }
   tracks:    { label: Review tracks, at: [3, 1], about: "Shows the songs found and a preview of the generated cover. The listener names the playlist here." }
@@ -44,7 +44,7 @@ scenes:
     path: [listener, upload, analyze, ai, analyze, upload, search, music, search, tracks, create, music]
   custom:
     title: Edit the artists first
-    path: [listener, upload, review, search, tracks, create]
+    path: [listener, upload, analyze, ai, analyze, upload, review, search, music, search, tracks, create, music]
 ```
 
 ```steps
@@ -92,21 +92,21 @@ notes:
 
 ## 03 · Bigger names get more songs
 
-By default, a [headliner gets 10 songs](#tiers-headliner) and an [undercard act gets 1](#tiers-undercard). [Vision gives no tier, so every artist it finds gets 3](#tiers-no-tier). On Review artists the listener can replace these counts.
+By default, the search asks for [10 songs per headliner](#tiers-headliner) and [1 per undercard act](#tiers-undercard). [Vision gives no tier, so it asks for 3 per artist it finds](#tiers-no-tier). These counts are targets: an artist can get fewer songs, or none, when the music service has fewer matches. On Review artists the listener can replace these counts.
 
 ```bar
 id: tiers
 unit: songs
-axis: Songs per artist, tier-based mode
+axis: Songs requested per artist, tier-based mode
 sort: none
 data:
   - { label: Headliner, value: 10, focal: true, about: "Weight 8 to 10: the largest names at the top of the poster." }
   - { label: Sub-headliner, value: 5, about: "Weight 6 or 7." }
   - { label: Mid-tier, value: 3, about: "Weight 4 or 5." }
   - { label: Undercard, value: 1, about: "Weight 1 to 3: small text, or names only Vision saw." }
-  - { label: No tier, value: 3, muted: true, about: "What every artist gets when Vision reads the poster alone." }
+  - { label: No tier, value: 3, muted: true, about: "What the search asks for each artist when Vision reads the poster alone." }
 notes:
-  - { on: tiers-headliner, text: "One headliner brings as many songs as ten undercard acts." }
+  - { on: tiers-headliner, text: "One headliner asks for as many songs as ten undercard acts." }
 caveat: "A track mode then picks which songs: popular, balanced or deep cuts. Each mode shuffles its pool."
 ```
 
