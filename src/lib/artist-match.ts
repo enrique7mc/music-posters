@@ -96,12 +96,77 @@ const DERIVATIVE_MARKERS = new Set([
   'unplugged', 'acoustic', 'acustico', 'symphonic', 'sinfonico',
 ]); // prettier-ignore
 
-/** Number of words in a normalized name after its leading particles. */
-function distinctiveWordCount(normalized: string): number {
-  const words = normalized.split(' ');
+/** Words of a normalized name after its leading particles. */
+function distinctiveWords(normalized: string): string[] {
+  const words = normalized.split(' ').filter(Boolean);
   let i = 0;
   while (i < words.length && LEADING_PARTICLES.has(words[i])) i++;
-  return words.length - i;
+  return words.slice(i);
+}
+
+/** Number of words in a normalized name after its leading particles. */
+function distinctiveWordCount(normalized: string): number {
+  return distinctiveWords(normalized).length;
+}
+
+/** Minimum similarity for two different words to count as one word with a typo. */
+const WORD_MATCH_THRESHOLD = 0.5;
+
+/**
+ * True when `short` abbreviates `long`: same first letter, and the letters of
+ * `short` appear in order in `long`. Examples: "sr" → "senor", "dr" → "doctor",
+ * "st" → "saint".
+ */
+function isAbbreviation(short: string, long: string): boolean {
+  if (short.length >= long.length || short[0] !== long[0]) return false;
+  let i = 0;
+  for (const ch of long) if (ch === short[i]) i++;
+  return i === short.length;
+}
+
+/**
+ * Words that mean the same in artist names but share no spelling: "and" in
+ * its short and Spanish forms ("Guns N' Roses", "Jesse y Joy"), and numbers
+ * as digits or as English or Spanish words ("Maroon Five", "Calle Trece").
+ */
+const WORD_ALIASES: Record<string, string> = Object.fromEntries([
+  ['n', 'and'], ['y', 'and'],
+  ...[
+    ['zero', 'cero'], ['one', 'uno'], ['two', 'dos'], ['three', 'tres'], ['four', 'cuatro'],
+    ['five', 'cinco'], ['six', 'seis'], ['seven', 'siete'], ['eight', 'ocho'], ['nine', 'nueve'],
+    ['ten', 'diez'], ['eleven', 'once'], ['twelve', 'doce'], ['thirteen', 'trece'],
+    ['fourteen', 'catorce'], ['fifteen', 'quince'], ['sixteen', 'dieciseis'],
+    ['seventeen', 'diecisiete'], ['eighteen', 'dieciocho'], ['nineteen', 'diecinueve'],
+    ['twenty', 'veinte'],
+  ].flatMap((words, digit) => words.map((w) => [w, String(digit)])),
+]); // prettier-ignore
+
+/** True when two normalized words can be the same word: equal, an alias, a typo, or an abbreviation. */
+function wordsCompatible(a: string, b: string): boolean {
+  if (a === b) return true;
+  if ((WORD_ALIASES[a] ?? a) === (WORD_ALIASES[b] ?? b)) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (isAbbreviation(short, long)) return true;
+  return (long.length - levenshteinDistance(long, short)) / long.length >= WORD_MATCH_THRESHOLD;
+}
+
+/**
+ * True when the two names differ by a whole word: each name has a distinctive
+ * word that matches no word of the other name. Example: "LTD Rock" and "Kid
+ * Rock" ("ltd" vs "kid"). Character similarity cannot see this on short names:
+ * the pair scores 75%.
+ *
+ * Both sides need an unmatched word. A word that is only added or dropped
+ * ("The Skatalites", "Maldita Vecindad y Los Hijos del Quinto Patio") is not a
+ * conflict. Typos ("Tacvba" vs "Tacuba"), abbreviations ("Sr." vs "Señor") and
+ * aliases ("N" vs "and", "5" vs "five"; see WORD_ALIASES) are not conflicts.
+ */
+export function hasWordConflict(a: string, b: string): boolean {
+  const x = distinctiveWords(normalize(a));
+  const y = distinctiveWords(normalize(b));
+  const unmatched = (words: string[], other: string[]) =>
+    words.some((w) => !other.some((o) => wordsCompatible(w, o)));
+  return unmatched(x, y) && unmatched(y, x);
 }
 
 /**

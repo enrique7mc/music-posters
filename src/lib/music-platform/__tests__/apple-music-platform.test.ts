@@ -193,6 +193,28 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.similarity).toBeLessThan(0.6);
   });
 
+  // Regression #71: "Kid Rock" is 75% similar to "LTD Rock" but a different act.
+  it('rejects a fuzzy name that differs by a whole word', async () => {
+    stubCatalog(['Kid Rock', 'L.T.D.', 'Blake Shelton']);
+    const result = await service.searchArtist('LTD Rock', 'user-token');
+    expect(result!.matched).toBe(false);
+    expect(result!.name).not.toBe('Kid Rock');
+  });
+
+  it('picks a less similar name when the closer one differs by a whole word', async () => {
+    stubCatalog(['Kid Rock', 'LTD Rocks']);
+    const result = await service.searchArtist('LTD Rock', 'user-token');
+    expect(result!.matched).toBe(true);
+    expect(result!.name).toBe('LTD Rocks');
+  });
+
+  it('still matches an abbreviated name ("Señor" vs "Sr.")', async () => {
+    stubCatalog(['Sr. Bikini', 'Krill Sr Bikini', 'Big Máscara de Sr. Bikini']);
+    const result = await service.searchArtist('Señor Bikini', 'user-token');
+    expect(result!.matched).toBe(true);
+    expect(result!.name).toBe('Sr. Bikini');
+  });
+
   // Stub the catalog search with album counts, as Apple returns them in
   // relationships.albums (a capped list plus `next` when there are more).
   function stubCatalogWithAlbums(entries: Array<[name: string, albums: number, more?: boolean]>) {

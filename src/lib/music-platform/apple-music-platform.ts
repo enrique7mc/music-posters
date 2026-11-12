@@ -11,6 +11,7 @@ import {
   similarity,
   containsName,
   isDerivativeName,
+  hasWordConflict,
   CATALOG_MATCH_THRESHOLD,
 } from '@/lib/artist-match';
 // Shared with the Spotify adapter — see safe-log.ts for why raw axios errors must
@@ -128,6 +129,8 @@ interface CatalogCandidate {
   albums: number;
   /** A tribute, karaoke, live or hits page that contains the poster name. */
   derivative: boolean;
+  /** A fuzzy name that differs from the poster name by a whole word (see hasWordConflict). */
+  conflict: boolean;
 }
 
 interface CatalogPick {
@@ -153,35 +156,52 @@ function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
  * Chooses the catalog artist for a poster name from Apple's search results.
  *
  * 1. An exact name match (after normalization) wins, first in Apple's order.
- * 2. If the closest spelling is below CATALOG_MATCH_THRESHOLD, there is no
+ * 2. A fuzzy name that differs from the poster name by a whole word is not a
+ *    match, whatever its similarity (see hasWordConflict). Example: "LTD Rock"
+ *    vs "Kid Rock" scores 75% but is a different act. The closest spelling is
+ *    the most similar of the other candidates.
+ * 3. If the closest spelling is below CATALOG_MATCH_THRESHOLD, there is no
  *    match. A containing name alone never creates a match.
- * 3. Otherwise the candidates are the closest spelling plus every artist whose
+ * 4. Otherwise the candidates are the closest spelling plus every artist whose
  *    name contains the poster name as a phrase (see containsName), except
  *    tribute, karaoke, live and hits pages (see isDerivativeName). A real
  *    artist beats a derived page, then the most albums wins, then the higher
  *    similarity, then Apple's order. Album counts stop at 26 (see
  *    CatalogCandidate), so two large catalogs tie and the closer spelling wins.
- * 4. If the search response has no album lists, rule 3 cannot rank the
+ * 5. If the search response has no album lists, rule 4 cannot rank the
  *    candidates, so the closest spelling wins and a warning is logged.
  *
- * Rule 3 exists because the closest spelling is often a thin secondary page.
+ * Rule 4 exists because the closest spelling is often a thin secondary page.
  * Example: "Maldita Vecindad" is closest to "La Maldita Vecindad" (2 singles as
  * a featured artist), but the band is "Maldita Vecindad y Los Hijos del Quinto
  * Patio" (18 albums). The album count comes with the search response, so this
  * costs no extra request.
  */
 function pickCatalogArtist(name: string, artists: any[]): CatalogPick {
-  const candidates: CatalogCandidate[] = artists.map((artist) => ({
-    artist,
-    sim: similarity(name, artist.attributes.name),
-    albums: albumCount(artist),
-    derivative: isDerivativeName(artist.attributes.name, name),
-  }));
+  const candidates: CatalogCandidate[] = artists.map((artist) => {
+    const sim = similarity(name, artist.attributes.name);
+    return {
+      artist,
+      sim,
+      albums: albumCount(artist),
+      derivative: isDerivativeName(artist.attributes.name, name),
+      conflict: sim < 1 && hasWordConflict(name, artist.attributes.name),
+    };
+  });
 
   // First candidate with the highest similarity (Apple's order breaks ties).
-  const closest = candidates.reduce((a, b) => (b.sim > a.sim ? b : a));
+  const mostSimilar = (list: CatalogCandidate[]) => list.reduce((a, b) => (b.sim > a.sim ? b : a));
+  const plausible = candidates.filter((c) => !c.conflict);
+  const closest = mostSimilar(plausible.length > 0 ? plausible : candidates);
+  const top = mostSimilar(candidates);
+  if (top.conflict && top.sim >= CATALOG_MATCH_THRESHOLD) {
+    console.log(
+      `[Apple Music] Rejected "${top.artist.attributes.name}" for "${name}" ` +
+        `(${(top.sim * 100).toFixed(0)}% similar, but a whole word differs)`
+    );
+  }
   if (closest.sim === 1) return { best: closest, closest, matched: true, matchType: 'exact' };
-  if (closest.sim < CATALOG_MATCH_THRESHOLD) {
+  if (closest.conflict || closest.sim < CATALOG_MATCH_THRESHOLD) {
     return { best: closest, closest, matched: false, matchType: 'fuzzy' };
   }
 
