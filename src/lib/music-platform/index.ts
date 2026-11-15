@@ -544,8 +544,12 @@ async function buildSetlistTracks(
         if ((error as { response?: { status?: number } })?.response?.status === 401) throw error;
         track = null;
       }
-      // A search hit that another setlist song already took is not a new song.
-      if (track && used.has(track.id)) track = null;
+      // A search hit that another setlist song took, or that is reserved for
+      // another song's exact title, is not this song.
+      const owner = track ? reservedFor.get(track.id) : undefined;
+      if (track && (used.has(track.id) || (owner !== undefined && owner !== songIndex))) {
+        track = null;
+      }
       viaPool = false;
     }
 

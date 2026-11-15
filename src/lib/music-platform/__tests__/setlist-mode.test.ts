@@ -357,4 +357,20 @@ describe('searchAndGetTopTracks with tour setlists', () => {
       vi.useRealTimers();
     }
   });
+
+  // Regression (sol S2): a search for Pt. 1 that returns the Pt. 2 track must
+  // not consume the track reserved for the Pt. 2 song.
+  it('rejects a search hit reserved for another song', async () => {
+    vi.mocked(getTypicalSetlist).mockResolvedValue(
+      typical(['Another Brick in the Wall, Pt. 1', 'Mystery', 'Another Brick in the Wall, Pt. 2'])
+    );
+    const pt2 = track('pt2', 'Another Brick in the Wall, Pt. 2');
+    const { platform } = stubPlatform({ 'Another Brick in the Wall, Pt. 1': pt2 });
+    vi.mocked(platform.getTopSongPool!).mockResolvedValue([pt2, POOL[0]]);
+
+    const { tracks } = await run(platform, { mode: 'custom', customCount: 1 });
+
+    // Pt. 2 stays in its own setlist position, after Mystery.
+    expect(tracks.filter((t) => t.source === 'setlist').map((t) => t.id)).toEqual(['p0', 'pt2']);
+  });
 });
