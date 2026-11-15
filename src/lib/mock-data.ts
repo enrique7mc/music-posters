@@ -1,4 +1,4 @@
-import { Track, Artist, MusicPlatform } from '@/types';
+import { Track, Artist, MusicPlatform, SetlistArtistInfo } from '@/types';
 
 /**
  * Mock track data for development and testing
@@ -528,4 +528,39 @@ export function getMockTracksForPlatform(platform: MusicPlatform): Track[] {
     platformUrl: `https://music.apple.com/us/song/${track.name.toLowerCase().replace(/\s+/g, '-')}/${1000000000 + index}`,
     platform: 'apple-music' as const,
   }));
+}
+
+/**
+ * Dev-mode stand-in for "Prefer tour setlists". Tags the mock tracks of each
+ * requested artist as setlist tracks and returns one mock show per artist.
+ * Requested artists without mock tracks are Setlist Fallbacks.
+ */
+export function mockSetlistResults(
+  tracks: Track[],
+  setlistArtistNames: string[]
+): { tracks: Track[]; setlistArtists: SetlistArtistInfo[]; fallbacks: string[] } {
+  const key = (name: string) => name.trim().toLowerCase();
+  const wanted = new Map(setlistArtistNames.map((name) => [key(name), name]));
+  const setlistArtists: SetlistArtistInfo[] = [];
+  const seen = new Set<string>();
+  const tagged = tracks.map((track) => {
+    const requested = wanted.get(key(track.artist));
+    if (!requested) return track;
+    if (!seen.has(requested)) {
+      seen.add(requested);
+      const count = tracks.filter((t) => key(t.artist) === key(track.artist)).length;
+      setlistArtists.push({
+        artist: requested,
+        latestDate: '2026-11-13',
+        venue: 'Mock Venue',
+        city: 'Paris',
+        url: `https://www.setlist.fm/search?query=${encodeURIComponent(requested)}`,
+        setSize: count,
+        resolved: count,
+      });
+    }
+    return { ...track, source: 'setlist' as const };
+  });
+  const fallbacks = setlistArtistNames.filter((name) => !seen.has(name));
+  return { tracks: tagged, setlistArtists, fallbacks };
 }

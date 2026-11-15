@@ -19,6 +19,7 @@ import {
 // the Music-User-Token).
 import { errMessage } from '@/lib/safe-log';
 import { libraryPlaylistUrl } from '@/lib/apple-music-links';
+import { artistCredited, isLiveRecording, titlesMatch } from './song-match';
 
 const APPLE_MUSIC_API_BASE_URL = 'https://api.music.apple.com/v1';
 // Origin only (no `/v1`). Apple's pagination `next` is an absolute path like
@@ -83,10 +84,10 @@ function retryDelayMs(error: unknown, attempt: number, baseMs: number): number {
  * Selects tracks from a pool based on the selection mode.
  * Randomizes within the filtered pool to provide variety.
  */
-function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelectionMode): any[] {
+export function selectTracksFromPool<T>(tracks: T[], limit: number, mode: TrackSelectionMode): T[] {
   if (tracks.length === 0) return [];
 
-  let pool: any[];
+  let pool: T[];
 
   switch (mode) {
     case 'popular': {
@@ -117,6 +118,31 @@ function selectTracksFromPool(tracks: any[], limit: number, mode: TrackSelection
 
   // Return up to `limit` tracks
   return shuffled.slice(0, Math.min(limit, shuffled.length));
+}
+
+/** Map an Apple catalog song resource to our Track. */
+function mapCatalogSong(track: any, artistId: string): Track {
+  const attributes = track.attributes;
+
+  // Generate artwork URL (Apple Music uses {w}x{h} placeholders)
+  let artworkUrl = null;
+  if (attributes.artwork?.url) {
+    artworkUrl = attributes.artwork.url.replace('{w}', '300').replace('{h}', '300');
+  }
+
+  return {
+    name: attributes.name,
+    id: track.id,
+    uri: undefined, // Apple Music doesn't use URIs
+    artist: attributes.artistName || 'Unknown Artist',
+    artistId: artistId,
+    album: attributes.albumName || 'Unknown Album',
+    albumArtwork: artworkUrl,
+    duration: attributes.durationInMillis || 0,
+    previewUrl: attributes.previews?.[0]?.url || null,
+    platformUrl: attributes.url || `https://music.apple.com/song/${track.id}`,
+    platform: 'apple-music' as const,
+  };
 }
 
 interface CatalogCandidate {
@@ -384,6 +410,15 @@ export class AppleMusicPlatformService implements MusicPlatformService {
     limit: number = 1,
     selectionMode: TrackSelectionMode = 'popular'
   ): Promise<Track[]> {
+    const pool = await this.getTopSongPool(artistId);
+    return selectTracksFromPool(pool, limit, selectionMode);
+  }
+
+  /**
+   * The artist's top songs (one request, up to 25), mapped and in Apple's
+   * order. Returns [] when the artist has no top songs (404).
+   */
+  async getTopSongPool(artistId: string): Promise<Track[]> {
     try {
       // Get artist's top songs from catalog
       const response = await this.withRetry(`Top songs for artist ${artistId}`, () =>
@@ -400,34 +435,7 @@ export class AppleMusicPlatformService implements MusicPlatformService {
 
       const tracks = response.data.data;
       if (!tracks || tracks.length === 0) return [];
-
-      // Select tracks based on mode
-      const selectedTracks = selectTracksFromPool(tracks, limit, selectionMode);
-
-      // Map to our Track interface
-      return selectedTracks.map((track: any) => {
-        const attributes = track.attributes;
-
-        // Generate artwork URL (Apple Music uses {w}x{h} placeholders)
-        let artworkUrl = null;
-        if (attributes.artwork?.url) {
-          artworkUrl = attributes.artwork.url.replace('{w}', '300').replace('{h}', '300');
-        }
-
-        return {
-          name: attributes.name,
-          id: track.id,
-          uri: undefined, // Apple Music doesn't use URIs
-          artist: attributes.artistName || 'Unknown Artist',
-          artistId: artistId,
-          album: attributes.albumName || 'Unknown Album',
-          albumArtwork: artworkUrl,
-          duration: attributes.durationInMillis || 0,
-          previewUrl: attributes.previews?.[0]?.url || null,
-          platformUrl: attributes.url || `https://music.apple.com/song/${track.id}`,
-          platform: 'apple-music' as const,
-        };
-      });
+      return tracks.map((track: any) => mapCatalogSong(track, artistId));
     } catch (error) {
       const status = httpStatus(error);
       if (status === 404) return []; // no top songs for this artist: not a failure
@@ -439,6 +447,46 @@ export class AppleMusicPlatformService implements MusicPlatformService {
       // artist from the playlist with no warning (e.g. under a 429 burst).
       if (status === 401 || status === 403) {
         throw new PlatformAccessError('apple-music', status, '/catalog/artists/top-songs');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Search the catalog for one song by `artistName` (the catalog artist name).
+   * A hit is accepted only when its artist credit names the artist and its
+   * title matches after stripping live/remaster/feat. tags (see song-match.ts).
+   * A studio recording is preferred over a live one. Returns null otherwise:
+   * a cover only the original artist released is never returned.
+   * 401/403 throws PlatformAccessError; other errors rethrow after retries.
+   */
+  async searchArtistSong(artistName: string, title: string): Promise<Track | null> {
+    try {
+      const response = await this.withRetry(`Song search for "${title}"`, () =>
+        axios.get(`${APPLE_MUSIC_API_BASE_URL}/catalog/${DEFAULT_STOREFRONT}/search`, {
+          params: { types: 'songs', term: `${artistName} ${title}`, limit: 5 },
+          headers: this.getCatalogHeaders(),
+        })
+      );
+      const songs: any[] = response.data.results?.songs?.data ?? [];
+      const accepted = songs.filter(
+        (song) =>
+          typeof song?.attributes?.name === 'string' &&
+          artistCredited(song.attributes.artistName ?? '', artistName) &&
+          titlesMatch(song.attributes.name, title)
+      );
+      if (accepted.length === 0) return null;
+      const studio = accepted.find(
+        (song) => !isLiveRecording(song.attributes.name, song.attributes.albumName ?? '')
+      );
+      const pick = studio ?? accepted[0];
+      const artistId = pick.relationships?.artists?.data?.[0]?.id ?? '';
+      return mapCatalogSong(pick, artistId);
+    } catch (error) {
+      console.error(`[Apple Music] Error searching song "${title}":`, errMessage(error));
+      const status = httpStatus(error);
+      if (status === 401 || status === 403) {
+        throw new PlatformAccessError('apple-music', status, '/catalog/search');
       }
       throw error;
     }

@@ -4,6 +4,7 @@ import { http, HttpResponse, delay } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
 import { PlatformAccessError, PartialAddError } from '../types';
+import { artistCredited } from '../song-match';
 
 const LIBRARY_URL = 'https://api.music.apple.com/v1/me/library/artists';
 const SEARCH_URL = 'https://api.music.apple.com/v1/catalog/us/search';
@@ -664,6 +665,98 @@ describe('AppleMusicPlatformService.createPlaylist URL', () => {
     expect(result).toEqual({
       id: 'p.LibraryId',
       url: 'https://music.apple.com/library/playlist/p.LibraryId',
+    });
+  });
+});
+
+describe('AppleMusicPlatformService.searchArtistSong', () => {
+  let service: AppleMusicPlatformService;
+  let term: string | null;
+
+  beforeEach(() => {
+    service = new AppleMusicPlatformService();
+    service.setDeveloperToken('dev-token');
+    service.retryBaseMs = 0;
+    term = null;
+  });
+
+  function stubSongs(
+    songs: Array<{ id: string; name: string; artistName: string; albumName?: string }>
+  ) {
+    server.use(
+      http.get(SEARCH_URL, ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get('types')).toBe('songs');
+        term = url.searchParams.get('term');
+        return HttpResponse.json({
+          results: {
+            songs: {
+              data: songs.map((s) => ({
+                id: s.id,
+                attributes: {
+                  name: s.name,
+                  artistName: s.artistName,
+                  albumName: s.albumName ?? 'LP',
+                },
+              })),
+            },
+          },
+        });
+      })
+    );
+  }
+
+  it('searches "<artist> <title>" and returns a title match by the artist', async () => {
+    stubSongs([{ id: '1', name: 'MYSTERY', artistName: 'Turnstile' }]);
+    const track = await service.searchArtistSong('Turnstile', 'Mystery');
+    expect(term).toBe('Turnstile Mystery');
+    expect(track?.id).toBe('1');
+  });
+
+  it('matches through live, remaster and feat. tags', async () => {
+    stubSongs([
+      { id: '2', name: 'Holiday (feat. Someone) - Remastered 2020', artistName: 'Turnstile' },
+    ]);
+    expect((await service.searchArtistSong('Turnstile', 'Holiday'))?.id).toBe('2');
+  });
+
+  it('rejects a hit whose title does not match', async () => {
+    stubSongs([{ id: '3', name: 'Holiday Party Anthem', artistName: 'Turnstile' }]);
+    expect(await service.searchArtistSong('Turnstile', 'Holiday')).toBeNull();
+  });
+
+  it('never returns the original artist of a cover', async () => {
+    stubSongs([{ id: '4', name: 'Holiday', artistName: 'Green Day' }]);
+    expect(await service.searchArtistSong('Turnstile', 'Holiday')).toBeNull();
+  });
+
+  it('accepts a collaboration credit that names the artist', async () => {
+    stubSongs([{ id: '5', name: 'Guess', artistName: 'Charli xcx & Billie Eilish' }]);
+    expect((await service.searchArtistSong('Charli xcx', 'Guess'))?.id).toBe('5');
+  });
+
+  it('prefers a studio recording over a live one', async () => {
+    stubSongs([
+      { id: 'live', name: 'Mystery (Live)', artistName: 'Turnstile', albumName: 'Live at X' },
+      { id: 'studio', name: 'Mystery', artistName: 'Turnstile', albumName: 'Glow On' },
+    ]);
+    expect((await service.searchArtistSong('Turnstile', 'Mystery'))?.id).toBe('studio');
+  });
+
+  it('throws PlatformAccessError on 403', async () => {
+    server.use(http.get(SEARCH_URL, () => new HttpResponse(null, { status: 403 })));
+    await expect(service.searchArtistSong('Turnstile', 'Mystery')).rejects.toBeInstanceOf(
+      PlatformAccessError
+    );
+  });
+
+  describe('artistCredited', () => {
+    it('rejects a tribute credit that contains the artist name', () => {
+      expect(artistCredited('Florence Welch Tribute Band', 'Florence Welch')).toBe(false);
+    });
+
+    it('keeps a collaboration credit', () => {
+      expect(artistCredited('Florence Welch & Calvin Harris', 'Florence Welch')).toBe(true);
     });
   });
 });

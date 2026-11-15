@@ -1,14 +1,58 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getAuthenticatedPlatformOrDev, getPlatformAccessTokenOrDev } from '@/lib/auth';
 import { isDevModeAvailable, getDevConfig } from '@/lib/dev-mode';
-import { getMusicPlatform, searchAndGetTopTracks } from '@/lib/music-platform';
+import { getMusicPlatform, searchAndGetTopTracks, SetlistFallback } from '@/lib/music-platform';
 import { AppleMusicPlatformService } from '@/lib/music-platform/apple-music-platform';
 import { generateDeveloperToken } from '@/lib/apple-music-auth';
 import { PlatformAccessError } from '@/lib/music-platform/types';
-import { SearchTracksResponse, MusicPlatform } from '@/types';
+import {
+  SearchTracksResponse,
+  MusicPlatform,
+  SetlistArtistInfo,
+  TrackSelectionMode,
+} from '@/types';
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { errDetail } from '@/lib/safe-log';
 import { searchTracksSchema, validateRequest } from '@/lib/validation';
+
+const MODE_LABELS: Record<TrackSelectionMode, string> = {
+  popular: 'Popular Hits',
+  balanced: 'Balanced Mix',
+  'deep-cuts': 'Deep Cuts',
+};
+
+/** User-facing warnings for "Prefer tour setlists" outcomes. */
+export function setlistWarnings(
+  setlistArtists: SetlistArtistInfo[],
+  setlistFallbacks: SetlistFallback[],
+  platformDisplayName: string
+): string[] {
+  const warnings: string[] = [];
+  if (setlistFallbacks.some((f) => f.reason === 'no-key')) {
+    warnings.push('Tour setlists are unavailable: no setlist.fm API key is configured.');
+  }
+  for (const f of setlistFallbacks) {
+    const mode = MODE_LABELS[f.mode];
+    if (f.reason === 'no-key') continue;
+    if (f.reason === 'low-resolution') {
+      warnings.push(
+        `Too few of "${f.artist}"'s setlist songs are on ${platformDisplayName}, used ${mode}`
+      );
+    } else if (f.reason.startsWith('api-error')) {
+      warnings.push(`setlist.fm didn't respond for "${f.artist}", used ${mode}`);
+    } else if (f.reason === 'unsupported-platform') {
+      warnings.push(`Tour setlists need Apple Music; used ${mode} for "${f.artist}"`);
+    } else {
+      warnings.push(`No recent setlist for "${f.artist}", used ${mode}`);
+    }
+  }
+  for (const s of setlistArtists) {
+    if (s.resolved < s.setSize) {
+      warnings.push(`Resolved ${s.resolved} of ${s.setSize} setlist songs for "${s.artist}"`);
+    }
+  }
+  return warnings;
+}
 
 /**
  * API route handler that searches for top tracks for a list of artists with tier-based track counts.
@@ -64,6 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     tierCounts,
     perArtistCounts,
     trackSelectionMode = 'popular',
+    setlistArtistNames,
   } = validatedData;
 
   // Reject if requested platform doesn't match authenticated platform
@@ -78,7 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (useMockData) {
     console.log('[DEV MODE] Mock track search enabled');
-    const { mockTracks, getMockTracksForPlatform } = await import('@/lib/mock-data');
+    const { mockTracks, getMockTracksForPlatform, mockSetlistResults } = await import(
+      '@/lib/mock-data'
+    );
 
     const delay = devConfig?.mockDelayMs ?? 0;
     if (delay > 0) {
@@ -86,14 +133,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get platform-specific mock tracks
-    const platformTracks = getMockTracksForPlatform
-      ? getMockTracksForPlatform(platform)
-      : mockTracks;
+    const baseTracks = getMockTracksForPlatform ? getMockTracksForPlatform(platform) : mockTracks;
+    const mockSetlist = mockSetlistResults(baseTracks, setlistArtistNames ?? []);
+    const platformTracks = mockSetlist.tracks;
+    const mockWarnings = mockSetlist.fallbacks.map(
+      (name) => `No recent setlist for "${name}", used ${MODE_LABELS[trackSelectionMode]}`
+    );
 
     const response: SearchTracksResponse = {
       tracks: platformTracks,
       artistsSearched: artists.length,
       tracksFound: platformTracks.length,
+      ...(mockWarnings.length > 0 ? { warnings: mockWarnings } : {}),
+      ...(mockSetlist.setlistArtists.length > 0
+        ? { setlistArtists: mockSetlist.setlistArtists }
+        : {}),
     };
 
     console.log(
@@ -136,20 +190,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Search for artists and get their top tracks with rate limiting
     console.log(`Searching tracks for ${artists.length} artists on ${platform}`);
-    const { tracks, foundArtists, artistMatches, failedArtists, shortArtists } =
-      await searchAndGetTopTracks(
-        platformService,
-        artists,
-        accessToken,
-        {
-          mode: trackCountMode || 'tier-based',
-          customCount: customTrackCount,
-          tierCounts: tierCounts,
-          perArtistCounts: sanitizedPerArtistCounts,
-          selectionMode: trackSelectionMode,
-        },
-        developerToken
-      );
+    const {
+      tracks,
+      foundArtists,
+      artistMatches,
+      failedArtists,
+      shortArtists,
+      setlistArtists,
+      setlistFallbacks,
+    } = await searchAndGetTopTracks(
+      platformService,
+      artists,
+      accessToken,
+      {
+        mode: trackCountMode || 'tier-based',
+        customCount: customTrackCount,
+        tierCounts: tierCounts,
+        perArtistCounts: sanitizedPerArtistCounts,
+        selectionMode: trackSelectionMode,
+        setlistArtistNames,
+      },
+      developerToken
+    );
 
     // Log mismatches for debugging. A 'contains' match ("Maldita Vecindad" in
     // "Maldita Vecindad y Los Hijos del Quinto Patio") has a low similarity by
@@ -231,11 +293,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     );
 
+    // The missing-key warning goes first: Review Tracks shows only 10 warnings.
+    const tourWarnings = setlistWarnings(setlistArtists, setlistFallbacks, platformDisplayName);
+    if (setlistFallbacks.some((f) => f.reason === 'no-key')) {
+      warnings.unshift(tourWarnings.shift()!);
+    }
+    warnings.push(...tourWarnings);
+
     const response: SearchTracksResponse = {
       tracks,
       artistsSearched: artists.length,
       tracksFound: tracks.length,
       warnings: warnings.length > 0 ? warnings : undefined,
+      ...(setlistArtists.length > 0 ? { setlistArtists } : {}),
     };
 
     res.status(200).json(response);

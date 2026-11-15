@@ -166,6 +166,21 @@ export interface MusicPlatformService {
    *   genuinely-loved artist as an unknown "gem".
    */
   getLibraryArtists?(token: string): Promise<{ artists: string[]; complete: boolean }>;
+
+  /**
+   * The artist's top-song pool (Apple Music: up to 25 tracks), unshuffled and
+   * in the platform's order. Optional: used by "Prefer tour setlists" to match
+   * setlist titles without extra requests. A platform without it never gets a
+   * Typical Set (its artists are Setlist Fallbacks).
+   */
+  getTopSongPool?(artistId: string): Promise<Track[]>;
+
+  /**
+   * Find one song by the given catalog artist. Returns null when no hit is
+   * credited to that artist with a matching title. Never returns a recording
+   * by a different artist (a cover resolves only to the artist's own release).
+   */
+  searchArtistSong?(artistName: string, title: string): Promise<Track | null>;
 }
 
 /**
@@ -182,4 +197,9 @@ export interface TrackCountOptions {
   };
   perArtistCounts?: Record<string, number>;
   selectionMode?: TrackSelectionMode;
+  /**
+   * Artists (names as requested) whose tracks should come from their Typical
+   * Set when they are On Tour. Empty or absent: the toggle is off.
+   */
+  setlistArtistNames?: string[];
 }

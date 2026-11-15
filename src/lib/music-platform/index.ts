@@ -1,4 +1,4 @@
-import { MusicPlatform, Artist, Track, TrackSelectionMode } from '@/types';
+import { MusicPlatform, Artist, Track, TrackSelectionMode, SetlistArtistInfo } from '@/types';
 import {
   MusicPlatformService,
   TrackCountOptions,
@@ -9,6 +9,10 @@ import { errDetail } from '@/lib/safe-log';
 import { spotifyPlatform, SpotifyPlatformService } from './spotify-platform';
 import { appleMusicPlatform, AppleMusicPlatformService } from './apple-music-platform';
 import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '@/lib/constants';
+import { getTypicalSetlist, SetlistFallbackReason, TypicalSetlistLookup } from '@/lib/setlistfm';
+import type { TypicalSet } from '@/lib/setlist-select';
+import { selectTracksFromPool } from './apple-music-platform';
+import { SONG_MATCH_THRESHOLD, titleSimilarity } from './song-match';
 
 // Re-export types
 export * from './types';
@@ -45,6 +49,26 @@ export interface ShortArtist {
   requested: number;
   received: number;
 }
+
+/** An in-scope artist that got no Typical Set; its tracks come from the regular mode. */
+export interface SetlistFallback {
+  artist: string; // Name as requested
+  reason: SetlistFallbackReason;
+  mode: TrackSelectionMode; // The regular mode its tracks came from
+}
+
+/** Minimum share of a Typical Set (dropped covers excluded) that must resolve. */
+export const MIN_SETLIST_RESOLUTION = 0.5;
+
+/**
+ * Overall wait for Setlist.fm lookups, from the start of the search. A lookup
+ * still pending at the deadline becomes a fallback, so a hung upstream cannot
+ * push a 150-artist search past the route's time limit.
+ */
+export const SETLIST_LOOKUP_BUDGET_MS = 45_000;
+
+/** Pause between song searches inside one artist slot (keeps Apple near 10 req/s). */
+export const SETLIST_SONG_SEARCH_DELAY_MS = 500;
 
 // Helper function to add delay between requests
 function delay(ms: number): Promise<void> {
@@ -170,6 +194,8 @@ export async function searchAndGetTopTracks(
   }>;
   failedArtists: FailedArtist[];
   shortArtists: ShortArtist[];
+  setlistArtists: SetlistArtistInfo[];
+  setlistFallbacks: SetlistFallback[];
 }> {
   // Set developer token for Apple Music if needed
   if (platform.platform === 'apple-music' && developerToken) {
@@ -180,6 +206,36 @@ export async function searchAndGetTopTracks(
   console.log(`Searching for ${artists.length} artists...`);
 
   const artistNames = artists.map((a) => a.name);
+
+  // "Prefer tour setlists": start the Setlist.fm lookups now, so they overlap
+  // the Apple artist-search phase. getTypicalSetlist never rejects.
+  const setlistStartedAt = Date.now();
+  const setlistScope = new Set(trackCountOptions?.setlistArtistNames ?? []);
+  const setlistCapable = Boolean(platform.getTopSongPool && platform.searchArtistSong);
+  const setlistLookups = new Map<string, Promise<TypicalSetlistLookup>>();
+  if (setlistCapable && setlistScope.size > 0) {
+    let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+    const budget = new Promise<TypicalSetlistLookup>((resolve) => {
+      budgetTimer = setTimeout(
+        () =>
+          resolve({
+            result: { kind: 'fallback', reason: 'api-error:budget' },
+            calls: 0,
+            cacheHit: false,
+          }),
+        SETLIST_LOOKUP_BUDGET_MS
+      );
+    });
+    const lookups = [...setlistScope].map((name) => {
+      const bounded = Promise.race([getTypicalSetlist(name), budget]);
+      setlistLookups.set(name, bounded);
+      return bounded;
+    });
+    // Do not keep the process (or a test) alive for the budget timer.
+    void Promise.all(lookups).finally(() => clearTimeout(budgetTimer));
+  }
+  const setlistArtists: SetlistArtistInfo[] = [];
+  const setlistFallbacks: SetlistFallback[] = [];
 
   // Configure rate limiting based on platform
   // Spotify: 3 req/batch, 1000ms delay (180 req/min limit)
@@ -293,18 +349,67 @@ export async function searchAndGetTopTracks(
       const globalMode = trackCountOptions?.selectionMode || 'popular';
       const selectionMode = getSelectionModeForArtist(pair.originalArtist, globalMode);
 
-      console.log(
-        `  Fetching ${trackCount} tracks for ${pair.searchResult.name} ` +
-          `(tier: ${pair.originalArtist.tier || 'unknown'}, ` +
-          `affinity: ${pair.originalArtist.affinity || 'none'} → ${selectionMode})`
-      );
       try {
-        const artistTracks = await platform.getArtistTopTracks(
-          pair.searchResult.id,
-          token,
-          trackCount,
-          selectionMode
-        );
+        let artistTracks: Track[] | null = null;
+        if (setlistScope.has(pair.originalArtist.name)) {
+          const lookup = setlistLookups.get(pair.originalArtist.name);
+          const outcome = lookup ? (await lookup).result : null;
+          const reason: SetlistFallbackReason | null = !lookup
+            ? 'unsupported-platform'
+            : outcome!.kind === 'fallback'
+              ? outcome!.reason
+              : null;
+          if (outcome?.kind === 'typical') {
+            const built = await buildSetlistTracks(
+              platform,
+              pair.searchResult,
+              outcome.typicalSet,
+              trackCount,
+              selectionMode
+            );
+            if (built.kind === 'tracks') {
+              artistTracks = built.tracks;
+              const { latest } = outcome.typicalSet;
+              setlistArtists.push({
+                artist: pair.originalArtist.name,
+                latestDate: latest.date,
+                venue: latest.venue,
+                city: latest.city,
+                ...(latest.tour ? { tour: latest.tour } : {}),
+                url: latest.url,
+                setSize: built.setSize,
+                resolved: built.resolved,
+              });
+            } else {
+              setlistFallbacks.push({
+                artist: pair.originalArtist.name,
+                reason: 'low-resolution',
+                mode: selectionMode,
+              });
+            }
+          } else if (reason) {
+            console.log(`[setlist] ${pair.originalArtist.name}: fallback (${reason})`);
+            setlistFallbacks.push({
+              artist: pair.originalArtist.name,
+              reason,
+              mode: selectionMode,
+            });
+          }
+        }
+
+        if (!artistTracks) {
+          console.log(
+            `  Fetching ${trackCount} tracks for ${pair.searchResult.name} ` +
+              `(tier: ${pair.originalArtist.tier || 'unknown'}, ` +
+              `affinity: ${pair.originalArtist.affinity || 'none'} → ${selectionMode})`
+          );
+          artistTracks = await platform.getArtistTopTracks(
+            pair.searchResult.id,
+            token,
+            trackCount,
+            selectionMode
+          );
+        }
         // A short result is not an error, but it shrinks the playlist silently.
         // It often means the match picked a thin catalog page.
         if (artistTracks.length < trackCount) {
@@ -343,11 +448,143 @@ export async function searchAndGetTopTracks(
     console.error(`⚠️  ${failedArtists.length} artists failed and are missing from the results`);
   }
 
+  if (setlistScope.size > 0) {
+    let calls = 0;
+    let cacheHits = 0;
+    for (const lookup of setlistLookups.values()) {
+      const done = await lookup;
+      calls += done.calls;
+      if (done.cacheHit) cacheHits++;
+    }
+    console.log(
+      `[setlist] summary: inScope=${setlistScope.size} typicalSets=${setlistArtists.length} ` +
+        `fallbacks=${setlistFallbacks.length} calls=${calls} cacheHits=${cacheHits} ` +
+        `latencyMs=${Date.now() - setlistStartedAt}`
+    );
+  }
+
   return {
     tracks,
     foundArtists: validArtists.length,
     artistMatches,
     failedArtists,
     shortArtists,
+    setlistArtists,
+    setlistFallbacks,
   };
+}
+
+type SetlistBuild =
+  | { kind: 'tracks'; tracks: Track[]; setSize: number; resolved: number }
+  | { kind: 'low-resolution' };
+
+/**
+ * Resolve a Typical Set to platform tracks, in setlist order.
+ *
+ * 1. Match each title against the artist's top-song pool (no extra request).
+ * 2. Search the rest one at a time, SETLIST_SONG_SEARCH_DELAY_MS apart, so
+ *    this artist's slot never sends parallel requests.
+ * 3. A cover that the artist has not released is dropped. It is neither a
+ *    failure nor part of the MIN_SETLIST_RESOLUTION denominator.
+ * 4. Fewer than MIN_SETLIST_RESOLUTION resolved → low-resolution (fallback).
+ * 5. Count rule: max(resolved songs, the artist's count). A short set is
+ *    topped up from the pool with the artist's regular mode.
+ *
+ * Throws only what the caller already handles (access errors, a failed pool
+ * request). A failed song search counts as unresolved.
+ */
+async function buildSetlistTracks(
+  platform: MusicPlatformService,
+  catalogArtist: ArtistSearchResult,
+  typicalSet: TypicalSet,
+  artistCount: number,
+  selectionMode: TrackSelectionMode
+): Promise<SetlistBuild> {
+  const pool = await platform.getTopSongPool!(catalogArtist.id);
+  const resolvedTracks: Track[] = [];
+  const unresolved: string[] = [];
+  let fromPool = 0;
+  let fromSearch = 0;
+  let coversDropped = 0;
+  let searches = 0;
+
+  // Reserve every exact title match first, so a fuzzy match ("Pt. 2" for
+  // "Pt. 1") cannot take a track that a later song names exactly.
+  const reservedFor = new Map<string, number>();
+  typicalSet.songs.forEach((song, index) => {
+    const exact = pool.find(
+      (t) => !reservedFor.has(t.id) && titleSimilarity(t.name, song.title) === 1
+    );
+    if (exact) reservedFor.set(exact.id, index);
+  });
+
+  for (const [songIndex, song] of typicalSet.songs.entries()) {
+    // Closest unused pool title wins, skipping tracks reserved for other songs.
+    const used = new Set(resolvedTracks.map((t) => t.id));
+    let track: Track | null = null;
+    let best = SONG_MATCH_THRESHOLD;
+    for (const candidate of pool) {
+      if (used.has(candidate.id)) continue;
+      const owner = reservedFor.get(candidate.id);
+      if (owner !== undefined && owner !== songIndex) continue;
+      const score = titleSimilarity(candidate.name, song.title);
+      if (score >= best && (!track || score > best)) {
+        track = candidate;
+        best = score;
+      }
+    }
+    let viaPool = track !== null;
+    if (!track) {
+      if (searches > 0) await delay(SETLIST_SONG_SEARCH_DELAY_MS);
+      searches++;
+      try {
+        track = await platform.searchArtistSong!(catalogArtist.name, song.title);
+      } catch (error) {
+        if (error instanceof PlatformAccessError) throw error;
+        if ((error as { response?: { status?: number } })?.response?.status === 401) throw error;
+        track = null;
+      }
+      // A search hit that another setlist song took, or that is reserved for
+      // another song's exact title, is not this song.
+      const owner = track ? reservedFor.get(track.id) : undefined;
+      if (track && (used.has(track.id) || (owner !== undefined && owner !== songIndex))) {
+        track = null;
+      }
+      viaPool = false;
+    }
+
+    if (!track) {
+      if (song.isCover) coversDropped++;
+      else unresolved.push(song.title);
+      continue;
+    }
+    if (viaPool) fromPool++;
+    else fromSearch++;
+    resolvedTracks.push({ ...track, artistId: catalogArtist.id, source: 'setlist' });
+  }
+
+  const setSize = typicalSet.songs.length;
+  const counted = setSize - coversDropped;
+  const resolvedCount = fromPool + fromSearch;
+  const latest = `${typicalSet.latest.date} ${typicalSet.latest.city}`.trim();
+  const unresolvedNote =
+    unresolved.length > 0 ? `, unresolved: ${unresolved.map((t) => `"${t}"`).join(', ')}` : '';
+  console.log(
+    `[setlist] ${catalogArtist.name}: ${resolvedCount}/${counted} resolved ` +
+      `(pool ${fromPool}, search ${fromSearch}), ${coversDropped} cover` +
+      `${coversDropped === 1 ? '' : 's'} dropped${unresolvedNote} · ${latest}`
+  );
+
+  if (counted === 0 || resolvedCount < counted * MIN_SETLIST_RESOLUTION) {
+    console.log(`[setlist] ${catalogArtist.name}: fallback (low-resolution)`);
+    return { kind: 'low-resolution' };
+  }
+
+  const tracks = [...resolvedTracks];
+  if (tracks.length < artistCount) {
+    const chosen = new Set(tracks.map((t) => t.id));
+    const remaining = pool.filter((t) => !chosen.has(t.id));
+    tracks.push(...selectTracksFromPool(remaining, artistCount - tracks.length, selectionMode));
+  }
+  return { kind: 'tracks', tracks, setSize: counted, resolved: resolvedCount };
 }

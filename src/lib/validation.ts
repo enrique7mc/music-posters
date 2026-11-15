@@ -87,28 +87,48 @@ const perArtistCountsSchema = z.custom<Record<string, number>>(
 // Whole-number track counts shared by every count form below (1–25).
 const trackCountSchema = z.number().int().min(MIN_TRACKS_PER_ARTIST).max(MAX_TRACKS_PER_ARTIST);
 
-export const searchTracksSchema = z.object({
-  artists: z
-    .array(searchArtistSchema)
-    .min(1, 'At least one artist must be provided')
-    .max(
-      MAX_ARTISTS_PER_SEARCH,
-      `Maximum ${MAX_ARTISTS_PER_SEARCH} artists allowed to prevent excessive API calls`
-    ),
-  platform: z.enum(['spotify', 'apple-music']).optional(), // Optional for backward compatibility
-  trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
-  customTrackCount: trackCountSchema.optional(),
-  tierCounts: z
-    .object({
-      headliner: trackCountSchema,
-      'sub-headliner': trackCountSchema,
-      'mid-tier': trackCountSchema,
-      undercard: trackCountSchema,
-    })
-    .optional(),
-  perArtistCounts: perArtistCountsSchema.optional(),
-  trackSelectionMode: z.enum(['popular', 'balanced', 'deep-cuts']).optional(),
-});
+export const searchTracksSchema = z
+  .object({
+    artists: z
+      .array(searchArtistSchema)
+      .min(1, 'At least one artist must be provided')
+      .max(
+        MAX_ARTISTS_PER_SEARCH,
+        `Maximum ${MAX_ARTISTS_PER_SEARCH} artists allowed to prevent excessive API calls`
+      ),
+    platform: z.enum(['spotify', 'apple-music']).optional(), // Optional for backward compatibility
+    trackCountMode: z.enum(['tier-based', 'custom', 'custom-per-tier', 'per-artist']).optional(),
+    customTrackCount: trackCountSchema.optional(),
+    tierCounts: z
+      .object({
+        headliner: trackCountSchema,
+        'sub-headliner': trackCountSchema,
+        'mid-tier': trackCountSchema,
+        undercard: trackCountSchema,
+      })
+      .optional(),
+    perArtistCounts: perArtistCountsSchema.optional(),
+    trackSelectionMode: z.enum(['popular', 'balanced', 'deep-cuts']).optional(),
+    // "Prefer tour setlists": the Setlist Scope chosen by the client. Every name
+    // MUST be one of the request's artists.
+    setlistArtistNames: z
+      .array(z.string().trim().min(1).max(MAX_ARTIST_NAME_LENGTH))
+      .max(MAX_ARTISTS_PER_SEARCH)
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.setlistArtistNames) return;
+    const names = new Set(data.artists.map((artist) => artist.name));
+    data.setlistArtistNames.forEach((name, index) => {
+      if (!names.has(name)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['setlistArtistNames', index],
+          message: 'Setlist artist must be one of the requested artists',
+        });
+      }
+    });
+  });
 
 // ============================================================================
 // Personalize Validation (/api/personalize)
