@@ -172,8 +172,7 @@ review-tracks (edit, with a setlist.fm attribution chip per live-set artist) →
 
 ### 4b. Tour setlists ("Prefer tour setlists")
 
-Terms are defined in [GLOSSARY.md](GLOSSARY.md); the plan is in
-[docs/plan-setlist-mode.md](docs/plan-setlist-mode.md).
+Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
 - **Setlist Scope** (client, `setlistScopeNames`): the headliners of a Poster
   Lineup, or every artist of a Manual Lineup. The route rejects (400) a name that
