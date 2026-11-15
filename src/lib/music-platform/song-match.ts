@@ -4,7 +4,7 @@
  * the per-song catalog search.
  */
 
-import { similarity, containsName } from '@/lib/artist-match';
+import { similarity, containsName, isDerivativeName } from '@/lib/artist-match';
 
 /** Minimum similarity for a title, and for an artist credit, to match. */
 export const SONG_MATCH_THRESHOLD = 0.85;
@@ -38,6 +38,8 @@ export function titlesMatch(a: string, b: string): boolean {
  * "Fontaines D.C., Other") names the artist.
  */
 export function artistCredited(credit: string, artistName: string): boolean {
+  // "Florence Welch Tribute Band" contains the name but is another artist.
+  if (isDerivativeName(credit, artistName)) return false;
   if (similarity(credit, artistName) >= SONG_MATCH_THRESHOLD) return true;
   if (containsName(credit, artistName)) return true;
   return credit

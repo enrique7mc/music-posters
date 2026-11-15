@@ -174,4 +174,17 @@ describe('getTypicalSetlist', () => {
     await Promise.all(['A1', 'B2', 'C3', 'D4'].map((n) => getTypicalSetlist(n, NOW)));
     expect(peak).toBeLessThanOrEqual(2);
   });
+
+  it('looks up an artist whose name uses only a non-Latin script', async () => {
+    let requests = 0;
+    server.use(
+      http.get(SEARCH_URL, () => {
+        requests++;
+        return HttpResponse.json(page([entry('13-11-2026', '宇多田ヒカル')]));
+      })
+    );
+    const { result } = await getTypicalSetlist('宇多田ヒカル', NOW);
+    expect(requests).toBe(1);
+    expect(result.kind).toBe('typical');
+  });
 });

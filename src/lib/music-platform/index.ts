@@ -60,6 +60,13 @@ export interface SetlistFallback {
 /** Minimum share of a Typical Set (dropped covers excluded) that must resolve. */
 export const MIN_SETLIST_RESOLUTION = 0.5;
 
+/**
+ * Overall wait for Setlist.fm lookups, from the start of the search. A lookup
+ * still pending at the deadline becomes a fallback, so a hung upstream cannot
+ * push a 150-artist search past the route's time limit.
+ */
+export const SETLIST_LOOKUP_BUDGET_MS = 45_000;
+
 /** Pause between song searches inside one artist slot (keeps Apple near 10 req/s). */
 export const SETLIST_SONG_SEARCH_DELAY_MS = 500;
 
@@ -206,8 +213,26 @@ export async function searchAndGetTopTracks(
   const setlistScope = new Set(trackCountOptions?.setlistArtistNames ?? []);
   const setlistCapable = Boolean(platform.getTopSongPool && platform.searchArtistSong);
   const setlistLookups = new Map<string, Promise<TypicalSetlistLookup>>();
-  if (setlistCapable) {
-    for (const name of setlistScope) setlistLookups.set(name, getTypicalSetlist(name));
+  if (setlistCapable && setlistScope.size > 0) {
+    let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+    const budget = new Promise<TypicalSetlistLookup>((resolve) => {
+      budgetTimer = setTimeout(
+        () =>
+          resolve({
+            result: { kind: 'fallback', reason: 'api-error:budget' },
+            calls: 0,
+            cacheHit: false,
+          }),
+        SETLIST_LOOKUP_BUDGET_MS
+      );
+    });
+    const lookups = [...setlistScope].map((name) => {
+      const bounded = Promise.race([getTypicalSetlist(name), budget]);
+      setlistLookups.set(name, bounded);
+      return bounded;
+    });
+    // Do not keep the process (or a test) alive for the budget timer.
+    void Promise.all(lookups).finally(() => clearTimeout(budgetTimer));
   }
   const setlistArtists: SetlistArtistInfo[] = [];
   const setlistFallbacks: SetlistFallback[] = [];
@@ -483,14 +508,25 @@ async function buildSetlistTracks(
   let coversDropped = 0;
   let searches = 0;
 
-  for (const song of typicalSet.songs) {
-    // Closest unused pool title wins, so a fuzzy match ("Pt. 2" for "Pt. 1")
-    // cannot take a track that an exact match needs.
+  // Reserve every exact title match first, so a fuzzy match ("Pt. 2" for
+  // "Pt. 1") cannot take a track that a later song names exactly.
+  const reservedFor = new Map<string, number>();
+  typicalSet.songs.forEach((song, index) => {
+    const exact = pool.find(
+      (t) => !reservedFor.has(t.id) && titleSimilarity(t.name, song.title) === 1
+    );
+    if (exact) reservedFor.set(exact.id, index);
+  });
+
+  for (const [songIndex, song] of typicalSet.songs.entries()) {
+    // Closest unused pool title wins, skipping tracks reserved for other songs.
     const used = new Set(resolvedTracks.map((t) => t.id));
     let track: Track | null = null;
     let best = SONG_MATCH_THRESHOLD;
     for (const candidate of pool) {
       if (used.has(candidate.id)) continue;
+      const owner = reservedFor.get(candidate.id);
+      if (owner !== undefined && owner !== songIndex) continue;
       const score = titleSimilarity(candidate.name, song.title);
       if (score >= best && (!track || score > best)) {
         track = candidate;

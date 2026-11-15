@@ -311,4 +311,29 @@ describe('/api/search-tracks tour setlists', () => {
     await handler(req as any, res as any);
     expect(JSON.parse(res._getData()).setlistArtists).toBeUndefined();
   });
+
+  it('puts the missing-key warning first, ahead of artist warnings', async () => {
+    const names = Array.from({ length: 11 }, (_, i) => `Missing ${i}`);
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      ...okResult,
+      artistMatches: [
+        ...okResult.artistMatches,
+        ...names.map((n) => ({
+          requested: n,
+          found: null,
+          similarity: 0,
+          matched: false,
+          lookupFailed: false,
+        })),
+      ],
+      setlistFallbacks: [{ artist: 'A', reason: 'no-key', mode: 'popular' }],
+    });
+    const { req, res } = requestWith({ setlistArtistNames: ['A'] });
+
+    await handler(req as any, res as any);
+
+    const { warnings } = JSON.parse(res._getData());
+    expect(warnings[0]).toBe('Tour setlists are unavailable: no setlist.fm API key is configured.');
+    expect(warnings).toHaveLength(12);
+  });
 });

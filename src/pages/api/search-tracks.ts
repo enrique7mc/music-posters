@@ -293,7 +293,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     );
 
-    warnings.push(...setlistWarnings(setlistArtists, setlistFallbacks, platformDisplayName));
+    // The missing-key warning goes first: Review Tracks shows only 10 warnings.
+    const tourWarnings = setlistWarnings(setlistArtists, setlistFallbacks, platformDisplayName);
+    if (setlistFallbacks.some((f) => f.reason === 'no-key')) {
+      warnings.unshift(tourWarnings.shift()!);
+    }
+    warnings.push(...tourWarnings);
 
     const response: SearchTracksResponse = {
       tracks,

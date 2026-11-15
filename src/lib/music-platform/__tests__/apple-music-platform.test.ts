@@ -4,6 +4,7 @@ import { http, HttpResponse, delay } from 'msw';
 import { server } from '@/test/mocks/server';
 import { AppleMusicPlatformService } from '../apple-music-platform';
 import { PlatformAccessError, PartialAddError } from '../types';
+import { artistCredited } from '../song-match';
 
 const LIBRARY_URL = 'https://api.music.apple.com/v1/me/library/artists';
 const SEARCH_URL = 'https://api.music.apple.com/v1/catalog/us/search';
@@ -747,5 +748,15 @@ describe('AppleMusicPlatformService.searchArtistSong', () => {
     await expect(service.searchArtistSong('Turnstile', 'Mystery')).rejects.toBeInstanceOf(
       PlatformAccessError
     );
+  });
+
+  describe('artistCredited', () => {
+    it('rejects a tribute credit that contains the artist name', () => {
+      expect(artistCredited('Florence Welch Tribute Band', 'Florence Welch')).toBe(false);
+    });
+
+    it('keeps a collaboration credit', () => {
+      expect(artistCredited('Florence Welch & Calvin Harris', 'Florence Welch')).toBe(true);
+    });
   });
 });

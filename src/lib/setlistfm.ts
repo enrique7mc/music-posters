@@ -191,11 +191,20 @@ function isSetlistFmUrl(value: unknown): value is string {
   }
 }
 
+/**
+ * Comparison key for an artist name. normalize() drops non-Latin letters, so
+ * a name written only in another script ("宇多田ヒカル") keeps its own
+ * lowercased form instead of becoming "".
+ */
+function artistKey(name: string): string {
+  return normalize(name) || name.normalize('NFC').trim().toLowerCase();
+}
+
 function matchingEntries(response: SetlistFmSearchResponse | null, wanted: string) {
   return (response?.setlist ?? []).filter(
     (entry): entry is SetlistFmSetlist =>
       typeof entry?.artist?.name === 'string' &&
-      normalize(entry.artist.name) === wanted &&
+      artistKey(entry.artist.name) === wanted &&
       isSetlistFmUrl(entry.url)
   );
 }
@@ -205,7 +214,7 @@ async function lookup(
   apiKey: string,
   now: Date
 ): Promise<TypicalSetlistLookup> {
-  const wanted = normalize(artistName);
+  const wanted = artistKey(artistName);
   let calls = 0;
   try {
     calls++;
@@ -256,7 +265,7 @@ export async function getTypicalSetlist(
     return { result: { kind: 'fallback', reason: 'no-key' }, calls: 0, cacheHit: false };
   }
 
-  const key = normalize(artistName);
+  const key = artistKey(artistName);
   if (!key) {
     return { result: { kind: 'fallback', reason: 'no-match' }, calls: 0, cacheHit: false };
   }

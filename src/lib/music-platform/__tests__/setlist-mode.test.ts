@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchAndGetTopTracks } from '../index';
+import { searchAndGetTopTracks, SETLIST_LOOKUP_BUDGET_MS } from '../index';
 import { MusicPlatformService } from '../types';
 import { Track } from '@/types';
 import { getTypicalSetlist, TypicalSetlistLookup } from '@/lib/setlistfm';
@@ -317,5 +317,44 @@ describe('searchAndGetTopTracks with tour setlists', () => {
     const { setlistArtists } = await run(platform, { mode: 'custom', customCount: 1 });
 
     expect(setlistArtists[0]).toMatchObject({ setSize: 2, resolved: 1 });
+  });
+
+  // Regression (CodeRabbit): with only Pt. 2 in the pool, Pt. 1 used to take it
+  // fuzzily, and Pt. 2 then failed. Exact matches are reserved first now.
+  it('reserves an exact pool match for its own song and searches the other', async () => {
+    vi.mocked(getTypicalSetlist).mockResolvedValue(
+      typical(['Another Brick in the Wall, Pt. 1', 'Another Brick in the Wall, Pt. 2'])
+    );
+    const { platform, searchArtistSong } = stubPlatform({
+      'Another Brick in the Wall, Pt. 1': track('pt1', 'Another Brick in the Wall, Pt. 1'),
+    });
+    vi.mocked(platform.getTopSongPool!).mockResolvedValue([
+      track('pt2', 'Another Brick in the Wall, Pt. 2'),
+    ]);
+
+    const { tracks, setlistArtists } = await run(platform, { mode: 'custom', customCount: 1 });
+
+    expect(searchArtistSong).toHaveBeenCalledWith('Turnstile', 'Another Brick in the Wall, Pt. 1');
+    expect(tracks.filter((t) => t.source === 'setlist').map((t) => t.id)).toEqual(['pt1', 'pt2']);
+    expect(setlistArtists[0]).toMatchObject({ setSize: 2, resolved: 2 });
+  });
+
+  it('falls back when Setlist.fm does not answer within the overall budget', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getTypicalSetlist).mockReturnValue(new Promise(() => {})); // hangs
+      const { platform, getArtistTopTracks } = stubPlatform();
+
+      const pending = run(platform, { mode: 'custom', customCount: 2 });
+      await vi.advanceTimersByTimeAsync(SETLIST_LOOKUP_BUDGET_MS);
+      const { setlistFallbacks } = await pending;
+
+      expect(setlistFallbacks).toEqual([
+        { artist: 'Turnstile', reason: 'api-error:budget', mode: 'popular' },
+      ]);
+      expect(getArtistTopTracks).toHaveBeenCalledWith('id-Turnstile', 'tok', 2, 'popular');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
