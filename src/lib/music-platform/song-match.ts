@@ -23,9 +23,14 @@ export function cleanSongTitle(title: string): string {
     .trim();
 }
 
+/** Similarity of two song titles after cleaning (see cleanSongTitle). */
+export function titleSimilarity(a: string, b: string): number {
+  return similarity(cleanSongTitle(a), cleanSongTitle(b));
+}
+
 /** True when two song titles name the same song after cleaning. */
 export function titlesMatch(a: string, b: string): boolean {
-  return similarity(cleanSongTitle(a), cleanSongTitle(b)) >= SONG_MATCH_THRESHOLD;
+  return titleSimilarity(a, b) >= SONG_MATCH_THRESHOLD;
 }
 
 /**

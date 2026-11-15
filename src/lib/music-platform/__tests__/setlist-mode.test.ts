@@ -290,4 +290,32 @@ describe('searchAndGetTopTracks with tour setlists', () => {
     expect(lines[0]).toContain('unresolved: "Gone"');
     expect(lines[0]).toContain('2026-11-13 Paris');
   });
+
+  // Regression (sol S1): the first fuzzy pool match used to win over an exact
+  // match later in the pool, so two setlist songs collapsed into one track.
+  it('gives each setlist song its closest unused pool track', async () => {
+    vi.mocked(getTypicalSetlist).mockResolvedValue(
+      typical(['Another Brick in the Wall, Pt. 1', 'Another Brick in the Wall, Pt. 2'])
+    );
+    const pool = [
+      track('pt2', 'Another Brick in the Wall, Pt. 2'),
+      track('pt1', 'Another Brick in the Wall, Pt. 1'),
+    ];
+    const { platform } = stubPlatform();
+    vi.mocked(platform.getTopSongPool!).mockResolvedValue(pool);
+
+    const { tracks, setlistArtists } = await run(platform, { mode: 'custom', customCount: 1 });
+
+    expect(tracks.filter((t) => t.source === 'setlist').map((t) => t.id)).toEqual(['pt1', 'pt2']);
+    expect(setlistArtists[0]).toMatchObject({ setSize: 2, resolved: 2 });
+  });
+
+  it('does not count a search hit that another setlist song already took', async () => {
+    vi.mocked(getTypicalSetlist).mockResolvedValue(typical(['Mystery', 'Mystery (Reprise)']));
+    const { platform } = stubPlatform({ 'Mystery (Reprise)': POOL[0] });
+
+    const { setlistArtists } = await run(platform, { mode: 'custom', customCount: 1 });
+
+    expect(setlistArtists[0]).toMatchObject({ setSize: 2, resolved: 1 });
+  });
 });

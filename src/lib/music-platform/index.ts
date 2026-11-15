@@ -12,7 +12,7 @@ import { MIN_TRACKS_PER_ARTIST, MAX_TRACKS_PER_ARTIST } from '@/lib/constants';
 import { getTypicalSetlist, SetlistFallbackReason, TypicalSetlistLookup } from '@/lib/setlistfm';
 import type { TypicalSet } from '@/lib/setlist-select';
 import { selectTracksFromPool } from './apple-music-platform';
-import { titlesMatch } from './song-match';
+import { SONG_MATCH_THRESHOLD, titleSimilarity } from './song-match';
 
 // Re-export types
 export * from './types';
@@ -484,10 +484,21 @@ async function buildSetlistTracks(
   let searches = 0;
 
   for (const song of typicalSet.songs) {
-    let track: Track | null = pool.find((t) => titlesMatch(t.name, song.title)) ?? null;
-    if (track) {
-      fromPool++;
-    } else {
+    // Closest unused pool title wins, so a fuzzy match ("Pt. 2" for "Pt. 1")
+    // cannot take a track that an exact match needs.
+    const used = new Set(resolvedTracks.map((t) => t.id));
+    let track: Track | null = null;
+    let best = SONG_MATCH_THRESHOLD;
+    for (const candidate of pool) {
+      if (used.has(candidate.id)) continue;
+      const score = titleSimilarity(candidate.name, song.title);
+      if (score >= best && (!track || score > best)) {
+        track = candidate;
+        best = score;
+      }
+    }
+    let viaPool = track !== null;
+    if (!track) {
       if (searches > 0) await delay(SETLIST_SONG_SEARCH_DELAY_MS);
       searches++;
       try {
@@ -497,10 +508,9 @@ async function buildSetlistTracks(
         if ((error as { response?: { status?: number } })?.response?.status === 401) throw error;
         track = null;
       }
-      if (track) {
-        fromSearch++;
-        track = { ...track, artistId: catalogArtist.id };
-      }
+      // A search hit that another setlist song already took is not a new song.
+      if (track && used.has(track.id)) track = null;
+      viaPool = false;
     }
 
     if (!track) {
@@ -508,9 +518,9 @@ async function buildSetlistTracks(
       else unresolved.push(song.title);
       continue;
     }
-    if (!resolvedTracks.some((t) => t.id === track!.id)) {
-      resolvedTracks.push({ ...track, source: 'setlist' });
-    }
+    if (viaPool) fromPool++;
+    else fromSearch++;
+    resolvedTracks.push({ ...track, artistId: catalogArtist.id, source: 'setlist' });
   }
 
   const setSize = typicalSet.songs.length;
