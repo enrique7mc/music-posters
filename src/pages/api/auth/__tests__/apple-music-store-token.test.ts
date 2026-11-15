@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMocks } from 'node-mocks-http';
 import handler from '../../auth/apple-music/store-token';
 
@@ -60,6 +60,58 @@ describe('POST /api/auth/apple-music/store-token', () => {
 
     await handler(req as any, res as any);
     expect(res._getStatusCode()).toBe(403);
+  });
+
+  describe('on a Vercel preview deployment', () => {
+    beforeEach(() => {
+      vi.stubEnv('NEXTAUTH_URL', 'https://music-posters.vercel.app');
+      vi.stubEnv('VERCEL_URL', 'music-posters-abc123-team.vercel.app');
+      vi.stubEnv('VERCEL_BRANCH_URL', 'music-posters-git-feature-team.vercel.app');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each(['music-posters-abc123-team.vercel.app', 'music-posters-git-feature-team.vercel.app'])(
+      'should accept the preview host %s',
+      async (host) => {
+        vi.stubEnv('VERCEL_ENV', 'preview');
+        const { req, res } = createMocks({
+          method: 'POST',
+          headers: { origin: `https://${host}` },
+          body: { musicUserToken: VALID_TOKEN },
+        });
+
+        await handler(req as any, res as any);
+        expect(res._getStatusCode()).toBe(200);
+        expectTokenStored(res);
+      }
+    );
+
+    it('should reject another vercel.app host', async () => {
+      vi.stubEnv('VERCEL_ENV', 'preview');
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: { origin: 'https://evil.vercel.app' },
+        body: { musicUserToken: VALID_TOKEN },
+      });
+
+      await handler(req as any, res as any);
+      expect(res._getStatusCode()).toBe(403);
+    });
+
+    it('should ignore the deployment hosts in production', async () => {
+      vi.stubEnv('VERCEL_ENV', 'production');
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: { origin: 'https://music-posters-abc123-team.vercel.app' },
+        body: { musicUserToken: VALID_TOKEN },
+      });
+
+      await handler(req as any, res as any);
+      expect(res._getStatusCode()).toBe(403);
+    });
   });
 
   it('should accept request when no origin header is sent', async () => {

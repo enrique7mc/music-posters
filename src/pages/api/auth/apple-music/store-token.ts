@@ -3,6 +3,19 @@ import { setAppleMusicCookies, isValidAppleMusicToken } from '@/lib/apple-music-
 import { applyRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 
 /**
+ * Hosts of the current Vercel preview deployment. NEXTAUTH_URL holds the
+ * production URL in every scope, so without these a preview fails the origin
+ * check. Vercel sets both values without a protocol, for example
+ * `music-posters-abc123.vercel.app`. Empty outside preview deployments.
+ */
+function vercelPreviewHosts(): string[] {
+  if (process.env.VERCEL_ENV !== 'preview') return [];
+  return [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL].filter((host): host is string =>
+    Boolean(host)
+  );
+}
+
+/**
  * API route that stores the Apple Music User Token in an httpOnly cookie.
  *
  * The Music User Token is obtained client-side via MusicKit JS authorization.
@@ -29,9 +42,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const origin = req.headers.origin;
   if (allowedOrigin && origin) {
     try {
-      const allowedHost = new URL(allowedOrigin).hostname;
+      const allowedHosts = [new URL(allowedOrigin).hostname, ...vercelPreviewHosts()];
       const requestHost = new URL(origin).hostname;
-      if (allowedHost !== requestHost) {
+      if (!allowedHosts.includes(requestHost)) {
         return res.status(403).json({ error: 'Invalid origin' });
       }
     } catch {
