@@ -37,6 +37,8 @@ describe('/api/search-tracks per-artist failures', () => {
   // Regression: an artist whose request failed used to vanish without a warning.
   it('warns about failed artists first, and does not call them "not found"', async () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
@@ -64,6 +66,8 @@ describe('/api/search-tracks per-artist failures', () => {
 
   it('returns 503 (not "no tracks found") when every matched artist failed', async () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [],
       foundArtists: 1,
       artistMatches: [
@@ -82,6 +86,8 @@ describe('/api/search-tracks per-artist failures', () => {
   it('reports short artists and missing tracks in the summary log line', async () => {
     const log = vi.mocked(console.log);
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
@@ -106,6 +112,8 @@ describe('/api/search-tracks per-artist failures', () => {
 
   it('warns about a match below the threshold as "not found", not "matched as"', async () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [track as any],
       foundArtists: 1,
       artistMatches: [
@@ -131,6 +139,8 @@ describe('/api/search-tracks per-artist failures', () => {
 
   it('does not warn about a whole-name match with a low similarity', async () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
@@ -172,6 +182,8 @@ describe('/api/search-tracks per-artist failures', () => {
 
   it('warns the user about an artist with fewer tracks than requested', async () => {
     vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      setlistArtists: [],
+      setlistFallbacks: [],
       tracks: [track as any],
       foundArtists: 2,
       artistMatches: [
@@ -193,5 +205,110 @@ describe('/api/search-tracks per-artist failures', () => {
       'Only 2 of 8 tracks found for "A"',
       'Only 1 of 3 tracks found for "B" (matched as "B Band")',
     ]);
+  });
+});
+
+describe('/api/search-tracks tour setlists', () => {
+  const okResult = {
+    tracks: [track as any],
+    foundArtists: 1,
+    artistMatches: [
+      { requested: 'A', found: 'A', similarity: 1, matched: true, lookupFailed: false },
+    ],
+    failedArtists: [],
+    shortArtists: [],
+    setlistArtists: [],
+    setlistFallbacks: [],
+  };
+
+  function requestWith(body: Record<string, unknown>) {
+    return createMocks({
+      method: 'POST',
+      headers: { cookie: APPLE_COOKIE },
+      body: { artists: [{ name: 'A' }, { name: 'B' }], ...body },
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  it('rejects a setlist artist that is not in the request (400)', async () => {
+    const { req, res } = requestWith({ setlistArtistNames: ['A', 'Z'] });
+    await handler(req as any, res as any);
+    expect(res._getStatusCode()).toBe(400);
+    expect(searchAndGetTopTracks).not.toHaveBeenCalled();
+  });
+
+  it('rejects more setlist artists than the artist cap (400)', async () => {
+    const { req, res } = requestWith({
+      setlistArtistNames: Array.from({ length: 151 }, () => 'A'),
+    });
+    await handler(req as any, res as any);
+    expect(res._getStatusCode()).toBe(400);
+  });
+
+  it('still answers 405 before validation', async () => {
+    const { req, res } = createMocks({ method: 'GET' });
+    await handler(req as any, res as any);
+    expect(res._getStatusCode()).toBe(405);
+  });
+
+  it('passes the Setlist Scope through and returns setlistArtists and warnings', async () => {
+    const info = {
+      artist: 'A',
+      latestDate: '2026-11-13',
+      venue: 'Zénith',
+      city: 'Paris',
+      url: 'https://www.setlist.fm/setlist/a.html',
+      setSize: 18,
+      resolved: 14,
+    };
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      ...okResult,
+      setlistArtists: [info],
+      setlistFallbacks: [{ artist: 'B', reason: 'not-on-tour', mode: 'popular' }],
+    });
+    const { req, res } = requestWith({ setlistArtistNames: [' A ', 'B'] });
+
+    await handler(req as any, res as any);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(vi.mocked(searchAndGetTopTracks).mock.calls[0][3]?.setlistArtistNames).toEqual([
+      'A',
+      'B',
+    ]);
+    const body = JSON.parse(res._getData());
+    expect(body.setlistArtists).toEqual([info]);
+    expect(body.warnings).toEqual([
+      'No recent setlist for "B", used Popular Hits',
+      'Resolved 14 of 18 setlist songs for "A"',
+    ]);
+  });
+
+  it('adds one warning when the key is missing', async () => {
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue({
+      ...okResult,
+      setlistFallbacks: [
+        { artist: 'A', reason: 'no-key', mode: 'popular' },
+        { artist: 'B', reason: 'no-key', mode: 'popular' },
+      ],
+    });
+    const { req, res } = requestWith({ setlistArtistNames: ['A', 'B'] });
+
+    await handler(req as any, res as any);
+
+    const { warnings } = JSON.parse(res._getData());
+    expect(warnings).toEqual([
+      'Tour setlists are unavailable: no setlist.fm API key is configured.',
+    ]);
+  });
+
+  it('omits setlistArtists when the toggle is off', async () => {
+    vi.mocked(searchAndGetTopTracks).mockResolvedValue(okResult);
+    const { req, res } = requestWith({});
+    await handler(req as any, res as any);
+    expect(JSON.parse(res._getData()).setlistArtists).toBeUndefined();
   });
 });

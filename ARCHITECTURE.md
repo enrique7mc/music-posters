@@ -163,9 +163,41 @@ Continue → POST /api/search-tracks (Artist[] + track-count + selection options
   → per-artist selection mode from affinity:
        loved → deep-cuts, gem → popular, untagged → global mode
   → search each artist + fetch tracks (rate-limited batches) → Track[]
-review-tracks (edit) → POST /api/create-playlist (trackIds/URIs + name + cover)
+  → "Prefer tour setlists" (optional setlistArtistNames): Setlist.fm lookups
+     start with the artist search; an On Tour artist gets its Typical Set
+     (see below), every other artist keeps the regular mode
+review-tracks (edit, with a setlist.fm attribution chip per live-set artist) → POST /api/create-playlist (trackIds/URIs + name + cover)
   → create playlist → add tracks in chunks of 100 → playlist URL → /success
 ```
+
+### 4b. Tour setlists ("Prefer tour setlists")
+
+Terms are defined in [GLOSSARY.md](GLOSSARY.md); the plan is in
+[docs/plan-setlist-mode.md](docs/plan-setlist-mode.md).
+
+- **Setlist Scope** (client, `setlistScopeNames`): the headliners of a Poster
+  Lineup, or every artist of a Manual Lineup. The route rejects (400) a name that
+  is not one of the request's artists.
+- **Lookup** (`src/lib/setlistfm.ts`): `GET /search/setlists?artistName=` (page 2
+  once when page 1 has fewer than 3 Qualifying Setlists). Limited to 4 req/s and
+  2 in flight; per-instance cache 6 h (Typical Sets) / 1 h (no-setlist
+  fallbacks); API errors are not cached and never fail the search.
+- **Selection** (`src/lib/setlist-select.ts`, pure): a Qualifying Setlist is a
+  past show with ≥ 8 performed (non-tape) songs. The MBID with the most recent
+  Qualifying Setlists wins. On Tour = newest one ≤ 180 days old. Sample: up to 5
+  newest within 90 days of it. Songs played at ≥ 50% of the sample, in median
+  position.
+- **Resolution** (`buildSetlistTracks` in `music-platform/index.ts`): match each
+  title to the Apple top-song pool first, then `searchArtistSong` one song at a
+  time (500 ms apart) inside the artist's batch slot. A cover resolves only to the
+  artist's own recording, else it is dropped (not counted). Under 50% resolved →
+  fallback. Count = max(resolved songs, the artist's count); a short set is topped
+  up from the pool with the artist's regular (affinity-derived) mode.
+- **Fallback reasons** (logged as `[setlist] <artist>: fallback (<reason>)`):
+  `not-on-tour`, `no-match`, `low-resolution`, `api-error:<status>`, `no-key`,
+  `unsupported-platform` (Spotify).
+- **Terms:** the free Setlist.fm key is non-commercial only; the review-tracks
+  chip links to the newest setlist's `url` (no `nofollow`).
 
 ## Technology Stack
 
@@ -190,6 +222,7 @@ review-tracks (edit) → POST /api/create-playlist (trackIds/URIs + name + cover
 - **Google Gemini 3.6 Flash** — image ranking (`gemini`, `hybrid`) and the gem engine
 - **Spotify Web API** — auth, search, playlists (currently broken; see above)
 - **Apple Music API** — catalog search, top songs, library scan, playlists
+- **Setlist.fm API** — recent setlists for "Prefer tour setlists" (optional)
 
 ### Tooling
 
@@ -238,6 +271,7 @@ review-tracks (edit) → POST /api/create-playlist (trackIds/URIs + name + cover
 | `GOOGLE_APPLICATION_CREDENTIALS`              | path to Vision service-account JSON  | `vision`, `hybrid`       |
 | `GEMINI_API_KEY`                              | Google AI Studio key                 | `gemini`, `hybrid`, gems |
 | `NEXTAUTH_URL` / `NEXTAUTH_SECRET`            | app base URL / session secret        | app                      |
+| `SETLISTFM_API_KEY`                           | Setlist.fm key (non-commercial)      | tour setlists (optional) |
 | `DEV_MODE`                                    | enable the dev panel (never in prod) | dev only                 |
 
 Full setup walkthrough: [SETUP.md](SETUP.md).
@@ -324,7 +358,10 @@ src/
   the auth check, so anonymous traffic can't burn legitimate users' slots.
 - **Provider batching** in `searchAndGetTopTracks`: Spotify 3/batch @ 1000ms
   (180 req/min), Apple Music 5/batch @ 500ms. The Apple library scan throttles
-  50ms/page and is capped at 50 pages.
+  50ms/page and is capped at 50 pages. Setlist song searches run one at a time
+  inside an artist's slot, 500ms apart.
+- **Setlist.fm** (`src/lib/setlistfm.ts`): 4 request starts/s, 2 in flight, per
+  instance. The key's quota is shared with another personal project.
 
 ## Scalability & Future Work
 

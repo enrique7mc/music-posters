@@ -97,6 +97,23 @@ export interface Track {
   previewUrl: string | null; // 30-second preview URL (may be null)
   platformUrl: string; // Direct link to track on the platform
   platform: MusicPlatform; // Which platform this track is from
+  source?: 'setlist'; // Set when the track comes from the artist's Typical Set (tour setlist)
+}
+
+/**
+ * An artist whose tracks came from their Typical Set (Setlist.fm). `url` is the
+ * setlist.fm page of the newest show; the UI MUST show it as an attribution
+ * link (Setlist.fm API terms).
+ */
+export interface SetlistArtistInfo {
+  artist: string; // Name as requested (from the poster / user list)
+  latestDate: string; // ISO yyyy-MM-dd of the newest Qualifying Setlist
+  venue: string;
+  city: string;
+  tour?: string;
+  url: string;
+  setSize: number; // Songs in the Typical Set
+  resolved: number; // Of those, songs found on the platform
 }
 
 export interface SearchTracksResponse {
@@ -104,6 +121,7 @@ export interface SearchTracksResponse {
   artistsSearched: number;
   tracksFound: number;
   warnings?: string[];
+  setlistArtists?: SetlistArtistInfo[];
 }
 
 export type TrackSelectionMode = 'popular' | 'balanced' | 'deep-cuts';

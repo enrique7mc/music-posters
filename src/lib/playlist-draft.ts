@@ -17,7 +17,14 @@
 // The app stays stateless: OAuth tokens remain in httpOnly cookies and are
 // NEVER part of the draft. Nothing survives closing the tab.
 
-import { Artist, ArtistInputSource, MusicPlatform, Track, TrackSelectionMode } from '@/types';
+import {
+  Artist,
+  ArtistInputSource,
+  MusicPlatform,
+  SetlistArtistInfo,
+  Track,
+  TrackSelectionMode,
+} from '@/types';
 import { AppError } from '@/lib/error-utils';
 import { DEFAULT_TEXT_ARTIST_TRACK_COUNT } from '@/lib/artist-text';
 import {
@@ -79,6 +86,8 @@ export interface PlaylistArtistReview {
   perArtistCounts: Record<string, number>;
   stagedTierCounts: Partial<TierCounts>;
   trackSelectionMode: TrackSelectionMode;
+  /** "Prefer tour setlists" toggle. Absent in older drafts; treat as false. */
+  preferSetlist?: boolean;
   personalization?: PlaylistPersonalizationSummary;
 }
 
@@ -89,6 +98,8 @@ export interface PlaylistTrackReview {
   selectedTrackIds: string[];
   warnings: string[];
   playlistName: string;
+  /** Artists whose tracks came from a Typical Set, with the attribution link. */
+  setlistArtists?: SetlistArtistInfo[];
 }
 
 export interface PlaylistDraft {
@@ -222,7 +233,22 @@ function isTrack(value: unknown): value is Track {
   if (value.previewUrl !== null && typeof value.previewUrl !== 'string') return false;
   if (typeof value.platformUrl !== 'string') return false;
   if (!MUSIC_PLATFORMS.includes(value.platform as MusicPlatform)) return false;
+  if (value.source !== undefined && value.source !== 'setlist') return false;
   return value.uri === undefined || typeof value.uri === 'string';
+}
+
+function isSetlistArtistInfo(value: unknown): value is SetlistArtistInfo {
+  if (!isRecord(value)) return false;
+  return (
+    isNonEmptyString(value.artist) &&
+    typeof value.latestDate === 'string' &&
+    typeof value.venue === 'string' &&
+    typeof value.city === 'string' &&
+    isOptionalString(value.tour) &&
+    typeof value.url === 'string' &&
+    typeof value.setSize === 'number' &&
+    typeof value.resolved === 'number'
+  );
 }
 
 function isNumberRecord(value: unknown): value is Record<string, number> {
@@ -255,6 +281,12 @@ function isTrackReview(value: unknown): value is PlaylistTrackReview {
   if (!Array.isArray(value.tracks) || !value.tracks.every(isTrack)) return false;
   if (!isStringArray(value.selectedTrackIds)) return false;
   if (!isStringArray(value.warnings)) return false;
+  if (
+    value.setlistArtists !== undefined &&
+    (!Array.isArray(value.setlistArtists) || !value.setlistArtists.every(isSetlistArtistInfo))
+  ) {
+    return false;
+  }
   return typeof value.playlistName === 'string';
 }
 
@@ -295,6 +327,9 @@ export function parsePlaylistDraft(value: unknown): PlaylistDraft | null {
   if (!isNumberRecord(review.perArtistCounts)) return null;
   if (!isPartialTierCounts(review.stagedTierCounts)) return null;
   if (!TRACK_SELECTION_MODES.includes(review.trackSelectionMode as TrackSelectionMode)) {
+    return null;
+  }
+  if (review.preferSetlist !== undefined && typeof review.preferSetlist !== 'boolean') {
     return null;
   }
   if (review.personalization !== undefined && !isPersonalization(review.personalization)) {
@@ -461,6 +496,7 @@ export function createRecommendedArtistReview(
     perArtistCounts,
     stagedTierCounts: {},
     trackSelectionMode: 'popular',
+    preferSetlist: false,
   };
 }
 
@@ -538,6 +574,16 @@ export function defaultPlaylistName(source: PlaylistDraftSource, now = new Date(
   return `Festival Mix - ${now.toLocaleDateString()}`;
 }
 
+/**
+ * The Setlist Scope: the headliners of a Poster Lineup, or every artist of a
+ * Manual Lineup. These artists get their Typical Set when "Prefer tour
+ * setlists" is on.
+ */
+export function setlistScopeNames(artists: Artist[], source: ArtistInputSource): string[] {
+  const inScope = source === 'text' ? artists : artists.filter((a) => a.tier === 'headliner');
+  return inScope.map((a) => a.name);
+}
+
 // ============================================================================
 // Search fingerprint (track-result reuse / invalidation)
 // ============================================================================
@@ -548,6 +594,8 @@ export interface SearchFingerprintInput {
   trackSelectionMode: TrackSelectionMode;
   tierCounts?: TierCounts;
   perArtistCounts?: Record<string, number>;
+  /** The Setlist Scope sent with the search; empty when the toggle is off. */
+  setlistArtistNames?: string[];
 }
 
 function sortedCountEntries(counts: Record<string, number>): Array<[string, number]> {
@@ -560,7 +608,8 @@ function sortedCountEntries(counts: Record<string, number>): Array<[string, numb
  * Deterministic fingerprint over only the inputs that affect
  * /api/search-tracks: the ordered artists (name, tier, affinity — the fields
  * the route uses for counts and selection), the count mode, the selection
- * mode, and the count map active for that mode (keys sorted). Equal
+ * mode, the count map active for that mode (keys sorted), and the Setlist
+ * Scope when "Prefer tour setlists" is on. Equal
  * fingerprints mean the stored track result is still valid; any difference
  * means a new search is required.
  */
@@ -584,6 +633,8 @@ export function computeSearchFingerprint(input: SearchFingerprintInput): string 
     trackCountMode: input.trackCountMode,
     trackSelectionMode: input.trackSelectionMode,
     counts,
+    // Added only when non-empty, so fingerprints from before the toggle stay valid.
+    ...(input.setlistArtistNames?.length ? { setlistArtistNames: input.setlistArtistNames } : {}),
   };
   return JSON.stringify(canonical);
 }

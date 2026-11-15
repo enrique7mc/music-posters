@@ -303,3 +303,44 @@ describe('review-tracks hydration from the playlist draft', () => {
     expect(screen.queryByRole('link', { name: /done/i })).not.toBeInTheDocument();
   });
 });
+
+describe('review-tracks tour setlist chips', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+    mockAxiosPost.mockReset();
+    mockAxiosPost.mockResolvedValue({ data: { coverPreview: '' } });
+  });
+
+  const INFO = {
+    artist: 'Alvvays',
+    latestDate: '2026-11-13',
+    venue: 'Zénith',
+    city: 'Paris',
+    url: 'https://www.setlist.fm/setlist/alvvays/x.html',
+    setSize: 12,
+    resolved: 12,
+  };
+
+  it('links each live-set chip to its setlist.fm page without nofollow', async () => {
+    seedTrackReviewDraft({
+      tracks: TRACKS.map((t) => ({ ...t, source: 'setlist' as const })),
+      setlistArtists: [INFO],
+    });
+
+    render(<ReviewTracks />);
+
+    const chip = await screen.findByRole('link', {
+      name: /Alvvays.*Live set · Paris, Nov 13, 2026/,
+    });
+    expect(chip).toHaveAttribute('href', INFO.url);
+    expect(chip.getAttribute('rel') ?? '').not.toContain('nofollow');
+  });
+
+  it('shows no chip when no track came from a setlist', async () => {
+    seedTrackReviewDraft({ setlistArtists: [INFO] });
+    render(<ReviewTracks />);
+    await screen.findByLabelText('Playlist Name');
+    expect(screen.queryByRole('link', { name: /Live set/ })).toBeNull();
+  });
+});

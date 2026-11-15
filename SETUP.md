@@ -178,6 +178,9 @@ IMAGE_ANALYSIS_PROVIDER=hybrid
 GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json   # needed for vision/hybrid
 
+# Tour setlists (optional): the "Prefer tour setlists" toggle
+SETLISTFM_API_KEY=your_setlistfm_api_key
+
 # Spotify (optional, currently broken)
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
@@ -192,6 +195,16 @@ NEXTAUTH_URL=http://127.0.0.1:3000
 # Dev panel (never set true in production)
 DEV_MODE=false
 ```
+
+> **`SETLISTFM_API_KEY` is optional.** It powers "Prefer tour setlists" on
+> Review Artists. Request a key at <https://www.setlist.fm/settings/api>. The free
+> key is for **non-commercial use only**, and the app MUST show the setlist.fm
+> attribution link wherever it uses the data (the review-tracks chips do this).
+> The maintainer's key is shared with the concert-history project (16 req/s,
+> 50,000 calls/day); this app limits itself to 4 req/s, 2 in flight. Without the
+> key, in-scope artists fall back to the regular selection and the track review
+> shows one warning. Check a key and see what the feature would pick with
+> `node --env-file=.env scripts/probe-setlists.mjs "Turnstile" "Daft Punk"`.
 
 > **`NEXTAUTH_SECRET` is not needed.** Despite the name, this app doesn't use
 > NextAuth (it isn't a dependency) — the only reference to the variable anywhere is

@@ -14,6 +14,7 @@ import {
   computeSearchFingerprint,
   defaultPlaylistName,
   readPlaylistDraftForUser,
+  setlistScopeNames,
   trackReviewMatches,
   updatePlaylistDraft,
 } from '@/lib/playlist-draft';
@@ -30,6 +31,7 @@ import TrackCountModeSelector, {
   TierCountControls,
 } from '@/components/features/TrackCountModeSelector';
 import TrackSelectionModeSelector from '@/components/features/TrackSelectionModeSelector';
+import SetlistToggle from '@/components/features/SetlistToggle';
 import BulkActionsBar from '@/components/features/BulkActionsBar';
 import PlaylistSummaryPreview from '@/components/features/PlaylistSummaryPreview';
 import PersonalizationHeader, {
@@ -348,7 +350,14 @@ export default function ReviewArtists() {
     commitReview({ ...current, trackSelectionMode: mode });
   };
 
+  const handlePreferSetlistChange = (preferSetlist: boolean) => {
+    const current = reviewRef.current;
+    if (!current) return;
+    commitReview({ ...current, preferSetlist });
+  };
+
   const artists = review?.artists ?? [];
+  const setlistScope = setlistScopeNames(artists, inputSource);
   const overLimit = artists.length > MAX_ARTISTS_PER_SEARCH;
 
   /**
@@ -379,12 +388,17 @@ export default function ReviewArtists() {
 
     if (!user || !platform) return;
 
+    const setlistArtistNames = current.preferSetlist
+      ? setlistScopeNames(current.artists, inputSource)
+      : [];
+
     const fingerprint = computeSearchFingerprint({
       artists: current.artists,
       trackCountMode: current.trackCountMode,
       trackSelectionMode: current.trackSelectionMode,
       tierCounts: current.tierCounts,
       perArtistCounts: current.perArtistCounts,
+      setlistArtistNames,
     });
 
     const draft = readPlaylistDraftForUser(user.draftOwnerId, platform);
@@ -422,6 +436,9 @@ export default function ReviewArtists() {
       } else if (current.trackCountMode === 'per-artist') {
         requestBody.perArtistCounts = current.perArtistCounts;
       }
+      if (setlistArtistNames.length > 0) {
+        requestBody.setlistArtistNames = setlistArtistNames;
+      }
 
       const response = await apiClient.post('/api/search-tracks', requestBody);
 
@@ -441,6 +458,9 @@ export default function ReviewArtists() {
           selectedTrackIds: tracks.map((t: { id: string }) => t.id),
           warnings: response.data.warnings ?? [],
           playlistName,
+          ...(response.data.setlistArtists?.length
+            ? { setlistArtists: response.data.setlistArtists }
+            : {}),
         },
       }));
       if (!write.ok) {
@@ -526,11 +546,20 @@ export default function ReviewArtists() {
                 <span className="text-xs text-dark-300">Choose the sound and the size</span>
               </div>
               <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-                <TrackSelectionModeSelector
-                  mode={review.trackSelectionMode}
-                  onModeChange={handleTrackSelectionModeChange}
-                  disabled={searching}
-                />
+                <div className="space-y-4">
+                  <TrackSelectionModeSelector
+                    mode={review.trackSelectionMode}
+                    onModeChange={handleTrackSelectionModeChange}
+                    disabled={searching}
+                  />
+                  <SetlistToggle
+                    enabled={review.preferSetlist ?? false}
+                    onChange={handlePreferSetlistChange}
+                    inputSource={inputSource}
+                    scopeCount={setlistScope.length}
+                    disabled={searching}
+                  />
+                </div>
                 <TrackCountModeSelector
                   mode={review.trackCountMode}
                   tierCounts={review.tierCounts}
@@ -599,6 +628,7 @@ export default function ReviewArtists() {
                   trackCountMode={review.trackCountMode}
                   tierCounts={review.tierCounts}
                   perArtistCounts={review.perArtistCounts}
+                  setlistArtistCount={review.preferSetlist ? setlistScope.length : 0}
                 />
 
                 <Card variant="default" className="rounded-2xl border-white/10 p-5 sm:p-6">

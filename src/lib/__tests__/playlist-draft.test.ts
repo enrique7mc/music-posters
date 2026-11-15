@@ -511,3 +511,75 @@ describe('computeSearchFingerprint', () => {
     ).toBe(false);
   });
 });
+
+describe('tour setlists in the draft', () => {
+  it('defaults preferSetlist to false and round-trips it', () => {
+    const draft = posterDraft();
+    expect(draft.artistReview.preferSetlist).toBe(false);
+    const on = { ...draft, artistReview: { ...draft.artistReview, preferSetlist: true } };
+    expect(parsePlaylistDraft(JSON.parse(JSON.stringify(on)))?.artistReview.preferSetlist).toBe(
+      true
+    );
+  });
+
+  it('accepts an older draft without preferSetlist', () => {
+    const draft = posterDraft();
+    const legacy = JSON.parse(JSON.stringify(draft));
+    delete legacy.artistReview.preferSetlist;
+    expect(parsePlaylistDraft(legacy)).not.toBeNull();
+  });
+
+  it('rejects a non-boolean preferSetlist', () => {
+    const draft = JSON.parse(JSON.stringify(posterDraft()));
+    draft.artistReview.preferSetlist = 'yes';
+    expect(parsePlaylistDraft(draft)).toBeNull();
+  });
+
+  it('round-trips setlist tracks and setlistArtists, and rejects a bad entry', () => {
+    const trackReview = {
+      searchFingerprint: 'fp',
+      tracks: [{ ...TRACK, source: 'setlist' as const }],
+      selectedTrackIds: [TRACK.id],
+      warnings: [],
+      playlistName: 'Mix',
+      setlistArtists: [
+        {
+          artist: 'Alvvays',
+          latestDate: '2026-11-13',
+          venue: 'Zénith',
+          city: 'Paris',
+          url: 'https://www.setlist.fm/setlist/a.html',
+          setSize: 12,
+          resolved: 10,
+        },
+      ],
+    };
+    const draft = JSON.parse(JSON.stringify(posterDraft({ trackReview })));
+    expect(parsePlaylistDraft(draft)?.trackReview?.setlistArtists).toHaveLength(1);
+
+    draft.trackReview.setlistArtists[0].setSize = 'twelve';
+    expect(parsePlaylistDraft(draft)).toBeNull();
+
+    const badSource = JSON.parse(JSON.stringify(posterDraft({ trackReview })));
+    badSource.trackReview.tracks[0].source = 'radio';
+    expect(parsePlaylistDraft(badSource)).toBeNull();
+  });
+
+  it('changes the fingerprint when the Setlist Scope changes', () => {
+    const base = {
+      artists: POSTER_ARTISTS,
+      trackCountMode: 'tier-based' as const,
+      trackSelectionMode: 'popular' as const,
+    };
+    const off = computeSearchFingerprint(base);
+    const on = computeSearchFingerprint({ ...base, setlistArtistNames: ['Alvvays'] });
+    const wider = computeSearchFingerprint({
+      ...base,
+      setlistArtistNames: ['Alvvays', 'The Beths'],
+    });
+    expect(on).not.toBe(off);
+    expect(wider).not.toBe(on);
+    // An empty scope is the same as the toggle off (keeps older fingerprints valid).
+    expect(computeSearchFingerprint({ ...base, setlistArtistNames: [] })).toBe(off);
+  });
+});

@@ -11,6 +11,8 @@ interface PlaylistSummaryPreviewProps {
   trackCountMode: TrackCountMode;
   tierCounts: TierCounts;
   perArtistCounts: Record<string, number>;
+  /** Artists that may get their live set ("Prefer tour setlists"); 0 when off. */
+  setlistArtistCount?: number;
 }
 
 function calculateEstimatedTracks(
@@ -54,6 +56,7 @@ export default function PlaylistSummaryPreview({
   trackCountMode,
   tierCounts,
   perArtistCounts,
+  setlistArtistCount = 0,
 }: PlaylistSummaryPreviewProps) {
   const estimatedTracks = calculateEstimatedTracks(
     artists,
@@ -124,6 +127,13 @@ export default function PlaylistSummaryPreview({
           <div className="mb-3 text-center text-xs text-dark-300">
             Average: {avgTracksPerArtist} tracks per artist
           </div>
+          {setlistArtistCount > 0 && (
+            <p className="mb-3 text-center text-xs text-dark-300">
+              Tour setlists are on: {setlistArtistCount}{' '}
+              {setlistArtistCount === 1 ? 'artist' : 'artists'} may get more tracks (a full live
+              set).
+            </p>
+          )}
 
           {/* Warnings */}
           {exceedsCap && (

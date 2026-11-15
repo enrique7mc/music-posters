@@ -941,3 +941,66 @@ describe('review-artists draft persistence', () => {
     confirmSpy.mockRestore();
   });
 });
+
+describe('review-artists "Prefer tour setlists" toggle', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockPost.mockReset();
+    stubApi();
+  });
+
+  const toggle = () => screen.getByRole('switch', { name: /prefer tour setlists/i });
+  const searchBody = () => mockPost.mock.calls.find(([url]) => url === '/api/search-tracks')?.[1];
+
+  it('persists the toggle in the draft', async () => {
+    await renderPosterReviewArtists();
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(toggle());
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    expect(readStoredDraft()?.artistReview.preferSetlist).toBe(true);
+  });
+
+  it('sends only the headliners of a poster', async () => {
+    await renderPosterReviewArtists([
+      { name: 'Alvvays', tier: 'headliner' },
+      { name: 'Turnstile', tier: 'headliner' },
+      { name: 'The Beths', tier: 'mid-tier' },
+    ]);
+    expect(screen.getByText(/Headliners \(2\) get their live set/)).toBeInTheDocument();
+
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/review-tracks'));
+    expect(searchBody().setlistArtistNames).toEqual(['Alvvays', 'Turnstile']);
+  });
+
+  it('sends every artist of a Manual Lineup', async () => {
+    seedTextSession();
+    await renderReviewArtists();
+    expect(screen.getByText(/Every artist gets their live set/)).toBeInTheDocument();
+
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/review-tracks'));
+    expect(searchBody().setlistArtistNames).toEqual(['Alvvays', 'The Beths', 'Men I Trust']);
+  });
+
+  it('sends no Setlist Scope while the toggle is off', async () => {
+    await renderPosterReviewArtists();
+    fireEvent.click(screen.getByRole('button', { name: /search tracks & continue/i }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/review-tracks'));
+    expect(searchBody().setlistArtistNames).toBeUndefined();
+  });
+
+  it('disables the switch on a poster with no headliners', async () => {
+    await renderPosterReviewArtists([{ name: 'The Beths', tier: 'mid-tier' }]);
+    expect(toggle()).toBeDisabled();
+    expect(screen.getByText('No headliners on this poster.')).toBeInTheDocument();
+  });
+});

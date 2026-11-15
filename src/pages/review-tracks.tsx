@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Track } from '@/types';
+import { SetlistArtistInfo, Track } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { AppError, parseApiError } from '@/lib/error-utils';
 import { MAX_PLAYLIST_TRACKS } from '@/lib/constants';
@@ -16,6 +16,7 @@ import ErrorMessage from '@/components/ui/ErrorMessage';
 import ProgressStepper from '@/components/ui/ProgressStepper';
 import Illustration from '@/components/ui/Illustration';
 import StartOverButton from '@/components/features/StartOverButton';
+import SetlistChips from '@/components/features/SetlistChips';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -49,6 +50,7 @@ export default function ReviewTracks() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [setlistArtists, setSetlistArtists] = useState<SetlistArtistInfo[]>([]);
   const [playlistName, setPlaylistName] = useState(
     `Festival Mix - ${new Date().toLocaleDateString()}`
   );
@@ -177,6 +179,7 @@ export default function ReviewTracks() {
     setWarnings([...trackReview.warnings]);
     playlistNameRef.current = trackReview.playlistName;
     setPlaylistName(trackReview.playlistName);
+    setSetlistArtists(trackReview.setlistArtists ?? []);
     setPosterThumbnail(draft.source.posterThumbnail ?? null);
 
     setLoading(false);
@@ -378,6 +381,8 @@ export default function ReviewTracks() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <SetlistChips setlistArtists={setlistArtists} tracks={tracks} />
 
         <AnimatePresence>
           {error && (
