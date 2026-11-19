@@ -8,6 +8,7 @@ import {
   PartialAddError,
 } from './types';
 import {
+  catalogSimilarity,
   similarity,
   containsName,
   isDerivativeName,
@@ -182,6 +183,8 @@ function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
  * Chooses the catalog artist for a poster name from Apple's search results.
  *
  * 1. An exact name match (after normalization) wins, first in Apple's order.
+ *    Next, a name that is exact when numbers 0–20 equal their English and
+ *    Spanish words (see catalogSimilarity) wins.
  * 2. A fuzzy name that differs from the poster name by a whole word is not a
  *    match, whatever its similarity (see hasWordConflict). Example: "LTD Rock"
  *    vs "Kid Rock" scores 75% but is a different act. The closest spelling is
@@ -205,7 +208,7 @@ function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
  */
 function pickCatalogArtist(name: string, artists: any[]): CatalogPick {
   const candidates: CatalogCandidate[] = artists.map((artist) => {
-    const sim = similarity(name, artist.attributes.name);
+    const sim = catalogSimilarity(name, artist.attributes.name);
     return {
       artist,
       sim,
@@ -226,6 +229,9 @@ function pickCatalogArtist(name: string, artists: any[]): CatalogPick {
         `(${(top.sim * 100).toFixed(0)}% similar, but a whole word differs)`
     );
   }
+  // A literal exact match beats a number-word match ("4 Muertos" over "Cuatro Muertos").
+  const literal = candidates.find((c) => similarity(name, c.artist.attributes.name) === 1);
+  if (literal) return { best: literal, closest: literal, matched: true, matchType: 'exact' };
   if (closest.sim === 1) return { best: closest, closest, matched: true, matchType: 'exact' };
   if (closest.conflict || closest.sim < CATALOG_MATCH_THRESHOLD) {
     return { best: closest, closest, matched: false, matchType: 'fuzzy' };

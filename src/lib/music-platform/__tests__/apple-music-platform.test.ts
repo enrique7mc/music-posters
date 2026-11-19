@@ -353,6 +353,48 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.similarity).toBeLessThan(0.6);
   });
 
+  // Regression (#70): "4 Muertos" is closer by edit distance to "DI4 D MUERTOS".
+  it('matches a digit on the poster to its number word in the catalog', async () => {
+    stubCatalogWithAlbums([
+      ['DI4 D MUERTOS', 2],
+      ['Cuatro Muertos', 3],
+    ]);
+    const result = await service.searchArtist('4 Muertos', 'user-token');
+    expect(result!.name).toBe('Cuatro Muertos');
+    expect(result!.matched).toBe(true);
+    expect(result!.matchType).toBe('exact');
+  });
+
+  it('prefers a literal exact match over a number-word match', async () => {
+    stubCatalogWithAlbums([
+      ['Cuatro Muertos', 3],
+      ['4 Muertos', 1],
+    ]);
+    const result = await service.searchArtist('4 Muertos', 'user-token');
+    expect(result!.name).toBe('4 Muertos');
+    expect(result!.matchType).toBe('exact');
+  });
+
+  it('matches a number word on the poster to its digit in the catalog', async () => {
+    stubCatalogWithAlbums([
+      ['Cuatro Muertes', 4],
+      ['4 Muertos', 3],
+    ]);
+    const result = await service.searchArtist('Cuatro Muertos', 'user-token');
+    expect(result!.name).toBe('4 Muertos');
+    expect(result!.matchType).toBe('exact');
+  });
+
+  it('matches English number words', async () => {
+    stubCatalogWithAlbums([
+      ['5 Seconds Of Summer Tribute', 25],
+      ['Five Seconds of Summer', 10],
+    ]);
+    const result = await service.searchArtist('5 Seconds of Summer', 'user-token');
+    expect(result!.name).toBe('Five Seconds of Summer');
+    expect(result!.matchType).toBe('exact');
+  });
+
   it('returns null when the catalog has no results', async () => {
     server.use(http.get(SEARCH_URL, () => HttpResponse.json({ results: {} })));
     expect(await service.searchArtist('Nobody', 'user-token')).toBeNull();

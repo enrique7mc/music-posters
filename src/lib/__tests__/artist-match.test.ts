@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  catalogSimilarity,
   normalize,
   similarity,
   matchLineup,
@@ -52,6 +53,43 @@ describe('similarity', () => {
 
   it('is symmetric regardless of argument order', () => {
     expect(similarity('Lane 8', 'Lane Eight')).toBe(similarity('Lane Eight', 'Lane 8'));
+  });
+});
+
+describe('catalogSimilarity', () => {
+  it('treats a standalone digit as its Spanish or English word', () => {
+    expect(catalogSimilarity('4 Muertos', 'Cuatro Muertos')).toBe(1);
+    expect(catalogSimilarity('Cuatro Muertos', '4 Muertos')).toBe(1);
+    expect(catalogSimilarity('5 Seconds of Summer', 'Five Seconds of Summer')).toBe(1);
+    expect(catalogSimilarity('Five Seconds of Summer', '5 Seconds of Summer')).toBe(1);
+    expect(catalogSimilarity('Matchbox 20', 'Matchbox Twenty')).toBe(1);
+    expect(catalogSimilarity('0 Grados', 'Cero Grados')).toBe(1);
+  });
+
+  it('does not expand a digit inside a word', () => {
+    // Plain similarity("4 Muertos", "DI4 D MUERTOS") is ~69%; it must not rise.
+    expect(catalogSimilarity('4 Muertos', 'DI4 D MUERTOS')).toBe(
+      similarity('4 Muertos', 'DI4 D MUERTOS')
+    );
+    expect(catalogSimilarity('Cuatro Muertos', 'DI4 D MUERTOS')).toBeLessThan(0.6);
+    expect(catalogSimilarity('Blink-182', 'Blink One Eight Two')).toBe(
+      similarity('Blink-182', 'Blink One Eight Two')
+    );
+  });
+
+  it('does not expand numbers above 20 or with leading zeros', () => {
+    expect(catalogSimilarity('Sum 41', 'Sum Forty One')).toBe(
+      similarity('Sum 41', 'Sum Forty One')
+    );
+    expect(catalogSimilarity('007', 'Seven')).toBe(0);
+  });
+
+  it('equals plain similarity for names without numbers', () => {
+    expect(catalogSimilarity('F.E.A.T.', 'F.E.A.T.')).toBe(similarity('F.E.A.T.', 'F.E.A.T.'));
+    expect(catalogSimilarity('Café Tacvba', 'Cafe Tacuba')).toBe(
+      similarity('Café Tacvba', 'Cafe Tacuba')
+    );
+    expect(catalogSimilarity('Sigur Rós', 'sigur ros')).toBe(1);
   });
 });
 
@@ -183,6 +221,12 @@ describe('matchLineup', () => {
     expect(looseHits).toHaveLength(1);
     const strictHits = matchLineup(['Phoeni'], ['Phoenix'], LOVED_MATCH_THRESHOLD).loved;
     expect(strictHits).toHaveLength(1); // 6/7 ≈ 0.857 ≥ 0.85, still a hit
+  });
+
+  it('keeps plain similarity: a digit does not equal its number word', () => {
+    const { loved: hits, unknown } = matchLineup(['4 Muertos'], ['Cuatro Muertos']);
+    expect(hits).toHaveLength(0);
+    expect(unknown).toEqual(['4 Muertos']);
   });
 
   it('exposes the documented threshold constants', () => {
