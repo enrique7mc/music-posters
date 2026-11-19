@@ -85,6 +85,7 @@ describe('catalogSimilarity', () => {
   });
 
   it('equals plain similarity for names without numbers', () => {
+    expect(catalogSimilarity('F.E.A.T.', 'F.E.A.T.')).toBe(similarity('F.E.A.T.', 'F.E.A.T.'));
     expect(catalogSimilarity('Café Tacvba', 'Cafe Tacuba')).toBe(
       similarity('Café Tacvba', 'Cafe Tacuba')
     );

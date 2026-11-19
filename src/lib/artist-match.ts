@@ -66,8 +66,11 @@ function levenshteinDistance(s1: string, s2: string): number {
  * first, then computes 1 - (editDistance / longerLength). 1.0 = identical.
  */
 export function similarity(a: string, b: string): number {
-  const x = normalize(a);
-  const y = normalize(b);
+  return normalizedSimilarity(normalize(a), normalize(b));
+}
+
+/** `similarity` for names that are already normalized. */
+function normalizedSimilarity(x: string, y: string): number {
   // A name that normalizes to "" (e.g. "&", "feat.", emoji-only) must NOT score
   // 1.0 against another empty-normalizing name — that would be a false "loved".
   if (x.length === 0 || y.length === 0) return 0;
@@ -104,7 +107,7 @@ export function catalogSimilarity(a: string, b: string): number {
   let best = 0;
   for (const x of numberVariants(normalize(a))) {
     for (const y of numberVariants(normalize(b))) {
-      best = Math.max(best, similarity(x, y));
+      best = Math.max(best, normalizedSimilarity(x, y));
     }
   }
   return best;

@@ -365,6 +365,16 @@ describe('AppleMusicPlatformService.searchArtist', () => {
     expect(result!.matchType).toBe('exact');
   });
 
+  it('prefers a literal exact match over a number-word match', async () => {
+    stubCatalogWithAlbums([
+      ['Cuatro Muertos', 3],
+      ['4 Muertos', 1],
+    ]);
+    const result = await service.searchArtist('4 Muertos', 'user-token');
+    expect(result!.name).toBe('4 Muertos');
+    expect(result!.matchType).toBe('exact');
+  });
+
   it('matches a number word on the poster to its digit in the catalog', async () => {
     stubCatalogWithAlbums([
       ['Cuatro Muertes', 4],
