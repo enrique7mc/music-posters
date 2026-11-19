@@ -8,7 +8,7 @@ import {
   PartialAddError,
 } from './types';
 import {
-  similarity,
+  catalogSimilarity,
   containsName,
   isDerivativeName,
   hasWordConflict,
@@ -181,7 +181,9 @@ function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
 /**
  * Chooses the catalog artist for a poster name from Apple's search results.
  *
- * 1. An exact name match (after normalization) wins, first in Apple's order.
+ * 1. An exact name match (after normalization, with numbers 0–20 equal to
+ *    their English and Spanish words; see catalogSimilarity) wins, first in
+ *    Apple's order.
  * 2. A fuzzy name that differs from the poster name by a whole word is not a
  *    match, whatever its similarity (see hasWordConflict). Example: "LTD Rock"
  *    vs "Kid Rock" scores 75% but is a different act. The closest spelling is
@@ -205,7 +207,7 @@ function outranks(b: CatalogCandidate, a: CatalogCandidate): boolean {
  */
 function pickCatalogArtist(name: string, artists: any[]): CatalogPick {
   const candidates: CatalogCandidate[] = artists.map((artist) => {
-    const sim = similarity(name, artist.attributes.name);
+    const sim = catalogSimilarity(name, artist.attributes.name);
     return {
       artist,
       sim,

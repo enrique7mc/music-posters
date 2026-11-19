@@ -76,6 +76,40 @@ export function similarity(a: string, b: string): number {
   return (longer.length - levenshteinDistance(longer, shorter)) / longer.length;
 }
 
+/** A whole word that is a number 0–20 without leading zeros ("007" is not "seven"). */
+const SMALL_NUMBER = /^(\d|1\d|20)$/;
+
+/**
+ * Forms of a normalized name with each standalone number 0–20 written as a
+ * word: the name itself, then the English form, then the Spanish form. "4
+ * muertos" gives "4 muertos", "four muertos", "cuatro muertos". Only whole
+ * words change: "di4" and "blink182" stay as they are.
+ */
+function numberVariants(normalized: string): string[] {
+  const words = normalized.split(' ');
+  if (!words.some((w) => SMALL_NUMBER.test(w))) return [normalized];
+  const spell = (lang: 0 | 1) =>
+    words.map((w) => (SMALL_NUMBER.test(w) ? NUMBER_WORDS[Number(w)][lang] : w)).join(' ');
+  return [normalized, spell(0), spell(1)];
+}
+
+/**
+ * Similarity for catalog search: the highest `similarity` over the number-word
+ * forms of both names (see numberVariants). "4 Muertos" vs "Cuatro Muertos"
+ * and "5 Seconds of Summer" vs "Five Seconds of Summer" score 1.0. Plain edit
+ * distance scores them low, and can prefer a name such as "DI4 D MUERTOS".
+ * Loved-overlap matching (matchLineup) keeps plain `similarity`.
+ */
+export function catalogSimilarity(a: string, b: string): number {
+  let best = 0;
+  for (const x of numberVariants(normalize(a))) {
+    for (const y of numberVariants(normalize(b))) {
+      best = Math.max(best, similarity(x, y));
+    }
+  }
+  return best;
+}
+
 /**
  * Leading words that do not make a name distinctive. "Los Lobos" is one
  * distinctive word, as weak a signal as "Lobos" alone.
@@ -124,6 +158,16 @@ function isAbbreviation(short: string, long: string): boolean {
   return i === short.length;
 }
 
+/** Number words for 0–20, as [English, Spanish]. Index = the number. */
+const NUMBER_WORDS: ReadonlyArray<readonly [english: string, spanish: string]> = [
+  ['zero', 'cero'], ['one', 'uno'], ['two', 'dos'], ['three', 'tres'], ['four', 'cuatro'],
+  ['five', 'cinco'], ['six', 'seis'], ['seven', 'siete'], ['eight', 'ocho'], ['nine', 'nueve'],
+  ['ten', 'diez'], ['eleven', 'once'], ['twelve', 'doce'], ['thirteen', 'trece'],
+  ['fourteen', 'catorce'], ['fifteen', 'quince'], ['sixteen', 'dieciseis'],
+  ['seventeen', 'diecisiete'], ['eighteen', 'dieciocho'], ['nineteen', 'diecinueve'],
+  ['twenty', 'veinte'],
+]; // prettier-ignore
+
 /**
  * Words that mean the same in artist names but share no spelling: "and" in
  * its short and Spanish forms ("Guns N' Roses", "Jesse y Joy"), and numbers
@@ -131,14 +175,7 @@ function isAbbreviation(short: string, long: string): boolean {
  */
 const WORD_ALIASES: Record<string, string> = Object.fromEntries([
   ['n', 'and'], ['y', 'and'],
-  ...[
-    ['zero', 'cero'], ['one', 'uno'], ['two', 'dos'], ['three', 'tres'], ['four', 'cuatro'],
-    ['five', 'cinco'], ['six', 'seis'], ['seven', 'siete'], ['eight', 'ocho'], ['nine', 'nueve'],
-    ['ten', 'diez'], ['eleven', 'once'], ['twelve', 'doce'], ['thirteen', 'trece'],
-    ['fourteen', 'catorce'], ['fifteen', 'quince'], ['sixteen', 'dieciseis'],
-    ['seventeen', 'diecisiete'], ['eighteen', 'dieciocho'], ['nineteen', 'diecinueve'],
-    ['twenty', 'veinte'],
-  ].flatMap((words, digit) => words.map((w) => [w, String(digit)])),
+  ...NUMBER_WORDS.flatMap((words, digit) => words.map((w) => [w, String(digit)])),
 ]); // prettier-ignore
 
 /** True when two normalized words can be the same word: equal, an alias, a typo, or an abbreviation. */
